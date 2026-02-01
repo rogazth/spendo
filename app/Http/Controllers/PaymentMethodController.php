@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\PaymentMethodType;
+use App\Http\Requests\StorePaymentMethodRequest;
+use App\Http\Requests\UpdatePaymentMethodRequest;
+use App\Models\PaymentMethod;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class PaymentMethodController extends Controller
+{
+    public function index(): Response
+    {
+        $paymentMethods = Auth::user()
+            ->paymentMethods()
+            ->with('linkedAccount')
+            ->withCount('transactions')
+            ->latest()
+            ->paginate(25)
+            ->withQueryString();
+
+        return Inertia::render('payment-methods/index', [
+            'paymentMethods' => $paymentMethods,
+        ]);
+    }
+
+    public function create(): Response
+    {
+        $accounts = Auth::user()->accounts()->where('is_active', true)->get();
+
+        return Inertia::render('payment-methods/create', [
+            'paymentMethodTypes' => collect(PaymentMethodType::cases())->map(fn($type) => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ]),
+            'accounts' => $accounts,
+        ]);
+    }
+
+    public function store(StorePaymentMethodRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        Auth::user()->paymentMethods()->create([
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'linked_account_id' => $validated['linked_account_id'] ?? null,
+            'currency' => $validated['currency'] ?? 'CLP',
+            'credit_limit' => $validated['credit_limit'] ?? null,
+            'billing_cycle_day' => $validated['billing_cycle_day'] ?? null,
+            'payment_due_day' => $validated['payment_due_day'] ?? null,
+            'color' => $validated['color'] ?? '#10B981',
+            'icon' => $validated['icon'] ?? null,
+            'last_four_digits' => $validated['last_four_digits'] ?? null,
+            'is_active' => $validated['is_active'] ?? true,
+        ]);
+
+        return redirect()
+            ->route('payment-methods.index')
+            ->with('success', 'Metodo de pago creado exitosamente.');
+    }
+
+    public function show(PaymentMethod $paymentMethod): Response
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        $paymentMethod->load('linkedAccount');
+
+        $transactions = $paymentMethod->transactions()
+            ->with(['category', 'paymentMethod'])
+            ->latest('transaction_date')
+            ->limit(50)
+            ->get();
+
+        return Inertia::render('payment-methods/show', [
+            'paymentMethod' => $paymentMethod,
+            'transactions' => $transactions,
+        ]);
+    }
+
+    public function edit(PaymentMethod $paymentMethod): Response
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        $accounts = Auth::user()->accounts()->where('is_active', true)->get();
+
+        return Inertia::render('payment-methods/edit', [
+            'paymentMethod' => $paymentMethod,
+            'paymentMethodTypes' => collect(PaymentMethodType::cases())->map(fn($type) => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ]),
+            'accounts' => $accounts,
+        ]);
+    }
+
+    public function update(UpdatePaymentMethodRequest $request, PaymentMethod $paymentMethod): RedirectResponse
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        $validated = $request->validated();
+
+        $paymentMethod->update([
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'linked_account_id' => $validated['linked_account_id'] ?? null,
+            'currency' => $validated['currency'] ?? $paymentMethod->currency,
+            'credit_limit' => $validated['credit_limit'] ?? null,
+            'billing_cycle_day' => $validated['billing_cycle_day'] ?? null,
+            'payment_due_day' => $validated['payment_due_day'] ?? null,
+            'color' => $validated['color'] ?? $paymentMethod->color,
+            'icon' => $validated['icon'] ?? $paymentMethod->icon,
+            'last_four_digits' => $validated['last_four_digits'] ?? $paymentMethod->last_four_digits,
+            'is_active' => $validated['is_active'] ?? $paymentMethod->is_active,
+        ]);
+
+        return redirect()
+            ->route('payment-methods.index')
+            ->with('success', 'Metodo de pago actualizado exitosamente.');
+    }
+
+    public function destroy(PaymentMethod $paymentMethod): RedirectResponse
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        $paymentMethod->delete();
+
+        return redirect()
+            ->route('payment-methods.index')
+            ->with('success', 'Metodo de pago eliminado exitosamente.');
+    }
+
+    private function authorizePaymentMethod(PaymentMethod $paymentMethod): void
+    {
+        if ($paymentMethod->user_id !== Auth::id()) {
+            abort(403);
+        }
+    }
+}
