@@ -1,24 +1,43 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Plus, MoreHorizontal, Pencil, Trash2, Filter } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
+import { Head, router } from '@inertiajs/react';
+import { PlusIcon, ReceiptIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { getTransactionColumns } from '@/components/data-table/columns/transaction-columns';
+import { DataTable } from '@/components/data-table/data-table';
+import { DateFilterDropdown } from '@/components/date-filter-dropdown';
+import { FilterDropdown } from '@/components/filter-dropdown';
+import { TransactionFormDialog } from '@/components/forms/transaction-form-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import type { BreadcrumbItem, Transaction, Account, Category, PaginatedResponse } from '@/types';
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+import AppLayout from '@/layouts/app-layout';
+import { useDebounce } from '@/hooks/use-debounce';
+import { cn } from '@/lib/utils';
+import type {
+    Account,
+    BreadcrumbItem,
+    Transaction,
+    PaginatedResponse,
+    PaymentMethod,
+    Category,
+} from '@/types';
 
 interface Props {
     transactions: PaginatedResponse<Transaction>;
     accounts: Account[];
+    paymentMethods: PaymentMethod[];
     categories: Category[];
     filters: {
-        account_id?: number;
-        category_id?: number;
-        type?: string;
+        account_ids?: number[];
+        category_ids?: number[];
         date_from?: string;
         date_to?: string;
     };
@@ -29,43 +48,178 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Transacciones', href: '/transactions' },
 ];
 
-function formatCurrency(amount: number, currency: string = 'CLP'): string {
-    return new Intl.NumberFormat('es-CL', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-    }).format(amount / 100);
-}
+export default function TransactionsIndex({
+    transactions,
+    accounts,
+    paymentMethods,
+    categories,
+    filters,
+}: Props) {
+    const [formDialogOpen, setFormDialogOpen] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<
+        Transaction | undefined
+    >();
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingTransaction, setDeletingTransaction] =
+        useState<Transaction | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const debouncedSearchQuery = useDebounce(searchQuery, 250);
+    const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(
+        filters.account_ids?.map(String) ?? [],
+    );
+    const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(
+        filters.category_ids?.map(String) ?? [],
+    );
+    const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
+    const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+    const didInitFilters = useRef(false);
+    const lastAppliedKey = useRef('');
 
-function formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('es-CL', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
-}
-
-function getTransactionTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        expense: 'Gasto',
-        income: 'Ingreso',
-        transfer_out: 'Transferencia Saliente',
-        transfer_in: 'Transferencia Entrante',
-        settlement: 'Liquidación TDC',
-        initial_balance: 'Balance Inicial',
+    const handleCreate = () => {
+        setEditingTransaction(undefined);
+        setFormDialogOpen(true);
     };
-    return labels[type] || type;
-}
 
-function isDebitTransaction(type: string): boolean {
-    return ['expense', 'transfer_out', 'settlement'].includes(type);
-}
+    const handleEdit = (transaction: Transaction) => {
+        setEditingTransaction(transaction);
+        setFormDialogOpen(true);
+    };
 
-export default function TransactionsIndex({ transactions, accounts, categories, filters }: Props) {
-    const handleDelete = (transaction: Transaction) => {
-        if (confirm(`¿Estás seguro de eliminar esta transacción?`)) {
-            router.delete(`/transactions/${transaction.uuid}`);
+    const handleDeleteClick = (transaction: Transaction) => {
+        setDeletingTransaction(transaction);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (!deletingTransaction) return;
+
+        setIsDeleting(true);
+        router.delete(`/transactions/${deletingTransaction.uuid}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeleteDialogOpen(false);
+                toast.success('Transacción eliminada');
+            },
+            onError: () => {
+                toast.error('Error al eliminar la transacción');
+            },
+            onFinish: () => {
+                setIsDeleting(false);
+            },
+        });
+    };
+
+    const handleDeleteDialogOpenChange = (open: boolean) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+            setDeletingTransaction(null);
         }
+    };
+
+    const columns = useMemo(
+        () =>
+            getTransactionColumns({
+                onEdit: handleEdit,
+                onDelete: handleDeleteClick,
+            }),
+        [],
+    );
+
+    const accountOptions = useMemo(
+        () =>
+            accounts.map((account) => ({
+                id: account.id.toString(),
+                name: account.name,
+                is_default: account.is_default,
+            })),
+        [accounts],
+    );
+
+    const categoryOptions = useMemo(() => {
+        return categories.flatMap((category) => {
+            const parents = [
+                {
+                    id: category.id.toString(),
+                    name: category.name,
+                    color: category.color,
+                    depth: 0,
+                },
+            ];
+            const children = (category.children ?? []).map((child) => ({
+                id: child.id.toString(),
+                name: child.name,
+                color: child.color,
+                depth: 1,
+            }));
+            return [...parents, ...children];
+        });
+    }, [categories]);
+
+    useEffect(() => {
+        if (!didInitFilters.current) {
+            didInitFilters.current = true;
+            const initialKey = [
+                [...selectedAccountIds].sort().join(','),
+                [...selectedCategoryIds].sort().join(','),
+                dateFrom,
+                dateTo,
+            ].join('|');
+            lastAppliedKey.current = initialKey;
+            return;
+        }
+
+        const nextKey = [
+            [...selectedAccountIds].sort().join(','),
+            [...selectedCategoryIds].sort().join(','),
+            dateFrom,
+            dateTo,
+        ].join('|');
+
+        if (nextKey === lastAppliedKey.current) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            lastAppliedKey.current = nextKey;
+            handleApplyFilters();
+        }, 250);
+
+        return () => window.clearTimeout(timeout);
+    }, [selectedAccountIds, selectedCategoryIds, dateFrom, dateTo]);
+
+    const filteredTransactions = useMemo(() => {
+        if (!debouncedSearchQuery.trim()) return transactions.data;
+        const query = debouncedSearchQuery.toLowerCase();
+        return transactions.data.filter((transaction) =>
+            (transaction.description ?? '').toLowerCase().includes(query),
+        );
+    }, [transactions.data, debouncedSearchQuery]);
+
+    const handleApplyFilters = () => {
+        const params: Record<string, string | string[]> = {};
+
+        if (selectedAccountIds.length > 0) {
+            params.account_ids = selectedAccountIds;
+        }
+
+        if (selectedCategoryIds.length > 0) {
+            params.category_ids = selectedCategoryIds;
+        }
+
+        if (dateFrom) {
+            params.date_from = dateFrom;
+        }
+
+        if (dateTo) {
+            params.date_to = dateTo;
+        }
+
+        router.get('/transactions', params, {
+            preserveScroll: true,
+            preserveState: true,
+            replace: true,
+        });
     };
 
     return (
@@ -74,129 +228,154 @@ export default function TransactionsIndex({ transactions, accounts, categories, 
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Transacciones</h1>
-                    <div className="flex gap-2">
-                        <Button variant="outline">
-                            <Filter className="mr-2 h-4 w-4" />
-                            Filtros
+
+                    {transactions.data.length > 0 && (
+                        <Button onClick={handleCreate}>
+                            <PlusIcon className="h-4 w-4" />
+                            Nueva Transacción
                         </Button>
-                        <Button asChild>
-                            <Link href="/transactions/create">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Nueva Transacción
-                            </Link>
-                        </Button>
-                    </div>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Buscar..."
+                        className="w-full sm:w-[220px]"
+                    />
+                    <FilterDropdown
+                        title="Cuentas"
+                        options={accountOptions.map((account) => ({
+                            value: account.id,
+                            label: (
+                                <span className="flex items-center gap-2">
+                                    <span>{account.name}</span>
+                                    {account.is_default && (
+                                        <span className="text-xs text-muted-foreground">
+                                            (Por defecto)
+                                        </span>
+                                    )}
+                                </span>
+                            ),
+                        }))}
+                        selectedValues={new Set(selectedAccountIds)}
+                        onChange={(next) =>
+                            setSelectedAccountIds(Array.from(next))
+                        }
+                        searchPlaceholder="Buscar cuentas..."
+                        emptyLabel="No hay cuentas"
+                    />
+                    <FilterDropdown
+                        title="Categorías"
+                        options={categoryOptions.map((category) => ({
+                            value: category.id,
+                            label: (
+                                <span
+                                    className={cn(
+                                        'flex items-center gap-2',
+                                        category.depth === 1 && 'pl-4',
+                                    )}
+                                >
+                                    <span
+                                        className="h-2.5 w-2.5 rounded-full"
+                                        style={{
+                                            backgroundColor: category.color,
+                                        }}
+                                    />
+                                    {category.name}
+                                </span>
+                            ),
+                        }))}
+                        selectedValues={new Set(selectedCategoryIds)}
+                        onChange={(next) =>
+                            setSelectedCategoryIds(Array.from(next))
+                        }
+                        searchPlaceholder="Buscar categorías..."
+                        emptyLabel="No hay categorías"
+                    />
+                    <DateFilterDropdown
+                        dateFrom={dateFrom}
+                        dateTo={dateTo}
+                        onChange={(next) => {
+                            setDateFrom(next.dateFrom);
+                            setDateTo(next.dateTo);
+                        }}
+                    />
                 </div>
 
                 {transactions.data.length === 0 ? (
-                    <Card>
-                        <CardContent className="flex flex-col items-center justify-center py-12">
-                            <p className="text-muted-foreground mb-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <ReceiptIcon />
+                            </EmptyMedia>
+                            <EmptyTitle>
                                 No tienes transacciones registradas
-                            </p>
-                            <Button asChild>
-                                <Link href="/transactions/create">
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Registrar tu primera transacción
-                                </Link>
+                            </EmptyTitle>
+                            <EmptyDescription>
+                                Registra tu primera transacción para comenzar a
+                                rastrear tus gastos e ingresos.
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                            <Button onClick={handleCreate}>
+                                Crear transacción
                             </Button>
-                        </CardContent>
-                    </Card>
+                        </EmptyContent>
+                    </Empty>
                 ) : (
-                    <Card>
-                        <CardContent className="p-0">
-                            <div className="divide-y">
-                                {transactions.data.map((transaction) => (
-                                    <div
-                                        key={transaction.uuid}
-                                        className="flex items-center justify-between p-4"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            {transaction.category && (
-                                                <div
-                                                    className="flex h-10 w-10 items-center justify-center rounded-full"
-                                                    style={{ backgroundColor: transaction.category.color + '20' }}
-                                                >
-                                                    <span
-                                                        className="h-5 w-5 rounded-full"
-                                                        style={{ backgroundColor: transaction.category.color }}
-                                                    />
-                                                </div>
-                                            )}
-                                            <div>
-                                                <p className="font-medium">{transaction.description}</p>
-                                                <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                                                    <span>{getTransactionTypeLabel(transaction.type)}</span>
-                                                    <span>•</span>
-                                                    <span>{formatDate(transaction.transaction_date)}</span>
-                                                    {transaction.account && (
-                                                        <>
-                                                            <span>•</span>
-                                                            <span>{transaction.account.name}</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <p
-                                                className={`text-lg font-medium ${
-                                                    isDebitTransaction(transaction.type)
-                                                        ? 'text-red-600'
-                                                        : 'text-green-600'
-                                                }`}
-                                            >
-                                                {isDebitTransaction(transaction.type) ? '-' : '+'}
-                                                {formatCurrency(transaction.amount, transaction.currency)}
-                                            </p>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/transactions/${transaction.uuid}/edit`}>
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            Editar
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleDelete(transaction)}
-                                                        className="text-destructive"
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Eliminar
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <DataTable columns={columns} data={filteredTransactions} />
                 )}
 
-                {transactions.meta.last_page > 1 && (
+                {transactions.meta.last_page > 1 &&
+                    !debouncedSearchQuery.trim() && (
                     <div className="flex justify-center gap-2">
                         {transactions.links.prev && (
                             <Button variant="outline" asChild>
-                                <Link href={transactions.links.prev}>Anterior</Link>
+                                <a href={transactions.links.prev}>Anterior</a>
                             </Button>
                         )}
-                        <span className="text-muted-foreground flex items-center px-4 text-sm">
-                            Página {transactions.meta.current_page} de {transactions.meta.last_page}
+                        <span className="flex items-center px-4 text-sm text-muted-foreground">
+                            Página {transactions.meta.current_page} de{' '}
+                            {transactions.meta.last_page}
                         </span>
                         {transactions.links.next && (
                             <Button variant="outline" asChild>
-                                <Link href={transactions.links.next}>Siguiente</Link>
+                                <a href={transactions.links.next}>Siguiente</a>
                             </Button>
                         )}
                     </div>
                 )}
             </div>
+
+            <TransactionFormDialog
+                open={formDialogOpen}
+                onOpenChange={setFormDialogOpen}
+                transaction={editingTransaction}
+                accounts={accounts}
+                paymentMethods={paymentMethods}
+                categories={categories}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={handleDeleteDialogOpenChange}
+                title="Eliminar transacción"
+                description={
+                    <>
+                        ¿Estás seguro de eliminar{' '}
+                        <span className="font-semibold">
+                            {deletingTransaction?.description}
+                        </span>
+                        ? Esta acción no se puede deshacer.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+                loading={isDeleting}
+            />
         </AppLayout>
     );
 }

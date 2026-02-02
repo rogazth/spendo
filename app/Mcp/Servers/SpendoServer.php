@@ -42,7 +42,6 @@ class SpendoServer extends Server
         - `income`: Money received (adds to account balance)
         - `transfer_out` / `transfer_in`: Money moved between accounts
         - `settlement`: Credit card payment (reduces account balance and credit card debt)
-        - `initial_balance`: Starting balance for an account
     MARKDOWN;
 
     /**

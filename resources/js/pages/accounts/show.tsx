@@ -1,21 +1,24 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Pencil, Trash2, ArrowLeft } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { PencilIcon, Trash2Icon, ArrowLeftIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { BreadcrumbItem, Account, Transaction, PaginatedResponse } from '@/types';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { AccountFormDialog } from '@/components/forms/account-form-dialog';
+import AppLayout from '@/layouts/app-layout';
+import { formatCurrency } from '@/lib/currency';
+import type {
+    BreadcrumbItem,
+    Account,
+    Transaction,
+    PaginatedResponse,
+} from '@/types';
 
 interface Props {
     account: Account;
     transactions: PaginatedResponse<Transaction>;
-}
-
-function formatCurrency(amount: number, currency: string = 'CLP'): string {
-    return new Intl.NumberFormat('es-CL', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-    }).format(amount / 100);
 }
 
 function formatDate(date: string): string {
@@ -43,22 +46,40 @@ function getTransactionTypeLabel(type: string): string {
         transfer_out: 'Transferencia Saliente',
         transfer_in: 'Transferencia Entrante',
         settlement: 'Liquidación TDC',
-        initial_balance: 'Balance Inicial',
     };
     return labels[type] || type;
 }
 
 export default function AccountShow({ account, transactions }: Props) {
+    const [formDialogOpen, setFormDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
         { title: 'Cuentas', href: '/accounts' },
         { title: account.name, href: `/accounts/${account.uuid}` },
     ];
 
-    const handleDelete = () => {
-        if (confirm(`¿Estás seguro de eliminar la cuenta "${account.name}"?`)) {
-            router.delete(`/accounts/${account.uuid}`);
-        }
+    const handleEdit = () => {
+        setFormDialogOpen(true);
+    };
+
+    const handleDeleteClick = () => {
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        setIsDeleting(true);
+        router.delete(`/accounts/${account.uuid}`, {
+            onSuccess: () => {
+                toast.success('Cuenta eliminada');
+            },
+            onError: () => {
+                toast.error('Error al eliminar la cuenta');
+                setIsDeleting(false);
+            },
+        });
     };
 
     return (
@@ -69,60 +90,56 @@ export default function AccountShow({ account, transactions }: Props) {
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" asChild>
                             <Link href="/accounts">
-                                <ArrowLeft className="h-4 w-4" />
+                                <ArrowLeftIcon className="h-4 w-4" />
                             </Link>
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold">{account.name}</h1>
-                            <p className="text-muted-foreground text-sm">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-balance text-2xl font-bold">
+                                    {account.name}
+                                </h1>
+                                {account.is_default && (
+                                    <Badge variant="secondary">Por defecto</Badge>
+                                )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
                                 {getAccountTypeLabel(account.type)}
                             </p>
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={`/accounts/${account.uuid}/edit`}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Editar
-                            </Link>
+                        <Button variant="outline" onClick={handleEdit}>
+                            <PencilIcon className="h-4 w-4" />
+                            Editar
                         </Button>
-                        <Button variant="destructive" onClick={handleDelete}>
-                            <Trash2 className="mr-2 h-4 w-4" />
+                        <Button variant="outline" onClick={handleDeleteClick}>
+                            <Trash2Icon className="h-4 w-4" />
                             Eliminar
                         </Button>
                     </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
                                 Balance Actual
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">
-                                {formatCurrency(account.current_balance, account.currency)}
+                                {formatCurrency(
+                                    account.current_balance,
+                                    account.currency,
+                                    account.currency_locale,
+                                )}
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">
-                                Balance Inicial
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">
-                                {formatCurrency(account.initial_balance, account.currency)}
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
                                 Estado
                             </CardTitle>
                         </CardHeader>
@@ -146,7 +163,7 @@ export default function AccountShow({ account, transactions }: Props) {
                     </CardHeader>
                     <CardContent>
                         {transactions.data.length === 0 ? (
-                            <p className="text-muted-foreground py-8 text-center">
+                            <p className="py-8 text-center text-muted-foreground">
                                 No hay transacciones para esta cuenta
                             </p>
                         ) : (
@@ -157,27 +174,42 @@ export default function AccountShow({ account, transactions }: Props) {
                                         className="flex items-center justify-between border-b pb-4 last:border-0"
                                     >
                                         <div>
-                                            <p className="font-medium">{transaction.description}</p>
-                                            <p className="text-muted-foreground text-sm">
-                                                {getTransactionTypeLabel(transaction.type)} •{' '}
-                                                {formatDate(transaction.transaction_date)}
+                                            <p className="font-medium">
+                                                {transaction.description}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {getTransactionTypeLabel(
+                                                    transaction.type,
+                                                )}{' '}
+                                                •{' '}
+                                                {formatDate(
+                                                    transaction.transaction_date,
+                                                )}
                                             </p>
                                         </div>
                                         <p
                                             className={`font-medium ${
-                                                ['expense', 'transfer_out', 'settlement'].includes(
-                                                    transaction.type
-                                                )
+                                                [
+                                                    'expense',
+                                                    'transfer_out',
+                                                    'settlement',
+                                                ].includes(transaction.type)
                                                     ? 'text-red-600'
                                                     : 'text-green-600'
                                             }`}
                                         >
-                                            {['expense', 'transfer_out', 'settlement'].includes(
-                                                transaction.type
-                                            )
+                                            {[
+                                                'expense',
+                                                'transfer_out',
+                                                'settlement',
+                                            ].includes(transaction.type)
                                                 ? '-'
                                                 : '+'}
-                                            {formatCurrency(transaction.amount, transaction.currency)}
+                                            {formatCurrency(
+                                                transaction.amount,
+                                                transaction.currency,
+                                                transaction.currency_locale,
+                                            )}
                                         </p>
                                     </div>
                                 ))}
@@ -186,6 +218,27 @@ export default function AccountShow({ account, transactions }: Props) {
                     </CardContent>
                 </Card>
             </div>
+
+            <AccountFormDialog
+                open={formDialogOpen}
+                onOpenChange={setFormDialogOpen}
+                account={account}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                title="Eliminar cuenta"
+                description={
+                    <>
+                        ¿Estás seguro de eliminar la cuenta <span className="font-semibold">{account.name}</span>? Esta acción no se puede deshacer.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+                loading={isDeleting}
+            />
         </AppLayout>
     );
 }

@@ -29,6 +29,7 @@ class PaymentMethodFactory extends Factory
             'icon' => $type->icon(),
             'last_four_digits' => in_array($type, [PaymentMethodType::CreditCard, PaymentMethodType::DebitCard, PaymentMethodType::PrepaidCard]) ? fake()->numerify('####') : null,
             'is_active' => true,
+            'is_default' => false,
             'sort_order' => 0,
         ];
     }
@@ -106,6 +107,13 @@ class PaymentMethodFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_active' => false,
+        ]);
+    }
+
+    public function default(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_default' => true,
         ]);
     }
 

@@ -81,16 +81,6 @@ class TransactionFactory extends Factory
         ]);
     }
 
-    public function initialBalance(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'type' => TransactionType::InitialBalance,
-            'amount' => fake()->numberBetween(10000000, 500000000),
-            'description' => 'Balance Inicial',
-            'payment_method_id' => null,
-        ]);
-    }
-
     public function settlement(): static
     {
         return $this->state(fn (array $attributes) => [

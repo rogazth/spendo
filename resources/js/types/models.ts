@@ -1,8 +1,40 @@
-// Enum types matching PHP enums
-export type AccountType = 'checking' | 'savings' | 'cash' | 'investment';
-export type TransactionType = 'expense' | 'income' | 'transfer_out' | 'transfer_in' | 'settlement' | 'initial_balance';
-export type CategoryType = 'expense' | 'income' | 'system';
-export type PaymentMethodType = 'credit_card' | 'debit_card' | 'prepaid_card' | 'cash' | 'transfer';
+// Account types
+export const ACCOUNT_TYPES = [
+    { id: 'checking', label: 'Cuenta Corriente' },
+    { id: 'savings', label: 'Cuenta de Ahorro' },
+    { id: 'cash', label: 'Efectivo' },
+    { id: 'investment', label: 'Inversión' },
+] as const;
+export type AccountType = typeof ACCOUNT_TYPES[number]['id'];
+
+// Transaction types
+export const TRANSACTION_TYPES = [
+    { id: 'expense', label: 'Gasto' },
+    { id: 'income', label: 'Ingreso' },
+    { id: 'transfer', label: 'Transferencia' },
+    { id: 'transfer_out', label: 'Transferencia Saliente' },
+    { id: 'transfer_in', label: 'Transferencia Entrante' },
+    { id: 'settlement', label: 'Liquidación' },
+] as const;
+export type TransactionType = typeof TRANSACTION_TYPES[number]['id'];
+
+// Category types
+export const CATEGORY_TYPES = [
+    { id: 'expense', label: 'Gasto' },
+    { id: 'income', label: 'Ingreso' },
+    { id: 'system', label: 'Sistema' },
+] as const;
+export type CategoryType = typeof CATEGORY_TYPES[number]['id'];
+
+// Payment method types
+export const PAYMENT_METHOD_TYPES = [
+    { id: 'credit_card', label: 'Tarjeta de Crédito' },
+    { id: 'debit_card', label: 'Tarjeta de Débito' },
+    { id: 'prepaid_card', label: 'Tarjeta Prepago' },
+    { id: 'cash', label: 'Efectivo' },
+    { id: 'transfer', label: 'Transferencia' },
+] as const;
+export type PaymentMethodType = typeof PAYMENT_METHOD_TYPES[number]['id'];
 
 // Base model with timestamps
 export interface Model {
@@ -12,17 +44,24 @@ export interface Model {
     updated_at: string;
 }
 
+export interface Currency {
+    code: string;
+    name: string;
+    locale: string;
+}
+
 // Account model
 export interface Account extends Model {
     user_id: number;
     name: string;
     type: AccountType;
     currency: string;
-    initial_balance: number;
+    currency_locale?: string;
     current_balance: number;
     color: string;
     icon: string;
     is_active: boolean;
+    is_default: boolean;
     // Computed
     formatted_balance?: string;
     // Relations
@@ -52,6 +91,7 @@ export interface PaymentMethod extends Model {
     name: string;
     type: PaymentMethodType;
     currency: string;
+    currency_locale?: string;
     credit_limit: number | null;
     billing_cycle_day: number | null;
     payment_due_day: number | null;
@@ -59,6 +99,7 @@ export interface PaymentMethod extends Model {
     icon: string | null;
     last_four_digits: string | null;
     is_active: boolean;
+    is_default: boolean;
     sort_order: number;
     // Computed
     current_debt?: number;
@@ -78,6 +119,7 @@ export interface Transaction extends Model {
     type: TransactionType;
     amount: number;
     currency: string;
+    currency_locale?: string;
     description: string | null;
     notes: string | null;
     transaction_date: string;
@@ -169,6 +211,7 @@ export interface UserSettings extends Model {
     date_format: string;
     time_format: string;
     first_day_of_week: number;
+    budget_cycle_start_day: number;
     // Relations
     default_account?: Account;
     default_payment_method?: PaymentMethod;
@@ -200,7 +243,7 @@ export interface AccountFormData {
     name: string;
     type: AccountType;
     currency: string;
-    initial_balance: number;
+    initial_balance: number | null;
     color: string;
     icon: string;
     is_active: boolean;

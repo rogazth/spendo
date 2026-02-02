@@ -1,5 +1,7 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Plus, MoreHorizontal, Pencil, Trash2, ChevronRight } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { PlusIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon, ChevronRightIcon } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,11 +11,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { CategoryFormDialog } from '@/components/forms/category-form-dialog';
 import type { BreadcrumbItem, Category } from '@/types';
 
 interface Props {
     expenseCategories: Category[];
     incomeCategories: Category[];
+    parentCategories: Category[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -21,16 +26,15 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Categorías', href: '/categories' },
 ];
 
-function getCategoryTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        expense: 'Gasto',
-        income: 'Ingreso',
-        system: 'Sistema',
-    };
-    return labels[type] || type;
-}
-
-function CategoryItem({ category, onDelete }: { category: Category; onDelete: (cat: Category) => void }) {
+function CategoryItem({
+    category,
+    onEdit,
+    onDelete,
+}: {
+    category: Category;
+    onEdit: (cat: Category) => void;
+    onDelete: (cat: Category) => void;
+}) {
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between rounded-lg border p-3">
@@ -55,21 +59,16 @@ function CategoryItem({ category, onDelete }: { category: Category; onDelete: (c
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
+                                <MoreHorizontalIcon className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                                <Link href={`/categories/${category.uuid}/edit`}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Editar
-                                </Link>
+                            <DropdownMenuItem onClick={() => onEdit(category)}>
+                                <PencilIcon className="h-4 w-4" />
+                                Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => onDelete(category)}
-                                className="text-destructive"
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
+                            <DropdownMenuItem onClick={() => onDelete(category)}>
+                                <Trash2Icon className="h-4 w-4" />
                                 Eliminar
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -84,7 +83,7 @@ function CategoryItem({ category, onDelete }: { category: Category; onDelete: (c
                             className="flex items-center justify-between rounded-lg border border-dashed p-2"
                         >
                             <div className="flex items-center gap-2">
-                                <ChevronRight className="text-muted-foreground h-4 w-4" />
+                                <ChevronRightIcon className="text-muted-foreground h-4 w-4" />
                                 <span
                                     className="h-3 w-3 rounded-full"
                                     style={{ backgroundColor: child.color }}
@@ -95,21 +94,16 @@ function CategoryItem({ category, onDelete }: { category: Category; onDelete: (c
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
-                                            <MoreHorizontal className="h-3 w-3" />
+                                            <MoreHorizontalIcon className="h-3 w-3" />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                        <DropdownMenuItem asChild>
-                                            <Link href={`/categories/${child.uuid}/edit`}>
-                                                <Pencil className="mr-2 h-4 w-4" />
-                                                Editar
-                                            </Link>
+                                        <DropdownMenuItem onClick={() => onEdit(child)}>
+                                            <PencilIcon className="h-4 w-4" />
+                                            Editar
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            onClick={() => onDelete(child)}
-                                            className="text-destructive"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
+                                        <DropdownMenuItem onClick={() => onDelete(child)}>
+                                            <Trash2Icon className="h-4 w-4" />
                                             Eliminar
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -123,10 +117,51 @@ function CategoryItem({ category, onDelete }: { category: Category; onDelete: (c
     );
 }
 
-export default function CategoriesIndex({ expenseCategories, incomeCategories }: Props) {
-    const handleDelete = (category: Category) => {
-        if (confirm(`¿Estás seguro de eliminar la categoría "${category.name}"?`)) {
-            router.delete(`/categories/${category.uuid}`);
+export default function CategoriesIndex({ expenseCategories, incomeCategories, parentCategories }: Props) {
+    const [formDialogOpen, setFormDialogOpen] = useState(false);
+    const [editingCategory, setEditingCategory] = useState<Category | undefined>();
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleCreate = () => {
+        setEditingCategory(undefined);
+        setFormDialogOpen(true);
+    };
+
+    const handleEdit = (category: Category) => {
+        setEditingCategory(category);
+        setFormDialogOpen(true);
+    };
+
+    const handleDeleteClick = (category: Category) => {
+        setDeletingCategory(category);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (!deletingCategory) return;
+
+        setIsDeleting(true);
+        router.delete(`/categories/${deletingCategory.uuid}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeleteDialogOpen(false);
+                toast.success('Categoría eliminada');
+            },
+            onError: () => {
+                toast.error('Error al eliminar la categoría');
+            },
+            onFinish: () => {
+                setIsDeleting(false);
+            },
+        });
+    };
+
+    const handleDeleteDialogOpenChange = (open: boolean) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+            setDeletingCategory(null);
         }
     };
 
@@ -136,11 +171,9 @@ export default function CategoriesIndex({ expenseCategories, incomeCategories }:
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Categorías</h1>
-                    <Button asChild>
-                        <Link href="/categories/create">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Nueva Categoría
-                        </Link>
+                    <Button onClick={handleCreate}>
+                        <PlusIcon className="h-4 w-4" />
+                        Nueva Categoría
                     </Button>
                 </div>
 
@@ -162,7 +195,8 @@ export default function CategoriesIndex({ expenseCategories, incomeCategories }:
                                     <CategoryItem
                                         key={category.uuid}
                                         category={category}
-                                        onDelete={handleDelete}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDeleteClick}
                                     />
                                 ))
                             )}
@@ -186,7 +220,8 @@ export default function CategoriesIndex({ expenseCategories, incomeCategories }:
                                     <CategoryItem
                                         key={category.uuid}
                                         category={category}
-                                        onDelete={handleDelete}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDeleteClick}
                                     />
                                 ))
                             )}
@@ -194,6 +229,28 @@ export default function CategoriesIndex({ expenseCategories, incomeCategories }:
                     </Card>
                 </div>
             </div>
+
+            <CategoryFormDialog
+                open={formDialogOpen}
+                onOpenChange={setFormDialogOpen}
+                category={editingCategory}
+                parentCategories={parentCategories}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={handleDeleteDialogOpenChange}
+                title="Eliminar categoría"
+                description={
+                    <>
+                        ¿Estás seguro de eliminar la categoría <span className="font-semibold">{deletingCategory?.name}</span>? Esta acción no se puede deshacer.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+                loading={isDeleting}
+            />
         </AppLayout>
     );
 }

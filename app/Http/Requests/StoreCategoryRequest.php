@@ -22,7 +22,18 @@ class StoreCategoryRequest extends FormRequest
         $user = Auth::user();
 
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')->where(function ($query) use ($user) {
+                    $query->where(function ($q) use ($user) {
+                        $q->whereNull('user_id')
+                            ->orWhere('user_id', $user->id);
+                    })
+                        ->whereNull('deleted_at');
+                }),
+            ],
             'type' => [
                 'required_without:parent_id',
                 'nullable',
@@ -56,6 +67,7 @@ class StoreCategoryRequest extends FormRequest
         return [
             'name.required' => 'El nombre es requerido.',
             'name.max' => 'El nombre no puede exceder 255 caracteres.',
+            'name.unique' => 'Ya existe una categoría con este nombre.',
             'type.required_without' => 'El tipo es requerido cuando no se selecciona una categoría padre.',
             'type.enum' => 'El tipo de categoría no es válido.',
             'type.not_in' => 'No puedes crear categorías de sistema.',

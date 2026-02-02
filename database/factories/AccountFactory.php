@@ -20,10 +20,10 @@ class AccountFactory extends Factory
             'name' => $this->getNameForType($type),
             'type' => $type,
             'currency' => 'CLP',
-            'initial_balance' => fake()->numberBetween(0, 500000000),
             'color' => fake()->hexColor(),
             'icon' => $type->icon(),
             'is_active' => true,
+            'is_default' => false,
             'sort_order' => 0,
         ];
     }
@@ -51,7 +51,6 @@ class AccountFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'type' => AccountType::Cash,
             'name' => 'Efectivo',
-            'initial_balance' => fake()->numberBetween(0, 50000000),
             'icon' => AccountType::Cash->icon(),
         ]);
     }
@@ -69,6 +68,13 @@ class AccountFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_active' => false,
+        ]);
+    }
+
+    public function default(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_default' => true,
         ]);
     }
 

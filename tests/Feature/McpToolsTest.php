@@ -19,8 +19,8 @@ uses(RefreshDatabase::class);
 describe('GetFinancialSummaryTool', function () {
     it('returns financial summary for authenticated user', function () {
         $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create(['initial_balance' => 100000]);
-        Account::factory()->savings()->for($user)->create(['initial_balance' => 50000]);
+        Account::factory()->checking()->for($user)->create();
+        Account::factory()->savings()->for($user)->create();
         PaymentMethod::factory()->creditCard()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(GetFinancialSummaryTool::class);
@@ -198,7 +198,7 @@ describe('CreateTransactionTool', function () {
 
         $this->assertDatabaseHas('transactions', [
             'user_id' => $user->id,
-            'amount' => 15000,
+            'amount' => 1500000, // 15000 * 100 (stored as cents)
             'description' => 'Lunch at restaurant',
         ]);
     });
@@ -221,7 +221,7 @@ describe('CreateTransactionTool', function () {
 
         $this->assertDatabaseHas('transactions', [
             'user_id' => $user->id,
-            'amount' => 500000,
+            'amount' => 50000000, // 500000 * 100 (stored as cents)
             'description' => 'Monthly salary',
         ]);
     });

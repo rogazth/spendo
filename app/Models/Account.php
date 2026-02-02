@@ -19,10 +19,10 @@ class Account extends Model
         'name',
         'type',
         'currency',
-        'initial_balance',
         'color',
         'icon',
         'is_active',
+        'is_default',
         'sort_order',
     ];
 
@@ -30,8 +30,8 @@ class Account extends Model
     {
         return [
             'type' => AccountType::class,
-            'initial_balance' => 'integer',
             'is_active' => 'boolean',
+            'is_default' => 'boolean',
             'sort_order' => 'integer',
         ];
     }
@@ -51,28 +51,25 @@ class Account extends Model
         return $this->hasMany(Transaction::class);
     }
 
-    public function getCurrentBalanceAttribute(): int
+    public function getCurrentBalanceAttribute(): float
     {
-        return $this->transactions()
+        $balanceInCents = $this->transactions()
             ->selectRaw("
                 COALESCE(SUM(
                     CASE
-                        WHEN type IN ('income', 'transfer_in', 'initial_balance') THEN amount
+                        WHEN type IN ('income', 'transfer_in') THEN amount
                         WHEN type IN ('expense', 'transfer_out', 'settlement') THEN -amount
                         ELSE 0
                     END
                 ), 0) as balance
             ")
             ->value('balance') ?? 0;
+
+        return $balanceInCents / 100;
     }
 
     public function getFormattedBalanceAttribute(): string
     {
-        return number_format($this->current_balance / 100, 0, ',', '.');
-    }
-
-    public function getBalanceDecimalAttribute(): float
-    {
-        return $this->current_balance / 100;
+        return number_format($this->current_balance, 0, ',', '.');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\HasUuid;
 use App\Enums\TransactionType;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -73,16 +74,22 @@ class Transaction extends Model
         return $this->hasMany(Attachment::class);
     }
 
+    /**
+     * Get and set the amount (stored as cents in DB).
+     */
+    protected function amount(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => $value / 100,
+            set: fn ($value) => (int) round($value * 100),
+        );
+    }
+
     public function getFormattedAmountAttribute(): string
     {
         $prefix = $this->type->isDebit() ? '-' : '+';
 
-        return $prefix.'$'.number_format($this->amount / 100, 0, ',', '.');
-    }
-
-    public function getAmountDecimalAttribute(): float
-    {
-        return $this->amount / 100;
+        return $prefix.'$'.number_format($this->amount, 0, ',', '.');
     }
 
     public function isTransfer(): bool

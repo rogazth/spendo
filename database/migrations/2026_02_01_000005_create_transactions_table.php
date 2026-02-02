@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('type', ['expense', 'income', 'transfer_out', 'transfer_in', 'settlement', 'initial_balance']);
+            $table->enum('type', ['expense', 'income', 'transfer_out', 'transfer_in', 'settlement']);
             $table->unsignedBigInteger('account_id')->nullable();
             $table->unsignedBigInteger('payment_method_id')->nullable();
             $table->unsignedBigInteger('category_id')->nullable();

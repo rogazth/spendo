@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PaymentMethodType;
 use App\Http\Requests\StorePaymentMethodRequest;
 use App\Http\Requests\UpdatePaymentMethodRequest;
+use App\Http\Resources\AccountResource;
+use App\Http\Resources\PaymentMethodResource;
+use App\Http\Resources\TransactionResource;
 use App\Models\PaymentMethod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -23,27 +25,22 @@ class PaymentMethodController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        return Inertia::render('payment-methods/index', [
-            'paymentMethods' => $paymentMethods,
-        ]);
-    }
-
-    public function create(): Response
-    {
         $accounts = Auth::user()->accounts()->where('is_active', true)->get();
 
-        return Inertia::render('payment-methods/create', [
-            'paymentMethodTypes' => collect(PaymentMethodType::cases())->map(fn($type) => [
-                'value' => $type->value,
-                'label' => $type->label(),
-            ]),
-            'accounts' => $accounts,
+        return Inertia::render('payment-methods/index', [
+            'paymentMethods' => PaymentMethodResource::collection($paymentMethods),
+            'accounts' => AccountResource::collection($accounts),
         ]);
     }
 
     public function store(StorePaymentMethodRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $isDefault = $validated['is_default'] ?? false;
+
+        if ($isDefault) {
+            Auth::user()->paymentMethods()->update(['is_default' => false]);
+        }
 
         Auth::user()->paymentMethods()->create([
             'name' => $validated['name'],
@@ -57,6 +54,7 @@ class PaymentMethodController extends Controller
             'icon' => $validated['icon'] ?? null,
             'last_four_digits' => $validated['last_four_digits'] ?? null,
             'is_active' => $validated['is_active'] ?? true,
+            'is_default' => $isDefault,
         ]);
 
         return redirect()
@@ -77,24 +75,8 @@ class PaymentMethodController extends Controller
             ->get();
 
         return Inertia::render('payment-methods/show', [
-            'paymentMethod' => $paymentMethod,
-            'transactions' => $transactions,
-        ]);
-    }
-
-    public function edit(PaymentMethod $paymentMethod): Response
-    {
-        $this->authorizePaymentMethod($paymentMethod);
-
-        $accounts = Auth::user()->accounts()->where('is_active', true)->get();
-
-        return Inertia::render('payment-methods/edit', [
-            'paymentMethod' => $paymentMethod,
-            'paymentMethodTypes' => collect(PaymentMethodType::cases())->map(fn($type) => [
-                'value' => $type->value,
-                'label' => $type->label(),
-            ]),
-            'accounts' => $accounts,
+            'paymentMethod' => new PaymentMethodResource($paymentMethod),
+            'transactions' => TransactionResource::collection($transactions),
         ]);
     }
 
@@ -103,6 +85,11 @@ class PaymentMethodController extends Controller
         $this->authorizePaymentMethod($paymentMethod);
 
         $validated = $request->validated();
+        $isDefault = $validated['is_default'] ?? $paymentMethod->is_default;
+
+        if ($isDefault && ! $paymentMethod->is_default) {
+            Auth::user()->paymentMethods()->where('id', '!=', $paymentMethod->id)->update(['is_default' => false]);
+        }
 
         $paymentMethod->update([
             'name' => $validated['name'],
@@ -116,11 +103,24 @@ class PaymentMethodController extends Controller
             'icon' => $validated['icon'] ?? $paymentMethod->icon,
             'last_four_digits' => $validated['last_four_digits'] ?? $paymentMethod->last_four_digits,
             'is_active' => $validated['is_active'] ?? $paymentMethod->is_active,
+            'is_default' => $isDefault,
         ]);
 
         return redirect()
             ->route('payment-methods.index')
             ->with('success', 'Metodo de pago actualizado exitosamente.');
+    }
+
+    public function makeDefault(PaymentMethod $paymentMethod): RedirectResponse
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        if (! $paymentMethod->is_default) {
+            Auth::user()->paymentMethods()->where('id', '!=', $paymentMethod->id)->update(['is_default' => false]);
+            $paymentMethod->update(['is_default' => true]);
+        }
+
+        return back();
     }
 
     public function destroy(PaymentMethod $paymentMethod): RedirectResponse
@@ -132,6 +132,17 @@ class PaymentMethodController extends Controller
         return redirect()
             ->route('payment-methods.index')
             ->with('success', 'Metodo de pago eliminado exitosamente.');
+    }
+
+    public function toggleActive(PaymentMethod $paymentMethod): RedirectResponse
+    {
+        $this->authorizePaymentMethod($paymentMethod);
+
+        $paymentMethod->update([
+            'is_active' => ! $paymentMethod->is_active,
+        ]);
+
+        return back();
     }
 
     private function authorizePaymentMethod(PaymentMethod $paymentMethod): void

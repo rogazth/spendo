@@ -9,7 +9,6 @@ enum TransactionType: string
     case TransferOut = 'transfer_out';
     case TransferIn = 'transfer_in';
     case Settlement = 'settlement';
-    case InitialBalance = 'initial_balance';
 
     public function label(): string
     {
@@ -19,7 +18,6 @@ enum TransactionType: string
             self::TransferOut => 'Transferencia Saliente',
             self::TransferIn => 'Transferencia Entrante',
             self::Settlement => 'Liquidación TDC',
-            self::InitialBalance => 'Balance Inicial',
         };
     }
 
@@ -31,7 +29,6 @@ enum TransactionType: string
             self::TransferOut => 'arrow-right',
             self::TransferIn => 'arrow-left',
             self::Settlement => 'credit-card',
-            self::InitialBalance => 'wallet',
         };
     }
 
@@ -46,7 +43,7 @@ enum TransactionType: string
     public function isCredit(): bool
     {
         return match ($this) {
-            self::Income, self::TransferIn, self::InitialBalance => true,
+            self::Income, self::TransferIn => true,
             default => false,
         };
     }

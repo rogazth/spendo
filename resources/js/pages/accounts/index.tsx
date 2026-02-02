@@ -1,14 +1,14 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { PlusIcon, WalletIcon } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { DataTable } from '@/components/data-table/data-table';
+import { getAccountColumns } from '@/components/data-table/columns/account-columns';
+import { AccountFormDialog } from '@/components/forms/account-form-dialog';
 import type { BreadcrumbItem, Account, PaginatedResponse } from '@/types';
 
 interface Props {
@@ -20,30 +20,74 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Cuentas', href: '/accounts' },
 ];
 
-function formatCurrency(amount: number, currency: string = 'CLP'): string {
-    return new Intl.NumberFormat('es-CL', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-    }).format(amount / 100);
-}
-
-function getAccountTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        checking: 'Cuenta Corriente',
-        savings: 'Cuenta de Ahorro',
-        cash: 'Efectivo',
-        investment: 'Inversión',
-    };
-    return labels[type] || type;
-}
-
 export default function AccountsIndex({ accounts }: Props) {
-    const handleDelete = (account: Account) => {
-        if (confirm(`¿Estás seguro de eliminar la cuenta "${account.name}"?`)) {
-            router.delete(`/accounts/${account.uuid}`);
+    const [formDialogOpen, setFormDialogOpen] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<Account | undefined>();
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleCreate = () => {
+        setEditingAccount(undefined);
+        setFormDialogOpen(true);
+    };
+
+    const handleEdit = (account: Account) => {
+        setEditingAccount(account);
+        setFormDialogOpen(true);
+    };
+
+    const handleDeleteClick = (account: Account) => {
+        setDeletingAccount(account);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        if (!deletingAccount) return;
+
+        setIsDeleting(true);
+        router.delete(`/accounts/${deletingAccount.uuid}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeleteDialogOpen(false);
+                toast.success('Cuenta eliminada');
+            },
+            onError: () => {
+                toast.error('Error al eliminar la cuenta');
+            },
+            onFinish: () => {
+                setIsDeleting(false);
+            },
+        });
+    };
+
+    const handleMakeDefault = (account: Account) => {
+        router.patch(`/accounts/${account.uuid}/make-default`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Cuenta marcada como por defecto');
+            },
+            onError: () => {
+                toast.error('Error al marcar la cuenta');
+            },
+        });
+    };
+
+    const handleDeleteDialogOpenChange = (open: boolean) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+            setDeletingAccount(null);
         }
     };
+
+    const columns = useMemo(
+        () => getAccountColumns({
+            onEdit: handleEdit,
+            onDelete: handleDeleteClick,
+            onMakeDefault: handleMakeDefault,
+        }),
+        []
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -51,88 +95,57 @@ export default function AccountsIndex({ accounts }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Cuentas</h1>
-                    <Button asChild>
-                        <Link href="/accounts/create">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Nueva Cuenta
-                        </Link>
+                    <Button onClick={handleCreate}>
+                        <PlusIcon className="h-4 w-4" />
+                        Nueva Cuenta
                     </Button>
                 </div>
 
                 {accounts.data.length === 0 ? (
-                    <Card>
-                        <CardContent className="flex flex-col items-center justify-center py-12">
-                            <p className="text-muted-foreground mb-4">
-                                No tienes cuentas registradas
-                            </p>
-                            <Button asChild>
-                                <Link href="/accounts/create">
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Crear tu primera cuenta
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <WalletIcon />
+                            </EmptyMedia>
+                            <EmptyTitle>No tienes cuentas registradas</EmptyTitle>
+                            <EmptyDescription>
+                                Crea tu primera cuenta para comenzar a administrar tus finanzas.
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                            <Button onClick={handleCreate}>Crear cuenta</Button>
+                        </EmptyContent>
+                    </Empty>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {accounts.data.map((account) => (
-                            <Card key={account.uuid}>
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-medium">
-                                        <Link
-                                            href={`/accounts/${account.uuid}`}
-                                            className="hover:underline"
-                                        >
-                                            {account.name}
-                                        </Link>
-                                    </CardTitle>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem asChild>
-                                                <Link href={`/accounts/${account.uuid}/edit`}>
-                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                    Editar
-                                                </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                onClick={() => handleDelete(account)}
-                                                className="text-destructive"
-                                            >
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            className="inline-block h-3 w-3 rounded-full"
-                                            style={{ backgroundColor: account.color }}
-                                        />
-                                        <span className="text-muted-foreground text-sm">
-                                            {getAccountTypeLabel(account.type)}
-                                        </span>
-                                    </div>
-                                    <p className="mt-2 text-2xl font-bold">
-                                        {formatCurrency(account.current_balance, account.currency)}
-                                    </p>
-                                    {!account.is_active && (
-                                        <span className="mt-2 inline-block rounded bg-yellow-100 px-2 py-1 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                            Inactiva
-                                        </span>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                    <DataTable
+                        columns={columns}
+                        data={accounts.data}
+                        searchKey="name"
+                        searchPlaceholder="Buscar cuentas..."
+                    />
                 )}
             </div>
+
+            <AccountFormDialog
+                open={formDialogOpen}
+                onOpenChange={setFormDialogOpen}
+                account={editingAccount}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={handleDeleteDialogOpenChange}
+                title="Eliminar cuenta"
+                description={
+                    <>
+                        ¿Estás seguro de eliminar la cuenta <span className="font-semibold">{deletingAccount?.name}</span>? Esta acción no se puede deshacer.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+                loading={isDeleting}
+            />
         </AppLayout>
     );
 }

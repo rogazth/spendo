@@ -15,10 +15,10 @@ return new class extends Migration
             $table->string('name');
             $table->enum('type', ['checking', 'savings', 'cash', 'investment']);
             $table->string('currency', 3)->default('CLP');
-            $table->bigInteger('initial_balance')->default(0);
             $table->string('color', 7)->default('#3B82F6');
             $table->string('icon', 50)->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
             $table->softDeletes();

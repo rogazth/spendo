@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\HasUuid;
 use App\Enums\PaymentMethodType;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,7 @@ class PaymentMethod extends Model
         'icon',
         'last_four_digits',
         'is_active',
+        'is_default',
         'sort_order',
     ];
 
@@ -38,6 +40,7 @@ class PaymentMethod extends Model
             'billing_cycle_day' => 'integer',
             'payment_due_day' => 'integer',
             'is_active' => 'boolean',
+            'is_default' => 'boolean',
             'sort_order' => 'integer',
         ];
     }
@@ -57,18 +60,29 @@ class PaymentMethod extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    /**
+     * Get and set the credit limit (stored as cents in DB).
+     */
+    protected function creditLimit(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => $value !== null ? $value / 100 : null,
+            set: fn ($value) => $value !== null ? (int) round($value * 100) : null,
+        );
+    }
+
     public function isCreditCard(): bool
     {
         return $this->type === PaymentMethodType::CreditCard;
     }
 
-    public function getCurrentDebtAttribute(): int
+    public function getCurrentDebtAttribute(): float
     {
         if (! $this->isCreditCard()) {
             return 0;
         }
 
-        return $this->transactions()
+        $debtInCents = $this->transactions()
             ->selectRaw("
                 COALESCE(SUM(
                     CASE
@@ -79,9 +93,11 @@ class PaymentMethod extends Model
                 ), 0) as debt
             ")
             ->value('debt') ?? 0;
+
+        return $debtInCents / 100;
     }
 
-    public function getAvailableCreditAttribute(): ?int
+    public function getAvailableCreditAttribute(): ?float
     {
         if (! $this->isCreditCard() || $this->credit_limit === null) {
             return null;
@@ -92,6 +108,6 @@ class PaymentMethod extends Model
 
     public function getFormattedDebtAttribute(): string
     {
-        return number_format($this->current_debt / 100, 0, ',', '.');
+        return number_format($this->current_debt, 0, ',', '.');
     }
 }

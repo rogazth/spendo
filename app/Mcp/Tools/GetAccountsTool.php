@@ -54,7 +54,6 @@ class GetAccountsTool extends Tool
             'currency' => $account->currency,
             'current_balance' => $account->current_balance,
             'current_balance_formatted' => '$'.number_format($account->current_balance / 100, 0, ',', '.'),
-            'initial_balance' => $account->initial_balance,
             'color' => $account->color,
             'icon' => $account->icon,
             'is_active' => $account->is_active,

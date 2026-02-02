@@ -1,21 +1,20 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { PencilIcon, Trash2Icon, ArrowLeftIcon } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { BreadcrumbItem, PaymentMethod, Transaction, PaginatedResponse } from '@/types';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { PaymentMethodFormDialog } from '@/components/forms/payment-method-form-dialog';
+import { formatCurrency } from '@/lib/currency';
+import type { BreadcrumbItem, PaymentMethod, Transaction, PaginatedResponse, Account } from '@/types';
 
 interface Props {
     paymentMethod: PaymentMethod;
     transactions: PaginatedResponse<Transaction>;
-}
-
-function formatCurrency(amount: number, currency: string = 'CLP'): string {
-    return new Intl.NumberFormat('es-CL', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-    }).format(amount / 100);
+    accounts?: Account[];
 }
 
 function formatDate(date: string): string {
@@ -44,22 +43,40 @@ function getTransactionTypeLabel(type: string): string {
         transfer_out: 'Transferencia Saliente',
         transfer_in: 'Transferencia Entrante',
         settlement: 'Liquidación TDC',
-        initial_balance: 'Balance Inicial',
     };
     return labels[type] || type;
 }
 
-export default function PaymentMethodShow({ paymentMethod, transactions }: Props) {
+export default function PaymentMethodShow({ paymentMethod, transactions, accounts = [] }: Props) {
+    const [formDialogOpen, setFormDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
         { title: 'Métodos de Pago', href: '/payment-methods' },
         { title: paymentMethod.name, href: `/payment-methods/${paymentMethod.uuid}` },
     ];
 
-    const handleDelete = () => {
-        if (confirm(`¿Estás seguro de eliminar "${paymentMethod.name}"?`)) {
-            router.delete(`/payment-methods/${paymentMethod.uuid}`);
-        }
+    const handleEdit = () => {
+        setFormDialogOpen(true);
+    };
+
+    const handleDeleteClick = () => {
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        setIsDeleting(true);
+        router.delete(`/payment-methods/${paymentMethod.uuid}`, {
+            onSuccess: () => {
+                toast.success('Método de pago eliminado');
+            },
+            onError: () => {
+                toast.error('Error al eliminar el método de pago');
+                setIsDeleting(false);
+            },
+        });
     };
 
     const isCreditCard = paymentMethod.type === 'credit_card';
@@ -72,11 +89,16 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" asChild>
                             <Link href="/payment-methods">
-                                <ArrowLeft className="h-4 w-4" />
+                                <ArrowLeftIcon className="h-4 w-4" />
                             </Link>
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold">{paymentMethod.name}</h1>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-balance text-2xl font-bold">{paymentMethod.name}</h1>
+                                {paymentMethod.is_default && (
+                                    <Badge variant="secondary">Por defecto</Badge>
+                                )}
+                            </div>
                             <p className="text-muted-foreground text-sm">
                                 {getPaymentMethodTypeLabel(paymentMethod.type)}
                                 {paymentMethod.last_four_digits && ` • •••• ${paymentMethod.last_four_digits}`}
@@ -84,14 +106,12 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={`/payment-methods/${paymentMethod.uuid}/edit`}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Editar
-                            </Link>
+                        <Button variant="outline" onClick={handleEdit}>
+                            <PencilIcon className="h-4 w-4" />
+                            Editar
                         </Button>
-                        <Button variant="destructive" onClick={handleDelete}>
-                            <Trash2 className="mr-2 h-4 w-4" />
+                        <Button variant="outline" onClick={handleDeleteClick}>
+                            <Trash2Icon className="h-4 w-4" />
                             Eliminar
                         </Button>
                     </div>
@@ -108,7 +128,11 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-2xl font-bold">
-                                        {formatCurrency(paymentMethod.current_debt || 0)}
+                                        {formatCurrency(
+                                            paymentMethod.current_debt || 0,
+                                            paymentMethod.currency,
+                                            paymentMethod.currency_locale,
+                                        )}
                                     </p>
                                 </CardContent>
                             </Card>
@@ -122,7 +146,12 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                                 <CardContent>
                                     <p className="text-2xl font-bold text-green-600">
                                         {formatCurrency(
-                                            paymentMethod.available_credit || (paymentMethod.credit_limit - (paymentMethod.current_debt || 0))
+                                            paymentMethod.available_credit ||
+                                                (paymentMethod.credit_limit -
+                                                    (paymentMethod.current_debt ||
+                                                        0)),
+                                            paymentMethod.currency,
+                                            paymentMethod.currency_locale,
                                         )}
                                     </p>
                                 </CardContent>
@@ -136,7 +165,11 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-2xl font-bold">
-                                        {formatCurrency(paymentMethod.credit_limit)}
+                                        {formatCurrency(
+                                            paymentMethod.credit_limit,
+                                            paymentMethod.currency,
+                                            paymentMethod.currency_locale,
+                                        )}
                                     </p>
                                 </CardContent>
                             </Card>
@@ -236,7 +269,11 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                                             )
                                                 ? '-'
                                                 : '+'}
-                                            {formatCurrency(transaction.amount, transaction.currency)}
+                                            {formatCurrency(
+                                                transaction.amount,
+                                                transaction.currency,
+                                                transaction.currency_locale,
+                                            )}
                                         </p>
                                     </div>
                                 ))}
@@ -245,6 +282,28 @@ export default function PaymentMethodShow({ paymentMethod, transactions }: Props
                     </CardContent>
                 </Card>
             </div>
+
+            <PaymentMethodFormDialog
+                open={formDialogOpen}
+                onOpenChange={setFormDialogOpen}
+                paymentMethod={paymentMethod}
+                accounts={accounts}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                title="Eliminar método de pago"
+                description={
+                    <>
+                        ¿Estás seguro de eliminar <span className="font-semibold">{paymentMethod.name}</span>? Esta acción no se puede deshacer.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+                loading={isDeleting}
+            />
         </AppLayout>
     );
 }

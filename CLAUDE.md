@@ -9,12 +9,36 @@ All product decisions, requirements, and specifications must be documented in th
 | [docs/SPENDO.md](docs/SPENDO.md) | Project overview, tech stack, coding standards, MVP scope |
 | [docs/DATABASE.md](docs/DATABASE.md) | Database schema, migrations, calculated fields, seeds |
 | [docs/FEATURES.md](docs/FEATURES.md) | Detailed feature specifications, CRUD operations, business rules |
-| [docs/UI.md](docs/UI.md) | Interface flows, wireframes, responsive considerations |
+| [docs/UI.md](docs/UI.md) | UI patterns, component conventions, dialog-based CRUD, form patterns |
 
 **Important:** When making product decisions or changes:
 - Update the relevant documentation file(s) in `docs/`
 - If a decision doesn't fit existing files, create a new appropriately-named markdown file in `docs/`
 - Keep docs in sync with implementation
+
+---
+
+## UI/Frontend Conventions (see docs/UI.md for details)
+
+**Icons**: Always use Icon suffix (`PlusIcon` not `Plus`). No margins on icons inside Button or DropdownMenuItem (gap is handled by component).
+
+**CRUD**: Dialog-based (FormDialog + ConfirmDialog). No separate create/edit pages. Clear deleting state on dialog close only.
+
+**ConfirmDialog**: `description` accepts ReactNode. Use semibold for item names. `variant="destructive"` for delete.
+
+**Empty states**: Use `ui/empty.tsx` components, not custom EmptyState.
+
+**DataTable sorting**: Show ArrowUpIcon/ArrowDownIcon/ArrowUpDownIcon based on `column.getIsSorted()`.
+
+**Forms**: Type toggles use `Tabs`. Dates use `Popover + Calendar`. Description/notes use `Textarea`. Hide irrelevant fields conditionally.
+
+**Backend for forms**: Return raw arrays for dropdowns (not ResourceCollection). Use `required_if:field,value` for conditional validation.
+
+**TypeScript**: Run `npx tsc --noEmit` to check for type errors before finalizing changes. Use explicit generic types in `useForm<{...}>()` instead of `as Type` casting. Define type constants with `as const` and derive types from them (see `types/models.ts`).
+
+**Migrations**: Project is in development - modify existing migrations instead of creating new ones. Add columns directly to the original create migration.
+
+**Design Skills**: Use `/frontend-design` for UI components, `/interface-design` for dashboards/admin panels, `/interaction-design` for animations/microinteractions, `/baseline-ui` for design quality checks.
 
 ---
 

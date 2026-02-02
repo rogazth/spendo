@@ -117,8 +117,8 @@ class GetTransactionsTool extends Tool
     {
         return [
             'type' => $schema->string()
-                ->description('Filter by transaction type: expense, income, transfer_out, transfer_in, settlement, initial_balance')
-                ->enum(['expense', 'income', 'transfer_out', 'transfer_in', 'settlement', 'initial_balance']),
+                ->description('Filter by transaction type: expense, income, transfer_out, transfer_in, settlement')
+                ->enum(['expense', 'income', 'transfer_out', 'transfer_in', 'settlement']),
             'category_id' => $schema->integer()
                 ->description('Filter by category ID'),
             'account_id' => $schema->integer()

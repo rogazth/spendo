@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('icon', 50)->nullable();
             $table->string('last_four_digits', 4)->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
             $table->softDeletes();
