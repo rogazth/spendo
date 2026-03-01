@@ -38,7 +38,12 @@ class GetCategoriesTool extends Tool
                 $q->whereNull('user_id')
                     ->orWhere('user_id', $user->id);
             })
-            ->with('children')
+            ->with(['children' => function ($q) use ($user) {
+                $q->where(function ($q) use ($user) {
+                    $q->whereNull('user_id')
+                        ->orWhere('user_id', $user->id);
+                });
+            }])
             ->whereNull('parent_id');
 
         // Filter by type if provided

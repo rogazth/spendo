@@ -12,17 +12,26 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('account_id')->nullable();
             $table->string('name');
+            $table->text('description')->nullable();
             $table->string('currency', 3)->default('CLP');
-            $table->date('period_start');
-            $table->date('period_end');
+            $table->enum('frequency', ['weekly', 'biweekly', 'monthly', 'bimonthly']);
+            $table->date('anchor_date');
+            $table->date('ends_at')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();
 
+            $table->foreign('account_id')
+                ->references('id')
+                ->on('accounts')
+                ->nullOnDelete();
+
             $table->index('user_id');
+            $table->index('account_id');
             $table->index(['user_id', 'is_active']);
-            $table->index(['user_id', 'period_start', 'period_end']);
+            $table->index(['user_id', 'anchor_date', 'ends_at']);
         });
     }
 

@@ -84,19 +84,19 @@ class GetFinancialSummaryTool extends Tool
 
         $summary = [
             'total_account_balance' => $totalAccountBalance,
-            'total_account_balance_formatted' => '$'.number_format($totalAccountBalance / 100, 0, ',', '.'),
+            'total_account_balance_formatted' => '$'.number_format($totalAccountBalance, 0, ',', '.'),
             'total_credit_debt' => $totalCreditDebt,
-            'total_credit_debt_formatted' => '$'.number_format($totalCreditDebt / 100, 0, ',', '.'),
+            'total_credit_debt_formatted' => '$'.number_format($totalCreditDebt, 0, ',', '.'),
             'net_balance' => $totalAccountBalance - $totalCreditDebt,
-            'net_balance_formatted' => '$'.number_format(($totalAccountBalance - $totalCreditDebt) / 100, 0, ',', '.'),
+            'net_balance_formatted' => '$'.number_format($totalAccountBalance - $totalCreditDebt, 0, ',', '.'),
             'accounts_by_type' => $accountsByType,
             'credit_cards_count' => $paymentMethods->count(),
             'monthly_stats' => [
                 'month' => now()->format('F Y'),
                 'transaction_count' => $monthlyTransactionCount,
-                'expenses' => $monthlyExpenses,
+                'expenses' => $monthlyExpenses / 100,
                 'expenses_formatted' => '$'.number_format($monthlyExpenses / 100, 0, ',', '.'),
-                'income' => $monthlyIncome,
+                'income' => $monthlyIncome / 100,
                 'income_formatted' => '$'.number_format($monthlyIncome / 100, 0, ',', '.'),
             ],
         ];

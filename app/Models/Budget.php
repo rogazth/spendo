@@ -15,18 +15,21 @@ class Budget extends Model
 
     protected $fillable = [
         'user_id',
+        'account_id',
         'name',
+        'description',
         'currency',
-        'period_start',
-        'period_end',
+        'frequency',
+        'anchor_date',
+        'ends_at',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
-            'period_start' => 'date',
-            'period_end' => 'date',
+            'anchor_date' => 'date',
+            'ends_at' => 'date',
             'is_active' => 'boolean',
         ];
     }
@@ -36,13 +39,20 @@ class Budget extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(BudgetItem::class);
     }
 
-    public function getTotalBudgetedAttribute(): int
+    public function getTotalBudgetedAttribute(): float
     {
-        return $this->items()->sum('amount');
+        $totalInCents = $this->items()->sum('amount');
+
+        return $totalInCents / 100;
     }
 }

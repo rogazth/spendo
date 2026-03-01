@@ -43,13 +43,15 @@ function isDebitTransaction(type: string): boolean {
 interface TransactionColumnsOptions {
     onEdit: (transaction: Transaction) => void;
     onDelete: (transaction: Transaction) => void;
+    showActions?: boolean;
 }
 
 export function getTransactionColumns({
     onEdit,
     onDelete,
+    showActions = true,
 }: TransactionColumnsOptions): ColumnDef<Transaction>[] {
-    return [
+    const columns: ColumnDef<Transaction>[] = [
         {
             accessorKey: 'description',
             header: ({ column }) => {
@@ -189,7 +191,10 @@ export function getTransactionColumns({
                 );
             },
         },
-        {
+    ];
+
+    if (showActions) {
+        columns.push({
             id: 'actions',
             cell: ({ row }) => {
                 const transaction = row.original;
@@ -218,6 +223,8 @@ export function getTransactionColumns({
                     </DropdownMenu>
                 );
             },
-        },
-    ];
+        });
+    }
+
+    return columns;
 }

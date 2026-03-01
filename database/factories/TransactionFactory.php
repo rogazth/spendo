@@ -59,6 +59,7 @@ class TransactionFactory extends Factory
             'currency' => 'CLP',
             'description' => 'Compra en '.fake()->randomElement(self::$merchants),
             'notes' => fake()->optional(0.2)->sentence(),
+            'exclude_from_budget' => false,
             'transaction_date' => fake()->dateTimeBetween('-3 months', 'now'),
         ];
     }

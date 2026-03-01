@@ -69,7 +69,7 @@ export function getAccountColumns({
                         style={{ backgroundColor: row.original.color }}
                     />
                     <Link
-                        href={`/accounts/${row.original.uuid}`}
+                        href={`/transactions?account_ids[]=${row.original.id}`}
                         className="font-medium hover:underline"
                     >
                         {row.getValue('name')}

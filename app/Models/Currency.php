@@ -10,8 +10,11 @@ class Currency extends Model
     use HasFactory;
 
     public $incrementing = false;
+
     protected $primaryKey = 'code';
+
     protected $keyType = 'string';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -25,21 +28,15 @@ class Currency extends Model
      */
     public static function map(): array
     {
-        static $cache = null;
-
-        if ($cache === null) {
-            $cache = self::query()
-                ->get(['code', 'name', 'locale'])
-                ->keyBy('code')
-                ->map(fn (Currency $currency) => [
-                    'code' => $currency->code,
-                    'name' => $currency->name,
-                    'locale' => $currency->locale,
-                ])
-                ->toArray();
-        }
-
-        return $cache;
+        return self::query()
+            ->get(['code', 'name', 'locale'])
+            ->keyBy('code')
+            ->map(fn (Currency $currency) => [
+                'code' => $currency->code,
+                'name' => $currency->name,
+                'locale' => $currency->locale,
+            ])
+            ->toArray();
     }
 
     /**

@@ -27,6 +27,7 @@ class Transaction extends Model
         'currency',
         'description',
         'notes',
+        'exclude_from_budget',
         'transaction_date',
     ];
 
@@ -35,6 +36,7 @@ class Transaction extends Model
         return [
             'type' => TransactionType::class,
             'amount' => 'integer',
+            'exclude_from_budget' => 'boolean',
             'transaction_date' => 'datetime',
         ];
     }

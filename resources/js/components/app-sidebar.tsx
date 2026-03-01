@@ -1,6 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Wallet, ArrowLeftRight, Tag, CreditCard } from 'lucide-react';
-import { NavFooter } from '@/components/nav-footer';
+import { LayoutGrid, Wallet, ArrowLeftRight, Tag, CreditCard, PiggyBank } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -42,20 +41,13 @@ const mainNavItems: NavItem[] = [
         href: '/payment-methods',
         icon: CreditCard,
     },
+    {
+        title: 'Budgets',
+        href: '/budgets',
+        icon: PiggyBank,
+    },
 ];
 
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
 
 export function AppSidebar() {
     return (
@@ -77,7 +69,6 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

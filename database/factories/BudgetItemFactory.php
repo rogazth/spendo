@@ -16,7 +16,7 @@ class BudgetItemFactory extends Factory
         return [
             'budget_id' => Budget::factory(),
             'category_id' => Category::factory(),
-            'amount' => fake()->numberBetween(5000000, 50000000),
+            'amount' => fake()->numberBetween(50000, 500000),
         ];
     }
 }

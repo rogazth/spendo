@@ -28,6 +28,7 @@ class TransactionResource extends JsonResource
             'currency_locale' => Currency::localeFor($this->currency),
             'description' => $this->description,
             'notes' => $this->notes,
+            'exclude_from_budget' => $this->exclude_from_budget,
             'transaction_date' => $this->transaction_date,
             'account_id' => $this->account_id,
             'payment_method_id' => $this->payment_method_id,

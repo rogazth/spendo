@@ -6,7 +6,6 @@ use App\Enums\TransactionType;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Http\Resources\AccountResource;
-use App\Http\Resources\TransactionResource;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -66,31 +65,6 @@ class AccountController extends Controller
         return redirect()
             ->route('accounts.index')
             ->with('success', 'Cuenta creada exitosamente.');
-    }
-
-    public function show(Account $account): Response
-    {
-        $this->authorizeAccount($account);
-
-        $account->load(['paymentMethods']);
-
-        $transactions = $account->paymentMethods()
-            ->with(['transactions' => fn ($query) => $query
-                ->with(['category', 'paymentMethod'])
-                ->latest('transaction_date')
-                ->limit(50),
-            ])
-            ->get()
-            ->pluck('transactions')
-            ->flatten()
-            ->sortByDesc('transaction_date')
-            ->take(50)
-            ->values();
-
-        return Inertia::render('accounts/show', [
-            'account' => new AccountResource($account),
-            'transactions' => TransactionResource::collection($transactions),
-        ]);
     }
 
     public function update(UpdateAccountRequest $request, Account $account): RedirectResponse

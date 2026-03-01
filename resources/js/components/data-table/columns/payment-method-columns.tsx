@@ -1,5 +1,5 @@
-import { ColumnDef } from '@tanstack/react-table';
 import { Link } from '@inertiajs/react';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
     ArrowUpDownIcon,
     ArrowUpIcon,
@@ -76,7 +76,7 @@ export function getPaymentMethodColumns({
                             style={{ backgroundColor: method.color }}
                         />
                         <Link
-                            href={`/payment-methods/${method.uuid}`}
+                            href={`/transactions?payment_method_ids[]=${method.id}`}
                             className="font-medium hover:underline"
                         >
                             {row.getValue('name')}

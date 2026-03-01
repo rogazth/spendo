@@ -53,7 +53,7 @@ class GetAccountsTool extends Tool
             'type_label' => $account->type->label(),
             'currency' => $account->currency,
             'current_balance' => $account->current_balance,
-            'current_balance_formatted' => '$'.number_format($account->current_balance / 100, 0, ',', '.'),
+            'current_balance_formatted' => '$'.number_format($account->current_balance, 0, ',', '.'),
             'color' => $account->color,
             'icon' => $account->icon,
             'is_active' => $account->is_active,

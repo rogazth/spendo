@@ -9,8 +9,8 @@ use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,20 +19,26 @@ class TransactionController extends Controller
 {
     public function index(Request $request): Response
     {
+        $paymentMethodIds = $this->extractIdFilter(
+            $request,
+            'payment_method_ids',
+            'payment_method_id',
+        );
+        $accountIds = $this->extractIdFilter($request, 'account_ids');
+        $categoryIds = $this->extractIdFilter($request, 'category_ids');
+
         $query = Auth::user()
             ->transactions()
             ->with(['paymentMethod', 'category', 'account', 'linkedTransaction.account']);
 
-        if ($request->filled('payment_method_id')) {
-            $query->where('payment_method_id', $request->input('payment_method_id'));
+        if ($paymentMethodIds) {
+            $query->whereIn('payment_method_id', $paymentMethodIds);
         }
 
-        $accountIds = array_filter((array) $request->input('account_ids', []));
         if ($accountIds) {
             $query->whereIn('account_id', $accountIds);
         }
 
-        $categoryIds = array_filter((array) $request->input('category_ids', []));
         if ($categoryIds) {
             $query->whereIn('category_id', $categoryIds);
         }
@@ -105,7 +111,13 @@ class TransactionController extends Controller
                     'color' => $child->color,
                 ])->toArray(),
             ])->toArray(),
-            'filters' => $request->only(['account_ids', 'category_ids', 'date_from', 'date_to']),
+            'filters' => [
+                'payment_method_ids' => $paymentMethodIds,
+                'account_ids' => $accountIds,
+                'category_ids' => $categoryIds,
+                'date_from' => $request->input('date_from'),
+                'date_to' => $request->input('date_to'),
+            ],
         ]);
     }
 
@@ -135,6 +147,7 @@ class TransactionController extends Controller
                     'account_id' => $originAccount->id,
                     'payment_method_id' => null,
                     'category_id' => null,
+                    'exclude_from_budget' => false,
                     'amount' => $validated['amount'],
                     'currency' => $originAccount->currency,
                     'description' => $validated['description'] ?? 'Transferencia',
@@ -146,6 +159,7 @@ class TransactionController extends Controller
                     'account_id' => $destinationAccount->id,
                     'payment_method_id' => null,
                     'category_id' => null,
+                    'exclude_from_budget' => false,
                     'amount' => $validated['amount'],
                     'currency' => $originAccount->currency,
                     'description' => $validated['description'] ?? 'Transferencia',
@@ -165,6 +179,7 @@ class TransactionController extends Controller
                 'account_id' => $validated['account_id'],
                 'payment_method_id' => $validated['payment_method_id'] ?? null,
                 'category_id' => $validated['category_id'] ?? null,
+                'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
                 'amount' => $validated['amount'],
                 'currency' => $validated['currency'],
                 'description' => $validated['description'] ?? null,
@@ -216,6 +231,7 @@ class TransactionController extends Controller
                         'account_id' => $originAccount->id,
                         'payment_method_id' => null,
                         'category_id' => null,
+                        'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
                         'currency' => $originAccount->currency,
                         'description' => $validated['description'] ?? 'Transferencia',
@@ -227,6 +243,7 @@ class TransactionController extends Controller
                         'account_id' => $originAccount->id,
                         'payment_method_id' => null,
                         'category_id' => null,
+                        'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
                         'currency' => $originAccount->currency,
                         'description' => $validated['description'] ?? 'Transferencia',
@@ -240,6 +257,7 @@ class TransactionController extends Controller
                         'account_id' => $destinationAccount->id,
                         'payment_method_id' => null,
                         'category_id' => null,
+                        'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
                         'currency' => $originAccount->currency,
                         'description' => $validated['description'] ?? 'Transferencia',
@@ -252,6 +270,7 @@ class TransactionController extends Controller
                         'account_id' => $destinationAccount->id,
                         'payment_method_id' => null,
                         'category_id' => null,
+                        'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
                         'currency' => $originAccount->currency,
                         'description' => $validated['description'] ?? 'Transferencia',
@@ -272,6 +291,7 @@ class TransactionController extends Controller
                 'account_id' => $validated['account_id'],
                 'payment_method_id' => $validated['payment_method_id'] ?? null,
                 'category_id' => $validated['category_id'] ?? null,
+                'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
                 'amount' => $validated['amount'],
                 'currency' => $validated['currency'],
                 'description' => $validated['description'] ?? null,
@@ -302,6 +322,37 @@ class TransactionController extends Controller
         if ($transaction->user_id !== Auth::id()) {
             abort(403);
         }
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function extractIdFilter(
+        Request $request,
+        string $multiKey,
+        ?string $legacySingleKey = null
+    ): array {
+        $raw = $request->input($multiKey, []);
+
+        if (! is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        if (
+            empty($raw) &&
+            $legacySingleKey !== null &&
+            $request->filled($legacySingleKey)
+        ) {
+            $raw = [$request->input($legacySingleKey)];
+        }
+
+        return collect($raw)
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

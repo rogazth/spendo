@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('currency', 3)->default('CLP');
             $table->string('description')->nullable();
             $table->text('notes')->nullable();
+            $table->boolean('exclude_from_budget')->default(false);
             $table->timestamp('transaction_date');
             $table->timestamps();
             $table->softDeletes();
@@ -42,6 +43,7 @@ return new class extends Migration
 
             $table->index(['user_id', 'transaction_date']);
             $table->index(['user_id', 'type']);
+            $table->index(['user_id', 'type', 'exclude_from_budget', 'transaction_date']);
             $table->index(['account_id', 'transaction_date']);
             $table->index('account_id');
             $table->index('payment_method_id');

@@ -12,15 +12,16 @@ class BudgetFactory extends Factory
 {
     public function definition(): array
     {
-        $periodStart = now()->startOfMonth();
-        $periodEnd = now()->endOfMonth();
+        $anchorDate = now()->startOfMonth();
 
         return [
             'user_id' => User::factory(),
             'name' => now()->format('F Y'),
+            'description' => fake()->optional()->sentence(),
             'currency' => 'CLP',
-            'period_start' => $periodStart,
-            'period_end' => $periodEnd,
+            'frequency' => 'monthly',
+            'anchor_date' => $anchorDate,
+            'ends_at' => null,
             'is_active' => true,
         ];
     }
@@ -38,8 +39,9 @@ class BudgetFactory extends Factory
 
         return $this->state(fn (array $attributes) => [
             'name' => $date->format('F Y'),
-            'period_start' => $date->startOfMonth()->toDateString(),
-            'period_end' => $date->endOfMonth()->toDateString(),
+            'frequency' => 'monthly',
+            'anchor_date' => $date->startOfMonth()->toDateString(),
+            'ends_at' => $date->endOfMonth()->toDateString(),
         ]);
     }
 }

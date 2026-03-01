@@ -2,8 +2,29 @@ import type { Currency } from '@/types';
 
 const formatterCache = new Map<string, Intl.NumberFormat>();
 const separatorCache = new Map<string, { group: string; decimal: string }>();
+const DEFAULT_CURRENCY = 'CLP';
 
-function getFormatter(locale: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+function resolveCurrencyCode(
+    currency?: string | null,
+    fallback: string = DEFAULT_CURRENCY,
+): string {
+    const normalizedCurrency = currency?.trim().toUpperCase() ?? '';
+    if (/^[A-Z]{3}$/.test(normalizedCurrency)) {
+        return normalizedCurrency;
+    }
+
+    const normalizedFallback = fallback.trim().toUpperCase();
+    if (/^[A-Z]{3}$/.test(normalizedFallback)) {
+        return normalizedFallback;
+    }
+
+    return DEFAULT_CURRENCY;
+}
+
+function getFormatter(
+    locale: string,
+    options: Intl.NumberFormatOptions,
+): Intl.NumberFormat {
     const key = `${locale}:${JSON.stringify(options)}`;
     const existing = formatterCache.get(key);
     if (existing) return existing;
@@ -23,14 +44,33 @@ export function getCurrencyLocale(
     return match?.locale ?? fallback;
 }
 
-export function getCurrencyFractionDigits(locale: string, currency: string): number {
-    return getFormatter(locale, {
-        style: 'currency',
-        currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2;
+export function getCurrencyFractionDigits(
+    locale: string,
+    currency?: string | null,
+): number {
+    const currencyCode = resolveCurrencyCode(currency);
+
+    try {
+        return (
+            getFormatter(locale, {
+                style: 'currency',
+                currency: currencyCode,
+            }).resolvedOptions().maximumFractionDigits ?? 2
+        );
+    } catch {
+        return (
+            getFormatter(locale, {
+                style: 'currency',
+                currency: DEFAULT_CURRENCY,
+            }).resolvedOptions().maximumFractionDigits ?? 2
+        );
+    }
 }
 
-export function getNumberSeparators(locale: string): { group: string; decimal: string } {
+export function getNumberSeparators(locale: string): {
+    group: string;
+    decimal: string;
+} {
     const cached = separatorCache.get(locale);
     if (cached) return cached;
 
@@ -44,21 +84,32 @@ export function getNumberSeparators(locale: string): { group: string; decimal: s
 
 export function formatCurrency(
     amount: number,
-    currency: string,
+    currency?: string | null,
     locale: string = 'es-CL',
 ): string {
-    const fractionDigits = getCurrencyFractionDigits(locale, currency);
-    return getFormatter(locale, {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: fractionDigits,
-    }).format(amount);
+    const currencyCode = resolveCurrencyCode(currency);
+    const fractionDigits = getCurrencyFractionDigits(locale, currencyCode);
+
+    try {
+        return getFormatter(locale, {
+            style: 'currency',
+            currency: currencyCode,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: fractionDigits,
+        }).format(amount);
+    } catch {
+        return getFormatter(locale, {
+            style: 'currency',
+            currency: DEFAULT_CURRENCY,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: fractionDigits,
+        }).format(amount);
+    }
 }
 
 export function formatCurrencyValue(
     amount: number,
-    currency: string,
+    currency?: string | null,
     locale: string = 'es-CL',
 ): string {
     const fractionDigits = getCurrencyFractionDigits(locale, currency);
@@ -71,7 +122,7 @@ export function formatCurrencyValue(
 
 export function parseCurrencyInput(
     rawValue: string,
-    currency: string,
+    currency?: string | null,
     locale: string = 'es-CL',
 ): number | null {
     const trimmed = rawValue.trim();

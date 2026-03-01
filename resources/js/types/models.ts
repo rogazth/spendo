@@ -36,6 +36,15 @@ export const PAYMENT_METHOD_TYPES = [
 ] as const;
 export type PaymentMethodType = typeof PAYMENT_METHOD_TYPES[number]['id'];
 
+// Budget frequencies
+export const BUDGET_FREQUENCIES = [
+    { id: 'weekly', label: 'Semanal' },
+    { id: 'biweekly', label: 'Quincenal' },
+    { id: 'monthly', label: 'Mensual' },
+    { id: 'bimonthly', label: 'Bimensual' },
+] as const;
+export type BudgetFrequency = typeof BUDGET_FREQUENCIES[number]['id'];
+
 // Base model with timestamps
 export interface Model {
     id: number;
@@ -122,6 +131,7 @@ export interface Transaction extends Model {
     currency_locale?: string;
     description: string | null;
     notes: string | null;
+    exclude_from_budget: boolean;
     transaction_date: string;
     // Computed
     formatted_amount?: string;
@@ -136,15 +146,23 @@ export interface Transaction extends Model {
 // Budget model
 export interface Budget extends Model {
     user_id: number;
+    account_id: number | null;
     name: string;
+    description: string | null;
     currency: string;
-    period_start: string;
-    period_end: string;
+    frequency: BudgetFrequency;
+    anchor_date: string;
+    ends_at: string | null;
     is_active: boolean;
     // Computed
     total_budgeted?: number;
+    current_cycle_spent?: number;
+    current_cycle_percentage?: number;
+    current_cycle_start?: string;
+    current_cycle_end?: string;
     total_spent?: number;
     // Relations
+    account?: Account;
     items?: BudgetItem[];
 }
 

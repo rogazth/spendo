@@ -18,8 +18,8 @@ import {
     EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/app-layout';
 import { useDebounce } from '@/hooks/use-debounce';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import type {
     Account,
@@ -36,6 +36,7 @@ interface Props {
     paymentMethods: PaymentMethod[];
     categories: Category[];
     filters: {
+        payment_method_ids?: number[];
         account_ids?: number[];
         category_ids?: number[];
         date_from?: string;
@@ -68,6 +69,9 @@ export default function TransactionsIndex({
     const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(
         filters.account_ids?.map(String) ?? [],
     );
+    const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = useState<
+        string[]
+    >(filters.payment_method_ids?.map(String) ?? []);
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(
         filters.category_ids?.map(String) ?? [],
     );
@@ -156,48 +160,22 @@ export default function TransactionsIndex({
         });
     }, [categories]);
 
-    useEffect(() => {
-        if (!didInitFilters.current) {
-            didInitFilters.current = true;
-            const initialKey = [
-                [...selectedAccountIds].sort().join(','),
-                [...selectedCategoryIds].sort().join(','),
-                dateFrom,
-                dateTo,
-            ].join('|');
-            lastAppliedKey.current = initialKey;
-            return;
-        }
-
-        const nextKey = [
-            [...selectedAccountIds].sort().join(','),
-            [...selectedCategoryIds].sort().join(','),
-            dateFrom,
-            dateTo,
-        ].join('|');
-
-        if (nextKey === lastAppliedKey.current) {
-            return;
-        }
-
-        const timeout = window.setTimeout(() => {
-            lastAppliedKey.current = nextKey;
-            handleApplyFilters();
-        }, 250);
-
-        return () => window.clearTimeout(timeout);
-    }, [selectedAccountIds, selectedCategoryIds, dateFrom, dateTo]);
-
-    const filteredTransactions = useMemo(() => {
-        if (!debouncedSearchQuery.trim()) return transactions.data;
-        const query = debouncedSearchQuery.toLowerCase();
-        return transactions.data.filter((transaction) =>
-            (transaction.description ?? '').toLowerCase().includes(query),
-        );
-    }, [transactions.data, debouncedSearchQuery]);
+    const paymentMethodOptions = useMemo(
+        () =>
+            paymentMethods.map((method) => ({
+                id: method.id.toString(),
+                name: method.name,
+                is_default: method.is_default,
+            })),
+        [paymentMethods],
+    );
 
     const handleApplyFilters = () => {
         const params: Record<string, string | string[]> = {};
+
+        if (selectedPaymentMethodIds.length > 0) {
+            params.payment_method_ids = selectedPaymentMethodIds;
+        }
 
         if (selectedAccountIds.length > 0) {
             params.account_ids = selectedAccountIds;
@@ -222,6 +200,54 @@ export default function TransactionsIndex({
         });
     };
 
+    useEffect(() => {
+        if (!didInitFilters.current) {
+            didInitFilters.current = true;
+            const initialKey = [
+                [...selectedPaymentMethodIds].sort().join(','),
+                [...selectedAccountIds].sort().join(','),
+                [...selectedCategoryIds].sort().join(','),
+                dateFrom,
+                dateTo,
+            ].join('|');
+            lastAppliedKey.current = initialKey;
+            return;
+        }
+
+        const nextKey = [
+            [...selectedPaymentMethodIds].sort().join(','),
+            [...selectedAccountIds].sort().join(','),
+            [...selectedCategoryIds].sort().join(','),
+            dateFrom,
+            dateTo,
+        ].join('|');
+
+        if (nextKey === lastAppliedKey.current) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            lastAppliedKey.current = nextKey;
+            handleApplyFilters();
+        }, 250);
+
+        return () => window.clearTimeout(timeout);
+    }, [
+        selectedPaymentMethodIds,
+        selectedAccountIds,
+        selectedCategoryIds,
+        dateFrom,
+        dateTo,
+    ]);
+
+    const filteredTransactions = useMemo(() => {
+        if (!debouncedSearchQuery.trim()) return transactions.data;
+        const query = debouncedSearchQuery.toLowerCase();
+        return transactions.data.filter((transaction) =>
+            (transaction.description ?? '').toLowerCase().includes(query),
+        );
+    }, [transactions.data, debouncedSearchQuery]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Transacciones" />
@@ -243,6 +269,28 @@ export default function TransactionsIndex({
                         onChange={(event) => setSearchQuery(event.target.value)}
                         placeholder="Buscar..."
                         className="w-full sm:w-[220px]"
+                    />
+                    <FilterDropdown
+                        title="Métodos de Pago"
+                        options={paymentMethodOptions.map((method) => ({
+                            value: method.id,
+                            label: (
+                                <span className="flex items-center gap-2">
+                                    <span>{method.name}</span>
+                                    {method.is_default && (
+                                        <span className="text-xs text-muted-foreground">
+                                            (Por defecto)
+                                        </span>
+                                    )}
+                                </span>
+                            ),
+                        }))}
+                        selectedValues={new Set(selectedPaymentMethodIds)}
+                        onChange={(next) =>
+                            setSelectedPaymentMethodIds(Array.from(next))
+                        }
+                        searchPlaceholder="Buscar métodos de pago..."
+                        emptyLabel="No hay métodos"
                     />
                     <FilterDropdown
                         title="Cuentas"

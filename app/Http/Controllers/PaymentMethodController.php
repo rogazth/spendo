@@ -6,7 +6,6 @@ use App\Http\Requests\StorePaymentMethodRequest;
 use App\Http\Requests\UpdatePaymentMethodRequest;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\PaymentMethodResource;
-use App\Http\Resources\TransactionResource;
 use App\Models\PaymentMethod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -60,24 +59,6 @@ class PaymentMethodController extends Controller
         return redirect()
             ->route('payment-methods.index')
             ->with('success', 'Metodo de pago creado exitosamente.');
-    }
-
-    public function show(PaymentMethod $paymentMethod): Response
-    {
-        $this->authorizePaymentMethod($paymentMethod);
-
-        $paymentMethod->load('linkedAccount');
-
-        $transactions = $paymentMethod->transactions()
-            ->with(['category', 'paymentMethod'])
-            ->latest('transaction_date')
-            ->limit(50)
-            ->get();
-
-        return Inertia::render('payment-methods/show', [
-            'paymentMethod' => new PaymentMethodResource($paymentMethod),
-            'transactions' => TransactionResource::collection($transactions),
-        ]);
     }
 
     public function update(UpdatePaymentMethodRequest $request, PaymentMethod $paymentMethod): RedirectResponse
