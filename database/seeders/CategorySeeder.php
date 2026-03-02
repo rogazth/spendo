@@ -24,6 +24,8 @@ class CategorySeeder extends Seeder
                 ['name' => 'Gas', 'icon' => 'flame', 'color' => '#F97316'],
                 ['name' => 'Internet', 'icon' => 'wifi', 'color' => '#8B5CF6'],
                 ['name' => 'Teléfono', 'icon' => 'phone', 'color' => '#10B981'],
+                ['name' => 'Televisión', 'icon' => 'monitor', 'color' => '#6366F1'],
+                ['name' => 'Impuestos', 'icon' => 'receipt', 'color' => '#EF4444'],
             ],
         ],
         [
@@ -35,6 +37,9 @@ class CategorySeeder extends Seeder
                 ['name' => 'Dividendo', 'icon' => 'building-2', 'color' => '#8B5CF6'],
                 ['name' => 'Mantención', 'icon' => 'tool', 'color' => '#F59E0B'],
                 ['name' => 'Seguros', 'icon' => 'shield', 'color' => '#10B981'],
+                ['name' => 'Gasto Común', 'icon' => 'building-2', 'color' => '#8B5CF6'],
+                ['name' => 'Suministros del Hogar', 'icon' => 'package', 'color' => '#84CC16'],
+                ['name' => 'Préstamo Hipotecario', 'icon' => 'coins', 'color' => '#F59E0B'],
             ],
         ],
         [
@@ -46,6 +51,8 @@ class CategorySeeder extends Seeder
                 ['name' => 'Restaurantes', 'icon' => 'utensils', 'color' => '#F97316'],
                 ['name' => 'Delivery', 'icon' => 'bike', 'color' => '#EC4899'],
                 ['name' => 'Café', 'icon' => 'coffee', 'color' => '#78350F'],
+                ['name' => 'Golosinas', 'icon' => 'candy', 'color' => '#EC4899'],
+                ['name' => 'Bebidas', 'icon' => 'wine', 'color' => '#7C3AED'],
             ],
         ],
         [
@@ -58,6 +65,10 @@ class CategorySeeder extends Seeder
                 ['name' => 'Uber/Taxi', 'icon' => 'car', 'color' => '#000000'],
                 ['name' => 'Estacionamiento', 'icon' => 'parking', 'color' => '#6B7280'],
                 ['name' => 'Peajes', 'icon' => 'route', 'color' => '#3B82F6'],
+                ['name' => 'Seguro de Auto', 'icon' => 'shield-check', 'color' => '#10B981'],
+                ['name' => 'Préstamo Auto', 'icon' => 'car', 'color' => '#F59E0B'],
+                ['name' => 'Vuelos', 'icon' => 'plane', 'color' => '#6366F1'],
+                ['name' => 'Reparación', 'icon' => 'wrench', 'color' => '#F97316'],
             ],
         ],
         [
@@ -69,6 +80,13 @@ class CategorySeeder extends Seeder
                 ['name' => 'Juegos', 'icon' => 'gamepad', 'color' => '#8B5CF6'],
                 ['name' => 'Salidas', 'icon' => 'glass', 'color' => '#EC4899'],
                 ['name' => 'Hobbies', 'icon' => 'palette', 'color' => '#06B6D4'],
+                ['name' => 'Cine', 'icon' => 'clapperboard', 'color' => '#E11D48'],
+                ['name' => 'Conciertos', 'icon' => 'mic', 'color' => '#EC4899'],
+                ['name' => 'Deportes', 'icon' => 'trophy', 'color' => '#3B82F6'],
+                ['name' => 'Gimnasio', 'icon' => 'dumbbell', 'color' => '#EC4899'],
+                ['name' => 'Discoteca', 'icon' => 'beer', 'color' => '#7C3AED'],
+                ['name' => 'Boliche', 'icon' => 'target', 'color' => '#EC4899'],
+                ['name' => 'Vacaciones', 'icon' => 'sun', 'color' => '#10B981'],
             ],
         ],
         [
@@ -79,6 +97,9 @@ class CategorySeeder extends Seeder
                 ['name' => 'Médico', 'icon' => 'stethoscope', 'color' => '#3B82F6'],
                 ['name' => 'Farmacia', 'icon' => 'pill', 'color' => '#10B981'],
                 ['name' => 'Seguro de Salud', 'icon' => 'shield', 'color' => '#6366F1'],
+                ['name' => 'Dentista', 'icon' => 'smile', 'color' => '#EC4899'],
+                ['name' => 'Óptica', 'icon' => 'glasses', 'color' => '#06B6D4'],
+                ['name' => 'Psicólogo', 'icon' => 'brain', 'color' => '#8B5CF6'],
             ],
         ],
         [
@@ -99,6 +120,54 @@ class CategorySeeder extends Seeder
                 ['name' => 'Ropa', 'icon' => 'shirt', 'color' => '#EC4899'],
                 ['name' => 'Tecnología', 'icon' => 'laptop', 'color' => '#6366F1'],
                 ['name' => 'Hogar', 'icon' => 'home', 'color' => '#84CC16'],
+                ['name' => 'Electrónica', 'icon' => 'cpu', 'color' => '#6366F1'],
+                ['name' => 'Accesorios', 'icon' => 'watch', 'color' => '#F97316'],
+                ['name' => 'Deportes y Outdoors', 'icon' => 'bike', 'color' => '#3B82F6'],
+            ],
+        ],
+        [
+            'name' => 'Mascotas',
+            'icon' => 'paw-print',
+            'color' => '#F97316',
+            'children' => [
+                ['name' => 'Alimento Mascota', 'icon' => 'utensils', 'color' => '#F97316'],
+                ['name' => 'Veterinario', 'icon' => 'stethoscope', 'color' => '#10B981'],
+                ['name' => 'Accesorios Mascota', 'icon' => 'package', 'color' => '#F59E0B'],
+                ['name' => 'Peluquería Mascota', 'icon' => 'scissors', 'color' => '#EC4899'],
+            ],
+        ],
+        [
+            'name' => 'Viajes',
+            'icon' => 'map-pin',
+            'color' => '#0EA5E9',
+            'children' => [
+                ['name' => 'Hotel', 'icon' => 'bed', 'color' => '#0EA5E9'],
+                ['name' => 'Tour / Actividades', 'icon' => 'map', 'color' => '#10B981'],
+                ['name' => 'Seguro de Viaje', 'icon' => 'shield', 'color' => '#6366F1'],
+                ['name' => 'Equipaje', 'icon' => 'luggage', 'color' => '#F59E0B'],
+            ],
+        ],
+        [
+            'name' => 'Estilo de Vida',
+            'icon' => 'sparkles',
+            'color' => '#EC4899',
+            'children' => [
+                ['name' => 'Donaciones', 'icon' => 'heart-handshake', 'color' => '#EC4899'],
+                ['name' => 'Cuidado Infantil', 'icon' => 'baby', 'color' => '#FB923C'],
+                ['name' => 'Regalos', 'icon' => 'gift', 'color' => '#EC4899'],
+                ['name' => 'Trabajo / Oficina', 'icon' => 'briefcase', 'color' => '#6366F1'],
+                ['name' => 'Comunidad', 'icon' => 'users', 'color' => '#84CC16'],
+            ],
+        ],
+        [
+            'name' => 'Finanzas',
+            'icon' => 'landmark',
+            'color' => '#6B7280',
+            'children' => [
+                ['name' => 'Comisiones Bancarias', 'icon' => 'landmark', 'color' => '#6B7280'],
+                ['name' => 'Préstamo Estudiantil', 'icon' => 'graduation-cap', 'color' => '#6366F1'],
+                ['name' => 'Intereses Deuda', 'icon' => 'percent', 'color' => '#EF4444'],
+                ['name' => 'Multas', 'icon' => 'alert-triangle', 'color' => '#F97316'],
             ],
         ],
         [
@@ -145,6 +214,36 @@ class CategorySeeder extends Seeder
             'color' => '#06B6D4',
         ],
         [
+            'name' => 'Pensión',
+            'icon' => 'piggy-bank',
+            'color' => '#10B981',
+        ],
+        [
+            'name' => 'Beneficio Familiar',
+            'icon' => 'users',
+            'color' => '#06B6D4',
+        ],
+        [
+            'name' => 'Bono / Aguinaldo',
+            'icon' => 'gift',
+            'color' => '#EC4899',
+        ],
+        [
+            'name' => 'Venta de Activos',
+            'icon' => 'trending-up',
+            'color' => '#22C55E',
+        ],
+        [
+            'name' => 'Ahorros',
+            'icon' => 'piggy-bank',
+            'color' => '#06B6D4',
+            'children' => [
+                ['name' => 'Ahorro de Emergencia', 'icon' => 'star', 'color' => '#06B6D4'],
+                ['name' => 'Ahorro General', 'icon' => 'piggy-bank', 'color' => '#06B6D4'],
+                ['name' => 'Ahorro para Vacaciones', 'icon' => 'umbrella', 'color' => '#06B6D4'],
+            ],
+        ],
+        [
             'name' => 'Otros Ingresos',
             'icon' => 'tag',
             'color' => '#6B7280',
@@ -165,21 +264,20 @@ class CategorySeeder extends Seeder
 
     public function run(): void
     {
-        // Create expense categories
         $this->createCategories($this->expenseCategories, CategoryType::Expense);
-
-        // Create income categories
         $this->createCategories($this->incomeCategories, CategoryType::Income);
 
-        // Create system categories (protected)
         foreach ($this->systemCategories as $categoryData) {
-            Category::create([
-                ...$categoryData,
-                'user_id' => null,
-                'parent_id' => null,
-                'type' => CategoryType::System,
-                'is_system' => true,
-            ]);
+            Category::updateOrCreate(
+                ['name' => $categoryData['name'], 'user_id' => null, 'is_system' => true],
+                [
+                    ...$categoryData,
+                    'user_id' => null,
+                    'parent_id' => null,
+                    'type' => CategoryType::System,
+                    'is_system' => true,
+                ]
+            );
         }
     }
 
@@ -192,22 +290,28 @@ class CategorySeeder extends Seeder
             $children = $categoryData['children'] ?? [];
             unset($categoryData['children']);
 
-            $parent = Category::create([
-                ...$categoryData,
-                'user_id' => null,
-                'parent_id' => null,
-                'type' => $type,
-                'is_system' => false,
-            ]);
-
-            foreach ($children as $childData) {
-                Category::create([
-                    ...$childData,
+            $parent = Category::updateOrCreate(
+                ['name' => $categoryData['name'], 'user_id' => null, 'parent_id' => null],
+                [
+                    ...$categoryData,
                     'user_id' => null,
-                    'parent_id' => $parent->id,
+                    'parent_id' => null,
                     'type' => $type,
                     'is_system' => false,
-                ]);
+                ]
+            );
+
+            foreach ($children as $childData) {
+                Category::updateOrCreate(
+                    ['name' => $childData['name'], 'user_id' => null, 'parent_id' => $parent->id],
+                    [
+                        ...$childData,
+                        'user_id' => null,
+                        'parent_id' => $parent->id,
+                        'type' => $type,
+                        'is_system' => false,
+                    ]
+                );
             }
         }
     }
