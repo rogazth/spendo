@@ -31,6 +31,11 @@ class SpendoServer extends Server
     protected string $name = 'Spendo';
 
     /**
+     * Return all tools without pagination truncation.
+     */
+    public int $defaultPaginationLength = 50;
+
+    /**
      * The MCP server's version.
      */
     protected string $version = '2.0.0';
