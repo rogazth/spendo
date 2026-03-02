@@ -9,8 +9,8 @@ Mcp::oauthRoutes();
 
 // Web server accessible via HTTP (for remote AI clients)
 // Protected with Passport OAuth authentication
-// URL: /api/mcp
-Mcp::web('/api/mcp', SpendoServer::class)
+// URL: /mcp
+Mcp::web('/mcp', SpendoServer::class)
     ->middleware(['auth:api']);
 
 // Local server for CLI usage (e.g., Claude Code)
