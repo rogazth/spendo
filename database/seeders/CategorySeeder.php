@@ -40,6 +40,9 @@ class CategorySeeder extends Seeder
                 ['name' => 'Gasto Común', 'icon' => 'building-2', 'color' => '#8B5CF6'],
                 ['name' => 'Suministros del Hogar', 'icon' => 'package', 'color' => '#84CC16'],
                 ['name' => 'Préstamo Hipotecario', 'icon' => 'coins', 'color' => '#F59E0B'],
+                ['name' => 'Banco', 'icon' => 'landmark', 'color' => '#6B7280'],
+                ['name' => 'Cuentas', 'icon' => 'file-text', 'color' => '#F59E0B'],
+                ['name' => 'Servicio', 'icon' => 'settings', 'color' => '#6B7280'],
             ],
         ],
         [
@@ -51,6 +54,7 @@ class CategorySeeder extends Seeder
                 ['name' => 'Restaurantes', 'icon' => 'utensils', 'color' => '#F97316'],
                 ['name' => 'Delivery', 'icon' => 'bike', 'color' => '#EC4899'],
                 ['name' => 'Café', 'icon' => 'coffee', 'color' => '#78350F'],
+                ['name' => 'Comida', 'icon' => 'utensils', 'color' => '#F97316'],
                 ['name' => 'Golosinas', 'icon' => 'candy', 'color' => '#EC4899'],
                 ['name' => 'Bebidas', 'icon' => 'wine', 'color' => '#7C3AED'],
             ],
@@ -68,6 +72,7 @@ class CategorySeeder extends Seeder
                 ['name' => 'Seguro de Auto', 'icon' => 'shield-check', 'color' => '#10B981'],
                 ['name' => 'Préstamo Auto', 'icon' => 'car', 'color' => '#F59E0B'],
                 ['name' => 'Vuelos', 'icon' => 'plane', 'color' => '#6366F1'],
+                ['name' => 'Costos del Auto', 'icon' => 'car', 'color' => '#6B7280'],
                 ['name' => 'Reparación', 'icon' => 'wrench', 'color' => '#F97316'],
             ],
         ],
@@ -86,6 +91,7 @@ class CategorySeeder extends Seeder
                 ['name' => 'Gimnasio', 'icon' => 'dumbbell', 'color' => '#EC4899'],
                 ['name' => 'Discoteca', 'icon' => 'beer', 'color' => '#7C3AED'],
                 ['name' => 'Boliche', 'icon' => 'target', 'color' => '#EC4899'],
+                ['name' => 'Suscripción', 'icon' => 'play-circle', 'color' => '#E11D48'],
                 ['name' => 'Vacaciones', 'icon' => 'sun', 'color' => '#10B981'],
             ],
         ],
@@ -174,6 +180,9 @@ class CategorySeeder extends Seeder
             'name' => 'Otros Gastos',
             'icon' => 'tag',
             'color' => '#6B7280',
+            'children' => [
+                ['name' => 'Desconocido', 'icon' => 'help-circle', 'color' => '#6B7280'],
+            ],
         ],
     ];
 
@@ -183,6 +192,11 @@ class CategorySeeder extends Seeder
      * @var array<int, array{name: string, icon: string, color: string, children?: array<int, array{name: string, icon: string, color: string}>}>
      */
     private array $incomeCategories = [
+        [
+            'name' => 'Ingresos',
+            'icon' => 'banknote',
+            'color' => '#22C55E',
+        ],
         [
             'name' => 'Sueldo',
             'icon' => 'briefcase',
