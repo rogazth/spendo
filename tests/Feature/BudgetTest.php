@@ -3,15 +3,18 @@
 use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
+use App\Models\Currency;
 use App\Models\Transaction;
 use App\Models\User;
-use Database\Seeders\CurrencySeeder;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('creates a budget with multiple categories and optional account', function () {
-    $this->seed(CurrencySeeder::class);
+beforeEach(function () {
+    $this->withoutVite();
+    Currency::updateOrCreate(['code' => 'CLP'], ['name' => 'Peso chileno', 'locale' => 'es-CL']);
+});
 
+test('creates a budget with multiple categories and optional account', function () {
     $user = User::factory()->create();
     $categoryA = Category::factory()->expense()->for($user)->create();
     $categoryB = Category::factory()->expense()->for($user)->create();
@@ -45,8 +48,6 @@ test('creates a budget with multiple categories and optional account', function 
 });
 
 test('rejects overlapping parent and child categories in the same budget', function () {
-    $this->seed(CurrencySeeder::class);
-
     $user = User::factory()->create();
     $parentCategory = Category::factory()->expense()->for($user)->create([
         'parent_id' => null,

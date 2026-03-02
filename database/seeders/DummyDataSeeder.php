@@ -24,7 +24,7 @@ class DummyDataSeeder extends Seeder
             'password' => Hash::make('luis1998'),
         ]);
 
-        $this->seedUserWithLotsOfData($mainUser, $expenseCategories, $incomeCategories);
+        // $this->seedUserWithLotsOfData($mainUser, $expenseCategories, $incomeCategories);
 
         // User 2: User with moderate data
         $moderateUser = User::factory()->create([
@@ -130,10 +130,29 @@ class DummyDataSeeder extends Seeder
 
         // Create expense transactions (150+ transactions over 6 months)
         $merchants = [
-            'Supermercado Lider', 'Jumbo', 'Santa Isabel', 'Starbucks', 'McDonald\'s',
-            'Uber', 'Uber Eats', 'Rappi', 'Copec', 'Shell', 'Farmacias Ahumada',
-            'Falabella', 'Ripley', 'Paris', 'Netflix', 'Spotify', 'Amazon',
-            'MercadoLibre', 'VTR', 'Movistar', 'Enel', 'Aguas Andinas', 'Metrogas',
+            'Supermercado Lider',
+            'Jumbo',
+            'Santa Isabel',
+            'Starbucks',
+            'McDonald\'s',
+            'Uber',
+            'Uber Eats',
+            'Rappi',
+            'Copec',
+            'Shell',
+            'Farmacias Ahumada',
+            'Falabella',
+            'Ripley',
+            'Paris',
+            'Netflix',
+            'Spotify',
+            'Amazon',
+            'MercadoLibre',
+            'VTR',
+            'Movistar',
+            'Enel',
+            'Aguas Andinas',
+            'Metrogas',
         ];
 
         $paymentMethods = [$creditCard, $debitCard, $cashPayment, $transfer];
@@ -216,8 +235,15 @@ class DummyDataSeeder extends Seeder
 
         // Create expenses (30-40 transactions over 3 months)
         $merchants = [
-            'Supermercado Lider', 'Jumbo', 'Starbucks', 'Uber', 'Copec',
-            'Netflix', 'Spotify', 'VTR', 'Enel',
+            'Supermercado Lider',
+            'Jumbo',
+            'Starbucks',
+            'Uber',
+            'Copec',
+            'Netflix',
+            'Spotify',
+            'VTR',
+            'Enel',
         ];
 
         $paymentMethods = [$debitCard, $creditCard];

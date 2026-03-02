@@ -32,7 +32,7 @@ class StorePaymentMethodRequest extends FormRequest
                     ->whereNull('deleted_at')),
             ],
             'type' => ['required', 'string', Rule::enum(PaymentMethodType::class)],
-            'linked_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'linked_account_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')->where('user_id', $userId)],
             'currency' => ['nullable', 'string', 'size:3', Rule::in(Currency::codes())],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'billing_cycle_day' => ['nullable', 'integer', 'min:1', 'max:28'],

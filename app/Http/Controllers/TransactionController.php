@@ -174,10 +174,26 @@ class TransactionController extends Controller
                 $this->storeAttachments($outgoing, $validated['attachments'] ?? []);
             });
         } else {
+            $account = Auth::user()->accounts()->find($validated['account_id']);
+
+            if (! $account) {
+                abort(403);
+            }
+
+            $paymentMethodId = $validated['payment_method_id'] ?? null;
+
+            if ($paymentMethodId !== null) {
+                $paymentMethod = Auth::user()->paymentMethods()->find($paymentMethodId);
+
+                if (! $paymentMethod) {
+                    abort(403);
+                }
+            }
+
             $transaction = Auth::user()->transactions()->create([
                 'type' => $validated['type'],
-                'account_id' => $validated['account_id'],
-                'payment_method_id' => $validated['payment_method_id'] ?? null,
+                'account_id' => $account->id,
+                'payment_method_id' => $paymentMethodId,
                 'category_id' => $validated['category_id'] ?? null,
                 'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
                 'amount' => $validated['amount'],
