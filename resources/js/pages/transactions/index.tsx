@@ -89,22 +89,23 @@ export default function TransactionsIndex({
     const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
     const [dateTo, setDateTo] = useState(filters.date_to ?? '');
 
-    const selectedBudgetId = filters.budget_id ? String(filters.budget_id) : '';
-    const selectedAccountId = filters.account_ids?.[0] ? String(filters.account_ids[0]) : '';
+    const ALL = '__all__';
+    const selectedBudgetId = filters.budget_id ? String(filters.budget_id) : ALL;
+    const selectedAccountId = filters.account_ids?.[0] ? String(filters.account_ids[0]) : ALL;
     const selectedInstrumentId = filters.instrument_ids?.[0]
         ? String(filters.instrument_ids[0])
-        : '';
+        : ALL;
 
     // Budget has a scoped account — the account filter is locked
     const budgetLocksAccount = !!(filters.budget_id && filters.budget_account_id);
 
-    function buildParams(overrides: Record<string, string>) {
+    function buildParams(overrides: Record<string, string> = {}) {
         const params: Record<string, string | string[]> = {};
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
-        if (selectedBudgetId) params.budget_id = selectedBudgetId;
-        if (selectedAccountId && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
-        if (selectedInstrumentId) params['instrument_ids[]'] = selectedInstrumentId;
+        if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
+        if (selectedAccountId !== ALL && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
+        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
         return { ...params, ...overrides };
     }
 
@@ -114,9 +115,9 @@ export default function TransactionsIndex({
         const params: Record<string, string | string[]> = {};
         if (next.dateFrom) params.date_from = next.dateFrom;
         if (next.dateTo) params.date_to = next.dateTo;
-        if (selectedBudgetId) params.budget_id = selectedBudgetId;
-        if (selectedAccountId && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
-        if (selectedInstrumentId) params['instrument_ids[]'] = selectedInstrumentId;
+        if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
+        if (selectedAccountId !== ALL && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
+        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
         applyFilters(params);
     };
 
@@ -124,26 +125,30 @@ export default function TransactionsIndex({
         const params: Record<string, string | string[]> = {};
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
-        if (value) params.budget_id = value;
-        // Clear account filter when switching budgets
-        if (selectedInstrumentId) params['instrument_ids[]'] = selectedInstrumentId;
+        if (value !== ALL) params.budget_id = value;
+        // Clear account when switching budgets; keep instrument
+        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
         applyFilters(params);
     };
 
     const handleAccountChange = (value: string) => {
-        const next = buildParams(value ? { 'account_ids[]': value } : {});
-        if (!value) delete next['account_ids[]'];
+        const next = buildParams(value !== ALL ? { 'account_ids[]': value } : {});
+        if (value === ALL) delete next['account_ids[]'];
         applyFilters(next);
     };
 
     const handleInstrumentChange = (value: string) => {
-        const next = buildParams(value ? { 'instrument_ids[]': value } : {});
-        if (!value) delete next['instrument_ids[]'];
+        const next = buildParams(value !== ALL ? { 'instrument_ids[]': value } : {});
+        if (value === ALL) delete next['instrument_ids[]'];
         applyFilters(next);
     };
 
     const hasActiveFilters =
-        selectedBudgetId || selectedAccountId || selectedInstrumentId || dateFrom || dateTo;
+        selectedBudgetId !== ALL ||
+        selectedAccountId !== ALL ||
+        selectedInstrumentId !== ALL ||
+        dateFrom ||
+        dateTo;
 
     const clearAllFilters = () => {
         setDateFrom('');
@@ -166,7 +171,7 @@ export default function TransactionsIndex({
                             <SelectValue placeholder="Presupuesto" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Todos los presupuestos</SelectItem>
+                            <SelectItem value={ALL}>Todos los presupuestos</SelectItem>
                             {budgets.map((b) => (
                                 <SelectItem key={b.id} value={String(b.id)}>
                                     {b.name}
@@ -185,7 +190,7 @@ export default function TransactionsIndex({
                             <SelectValue placeholder="Cuenta" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Todas las cuentas</SelectItem>
+                            <SelectItem value={ALL}>Todas las cuentas</SelectItem>
                             {accounts.map((a) => (
                                 <SelectItem key={a.id} value={String(a.id)}>
                                     {a.name}
@@ -200,7 +205,7 @@ export default function TransactionsIndex({
                             <SelectValue placeholder="Instrumento" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Todos los instrumentos</SelectItem>
+                            <SelectItem value={ALL}>Todos los instrumentos</SelectItem>
                             {instruments.map((i) => (
                                 <SelectItem key={i.id} value={String(i.id)}>
                                     {i.name}
