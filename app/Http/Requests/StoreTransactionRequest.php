@@ -19,13 +19,14 @@ class StoreTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['required', 'string', 'in:expense,income,transfer'],
+            'type' => ['required', 'string', 'in:expense,income,transfer,settlement'],
             'account_id' => ['nullable', 'required_if:type,expense,income', 'integer', 'exists:accounts,id'],
             'origin_account_id' => ['nullable', 'required_if:type,transfer', 'integer', 'exists:accounts,id', 'different:destination_account_id'],
             'destination_account_id' => ['nullable', 'required_if:type,transfer', 'integer', 'exists:accounts,id', 'different:origin_account_id'],
-            'payment_method_id' => ['nullable', 'integer', 'exists:payment_methods,id', 'required_if:type,expense'],
+            'instrument_id' => ['nullable', 'required_if:type,settlement', 'integer', 'exists:instruments,id'],
+            'from_instrument_id' => ['nullable', 'integer', 'exists:instruments,id'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
-            'amount' => ['required', 'numeric'],
+            'amount' => ['required', 'numeric', 'gt:0'],
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'description' => ['nullable', 'string', 'max:255'],
             'exclude_from_budget' => ['nullable', 'boolean'],
@@ -41,7 +42,7 @@ class StoreTransactionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'account_id.required' => 'La cuenta es requerida.',
+            'account_id.required_if' => 'La cuenta es requerida para gastos e ingresos.',
             'account_id.exists' => 'La cuenta seleccionada no existe.',
             'origin_account_id.required_if' => 'La cuenta de origen es requerida.',
             'origin_account_id.exists' => 'La cuenta de origen seleccionada no existe.',
@@ -49,11 +50,13 @@ class StoreTransactionRequest extends FormRequest
             'destination_account_id.required_if' => 'La cuenta de destino es requerida.',
             'destination_account_id.exists' => 'La cuenta de destino seleccionada no existe.',
             'destination_account_id.different' => 'La cuenta de destino debe ser distinta a la de origen.',
-            'payment_method_id.required_if' => 'El metodo de pago es requerido para gastos.',
-            'payment_method_id.exists' => 'El metodo de pago seleccionado no existe.',
+            'instrument_id.exists' => 'El instrumento seleccionado no existe.',
+            'from_instrument_id.exists' => 'El instrumento de origen seleccionado no existe.',
             'category_id.exists' => 'La categoria seleccionada no existe.',
             'amount.required' => 'El monto es requerido.',
             'amount.numeric' => 'El monto debe ser un numero.',
+            'amount.gt' => 'El monto debe ser mayor a cero.',
+            'instrument_id.required_if' => 'El instrumento es requerido para liquidaciones.',
             'currency.required' => 'La moneda es requerida.',
             'currency.size' => 'La moneda debe tener 3 caracteres.',
             'description.max' => 'La descripcion no puede exceder 255 caracteres.',

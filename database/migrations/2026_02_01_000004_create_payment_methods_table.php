@@ -8,13 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('payment_methods', function (Blueprint $table) {
+        Schema::create('instruments', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->enum('type', ['credit_card', 'debit_card', 'prepaid_card', 'cash', 'transfer']);
-            $table->unsignedBigInteger('linked_account_id')->nullable();
+            $table->enum('type', ['checking', 'savings', 'cash', 'investment', 'credit_card', 'prepaid_card']);
             $table->string('currency', 3)->default('CLP');
             $table->bigInteger('credit_limit')->nullable();
             $table->unsignedTinyInteger('billing_cycle_day')->nullable();
@@ -28,19 +27,13 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreign('linked_account_id')
-                ->references('id')
-                ->on('accounts')
-                ->nullOnDelete();
-
             $table->index(['user_id', 'is_active']);
             $table->index(['user_id', 'type']);
-            $table->index('linked_account_id');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('payment_methods');
+        Schema::dropIfExists('instruments');
     }
 };

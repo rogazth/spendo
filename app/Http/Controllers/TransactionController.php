@@ -19,20 +19,16 @@ class TransactionController extends Controller
 {
     public function index(Request $request): Response
     {
-        $paymentMethodIds = $this->extractIdFilter(
-            $request,
-            'payment_method_ids',
-            'payment_method_id',
-        );
+        $instrumentIds = $this->extractIdFilter($request, 'instrument_ids');
         $accountIds = $this->extractIdFilter($request, 'account_ids');
         $categoryIds = $this->extractIdFilter($request, 'category_ids');
 
         $query = Auth::user()
             ->transactions()
-            ->with(['paymentMethod', 'category', 'account', 'linkedTransaction.account']);
+            ->with(['instrument', 'fromInstrument', 'category', 'account', 'linkedTransaction.account']);
 
-        if ($paymentMethodIds) {
-            $query->whereIn('payment_method_id', $paymentMethodIds);
+        if ($instrumentIds) {
+            $query->whereIn('instrument_id', $instrumentIds);
         }
 
         if ($accountIds) {
@@ -61,8 +57,8 @@ class TransactionController extends Controller
             ->where('is_active', true)
             ->get();
 
-        $paymentMethods = Auth::user()
-            ->paymentMethods()
+        $instruments = Auth::user()
+            ->instruments()
             ->where('is_active', true)
             ->get();
 
@@ -81,21 +77,20 @@ class TransactionController extends Controller
                 'id' => $account->id,
                 'uuid' => $account->uuid,
                 'name' => $account->name,
-                'type' => $account->type->value,
                 'currency' => $account->currency,
                 'currency_locale' => Currency::localeFor($account->currency),
                 'is_active' => $account->is_active,
                 'is_default' => $account->is_default,
             ])->toArray(),
-            'paymentMethods' => $paymentMethods->map(fn ($pm) => [
-                'id' => $pm->id,
-                'uuid' => $pm->uuid,
-                'name' => $pm->name,
-                'type' => $pm->type->value,
-                'currency' => $pm->currency,
-                'currency_locale' => Currency::localeFor($pm->currency),
-                'is_active' => $pm->is_active,
-                'is_default' => $pm->is_default,
+            'instruments' => $instruments->map(fn ($instrument) => [
+                'id' => $instrument->id,
+                'uuid' => $instrument->uuid,
+                'name' => $instrument->name,
+                'type' => $instrument->type->value,
+                'currency' => $instrument->currency,
+                'currency_locale' => Currency::localeFor($instrument->currency),
+                'is_active' => $instrument->is_active,
+                'is_default' => $instrument->is_default,
             ])->toArray(),
             'categories' => $categories->map(fn ($cat) => [
                 'id' => $cat->id,
@@ -112,7 +107,7 @@ class TransactionController extends Controller
                 ])->toArray(),
             ])->toArray(),
             'filters' => [
-                'payment_method_ids' => $paymentMethodIds,
+                'instrument_ids' => $instrumentIds,
                 'account_ids' => $accountIds,
                 'category_ids' => $categoryIds,
                 'date_from' => $request->input('date_from'),
@@ -137,15 +132,11 @@ class TransactionController extends Controller
                 abort(403);
             }
 
-            \DB::transaction(function () use (
-                $validated,
-                $originAccount,
-                $destinationAccount
-            ) {
+            \DB::transaction(function () use ($validated, $originAccount, $destinationAccount) {
                 $outgoing = Auth::user()->transactions()->create([
                     'type' => 'transfer_out',
                     'account_id' => $originAccount->id,
-                    'payment_method_id' => null,
+                    'instrument_id' => null,
                     'category_id' => null,
                     'exclude_from_budget' => false,
                     'amount' => $validated['amount'],
@@ -157,7 +148,7 @@ class TransactionController extends Controller
                 $incoming = Auth::user()->transactions()->create([
                     'type' => 'transfer_in',
                     'account_id' => $destinationAccount->id,
-                    'payment_method_id' => null,
+                    'instrument_id' => null,
                     'category_id' => null,
                     'exclude_from_budget' => false,
                     'amount' => $validated['amount'],
@@ -167,12 +158,42 @@ class TransactionController extends Controller
                     'linked_transaction_id' => $outgoing->id,
                 ]);
 
-                $outgoing->update([
-                    'linked_transaction_id' => $incoming->id,
-                ]);
+                $outgoing->update(['linked_transaction_id' => $incoming->id]);
 
                 $this->storeAttachments($outgoing, $validated['attachments'] ?? []);
             });
+        } elseif ($validated['type'] === 'settlement') {
+            $instrumentId = $validated['instrument_id'] ?? null;
+            $fromInstrumentId = $validated['from_instrument_id'] ?? null;
+
+            if ($instrumentId) {
+                $instrument = Auth::user()->instruments()->find($instrumentId);
+                if (! $instrument) {
+                    abort(403);
+                }
+            }
+
+            if ($fromInstrumentId) {
+                $fromInstrument = Auth::user()->instruments()->find($fromInstrumentId);
+                if (! $fromInstrument) {
+                    abort(403);
+                }
+            }
+
+            $transaction = Auth::user()->transactions()->create([
+                'type' => 'settlement',
+                'account_id' => null,
+                'instrument_id' => $instrumentId,
+                'from_instrument_id' => $fromInstrumentId,
+                'category_id' => $validated['category_id'] ?? null,
+                'exclude_from_budget' => true,
+                'amount' => $validated['amount'],
+                'currency' => $validated['currency'],
+                'description' => $validated['description'] ?? null,
+                'transaction_date' => $validated['transaction_date'],
+            ]);
+
+            $this->storeAttachments($transaction, $validated['attachments'] ?? []);
         } else {
             $account = Auth::user()->accounts()->find($validated['account_id']);
 
@@ -180,12 +201,11 @@ class TransactionController extends Controller
                 abort(403);
             }
 
-            $paymentMethodId = $validated['payment_method_id'] ?? null;
+            $instrumentId = $validated['instrument_id'] ?? null;
 
-            if ($paymentMethodId !== null) {
-                $paymentMethod = Auth::user()->paymentMethods()->find($paymentMethodId);
-
-                if (! $paymentMethod) {
+            if ($instrumentId !== null) {
+                $instrument = Auth::user()->instruments()->find($instrumentId);
+                if (! $instrument) {
                     abort(403);
                 }
             }
@@ -193,7 +213,7 @@ class TransactionController extends Controller
             $transaction = Auth::user()->transactions()->create([
                 'type' => $validated['type'],
                 'account_id' => $account->id,
-                'payment_method_id' => $paymentMethodId,
+                'instrument_id' => $instrumentId,
                 'category_id' => $validated['category_id'] ?? null,
                 'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
                 'amount' => $validated['amount'],
@@ -228,12 +248,7 @@ class TransactionController extends Controller
                 abort(403);
             }
 
-            \DB::transaction(function () use (
-                $validated,
-                $transaction,
-                $originAccount,
-                $destinationAccount
-            ) {
+            \DB::transaction(function () use ($validated, $transaction, $originAccount, $destinationAccount) {
                 $outgoing = $transaction->type->value === 'transfer_in'
                     ? $transaction->linkedTransaction ?? $transaction->counterpartTransaction
                     : $transaction;
@@ -245,7 +260,7 @@ class TransactionController extends Controller
                     $outgoing = Auth::user()->transactions()->create([
                         'type' => 'transfer_out',
                         'account_id' => $originAccount->id,
-                        'payment_method_id' => null,
+                        'instrument_id' => null,
                         'category_id' => null,
                         'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
@@ -257,7 +272,7 @@ class TransactionController extends Controller
                     $outgoing->update([
                         'type' => 'transfer_out',
                         'account_id' => $originAccount->id,
-                        'payment_method_id' => null,
+                        'instrument_id' => null,
                         'category_id' => null,
                         'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
@@ -271,7 +286,7 @@ class TransactionController extends Controller
                     $incoming = Auth::user()->transactions()->create([
                         'type' => 'transfer_in',
                         'account_id' => $destinationAccount->id,
-                        'payment_method_id' => null,
+                        'instrument_id' => null,
                         'category_id' => null,
                         'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
@@ -284,7 +299,7 @@ class TransactionController extends Controller
                     $incoming->update([
                         'type' => 'transfer_in',
                         'account_id' => $destinationAccount->id,
-                        'payment_method_id' => null,
+                        'instrument_id' => null,
                         'category_id' => null,
                         'exclude_from_budget' => false,
                         'amount' => $validated['amount'],
@@ -295,17 +310,16 @@ class TransactionController extends Controller
                     ]);
                 }
 
-                $outgoing->update([
-                    'linked_transaction_id' => $incoming->id,
-                ]);
+                $outgoing->update(['linked_transaction_id' => $incoming->id]);
 
                 $this->storeAttachments($outgoing, $validated['attachments'] ?? []);
             });
         } else {
             $transaction->update([
                 'type' => $validated['type'],
-                'account_id' => $validated['account_id'],
-                'payment_method_id' => $validated['payment_method_id'] ?? null,
+                'account_id' => $validated['account_id'] ?? null,
+                'instrument_id' => $validated['instrument_id'] ?? null,
+                'from_instrument_id' => $validated['from_instrument_id'] ?? null,
                 'category_id' => $validated['category_id'] ?? null,
                 'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
                 'amount' => $validated['amount'],
@@ -326,7 +340,16 @@ class TransactionController extends Controller
     {
         $this->authorizeTransaction($transaction);
 
-        $transaction->delete();
+        \DB::transaction(function () use ($transaction) {
+            $transaction->delete();
+
+            // Also soft-delete the linked transfer leg to prevent orphaned transfers
+            if ($transaction->linked_transaction_id !== null) {
+                Transaction::query()
+                    ->find($transaction->linked_transaction_id)
+                    ?->delete();
+            }
+        });
 
         return redirect()
             ->route('transactions.index')
@@ -343,23 +366,12 @@ class TransactionController extends Controller
     /**
      * @return array<int, int>
      */
-    private function extractIdFilter(
-        Request $request,
-        string $multiKey,
-        ?string $legacySingleKey = null
-    ): array {
+    private function extractIdFilter(Request $request, string $multiKey): array
+    {
         $raw = $request->input($multiKey, []);
 
         if (! is_array($raw)) {
             $raw = [$raw];
-        }
-
-        if (
-            empty($raw) &&
-            $legacySingleKey !== null &&
-            $request->filled($legacySingleKey)
-        ) {
-            $raw = [$request->input($legacySingleKey)];
         }
 
         return collect($raw)

@@ -24,8 +24,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { getCurrencyLocale } from '@/lib/currency';
 import { cn } from '@/lib/utils';
-import type { Account, AccountType, Currency } from '@/types';
-import { ACCOUNT_TYPES } from '@/types';
+import type { Account, Currency } from '@/types';
 import { DEFAULT_COLORS } from '@/constants/colors';
 
 interface AccountFormDialogProps {
@@ -51,7 +50,6 @@ export function AccountFormDialog({
 
     const { data, setData, post, put, processing, errors, reset } = useForm<{
         name: string;
-        type: AccountType;
         currency: string;
         initial_balance: number | null;
         color: string;
@@ -60,7 +58,6 @@ export function AccountFormDialog({
         is_default: boolean;
     }>({
         name: '',
-        type: 'checking',
         currency: 'CLP',
         initial_balance: null,
         color: '#3B82F6',
@@ -73,7 +70,6 @@ export function AccountFormDialog({
         if (open) {
             setData({
                 name: account?.name ?? '',
-                type: account?.type ?? 'checking',
                 currency: account?.currency ?? 'CLP',
                 initial_balance: null,
                 color: account?.color ?? '#3B82F6',
@@ -143,31 +139,6 @@ export function AccountFormDialog({
                             <InputError message={errors.name} />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="type">Tipo de Cuenta</Label>
-                            <Select
-                                value={data.type}
-                                onValueChange={(value: AccountType) =>
-                                    setData('type', value)
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona un tipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {ACCOUNT_TYPES.map((type) => (
-                                        <SelectItem
-                                            key={type.id}
-                                            value={type.id}
-                                        >
-                                            {type.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.type} />
-                        </div>
-
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="currency">Moneda</Label>
@@ -180,18 +151,18 @@ export function AccountFormDialog({
                                     <SelectTrigger>
                                         <SelectValue placeholder="Selecciona moneda" />
                                     </SelectTrigger>
-                                <SelectContent>
-                                    {currencyOptions.map((currency) => (
-                                        <SelectItem
-                                            key={currency.code}
-                                            value={currency.code}
-                                        >
-                                            {currency.code} - {currency.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.currency} />
+                                    <SelectContent>
+                                        {currencyOptions.map((currency) => (
+                                            <SelectItem
+                                                key={currency.code}
+                                                value={currency.code}
+                                            >
+                                                {currency.code} - {currency.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={errors.currency} />
                             </div>
 
                             {!isEditing && (

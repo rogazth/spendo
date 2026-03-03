@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -17,16 +17,16 @@ class DummyDataSeeder extends Seeder
         $expenseCategories = Category::where('type', 'expense')->whereNull('parent_id')->get();
         $incomeCategories = Category::where('type', 'income')->whereNull('parent_id')->get();
 
-        // User 1: Main user with lots of data
+        // User 1: Main user (no dummy data — real user)
         $mainUser = User::factory()->create([
             'name' => 'Gabriel Rodriguez',
             'email' => 'gabriel98rl@gmail.com',
             'password' => Hash::make('luis1998'),
         ]);
 
-        // $this->seedUserWithLotsOfData($mainUser, $expenseCategories, $incomeCategories);
+        // $this->seedUserWithModerateData($mainUser, $expenseCategories, $incomeCategories);
 
-        // User 2: User with moderate data
+        // User 2: User with moderate dummy data
         $moderateUser = User::factory()->create([
             'name' => 'Juan Perez',
             'email' => 'juan@example.com',
@@ -43,177 +43,31 @@ class DummyDataSeeder extends Seeder
         ]);
     }
 
-    private function seedUserWithLotsOfData(User $user, $expenseCategories, $incomeCategories): void
-    {
-        // Create accounts
-        $checkingAccount = Account::factory()->checking()->default()->create([
-            'user_id' => $user->id,
-            'name' => 'Cuenta Corriente Santander',
-            'color' => '#EF4444',
-        ]);
-
-        $savingsAccount = Account::factory()->savings()->create([
-            'user_id' => $user->id,
-            'name' => 'Cuenta Ahorro BCI',
-            'color' => '#3B82F6',
-        ]);
-
-        $cashAccount = Account::factory()->cash()->create([
-            'user_id' => $user->id,
-            'name' => 'Efectivo',
-            'color' => '#10B981',
-        ]);
-
-        $investmentAccount = Account::factory()->investment()->create([
-            'user_id' => $user->id,
-            'name' => 'Fondo Mutuo Santander',
-            'color' => '#8B5CF6',
-        ]);
-
-        // Create payment methods
-        $creditCard = PaymentMethod::factory()->creditCard()->default()->create([
-            'user_id' => $user->id,
-            'name' => 'Visa Santander',
-            'credit_limit' => 3000000,
-            'billing_cycle_day' => 15,
-            'payment_due_day' => 5,
-            'last_four_digits' => '4532',
-            'color' => '#EF4444',
-        ]);
-
-        $debitCard = PaymentMethod::factory()->debitCard()->create([
-            'user_id' => $user->id,
-            'name' => 'Debito Santander',
-            'linked_account_id' => $checkingAccount->id,
-            'last_four_digits' => '7891',
-            'color' => '#3B82F6',
-        ]);
-
-        $cashPayment = PaymentMethod::factory()->cash()->create([
-            'user_id' => $user->id,
-            'name' => 'Efectivo',
-            'linked_account_id' => $cashAccount->id,
-            'color' => '#10B981',
-        ]);
-
-        $transfer = PaymentMethod::factory()->transfer()->create([
-            'user_id' => $user->id,
-            'name' => 'Transferencia',
-            'linked_account_id' => $checkingAccount->id,
-            'color' => '#F59E0B',
-        ]);
-
-        // Create income transactions (salary and others)
-        for ($month = 5; $month >= 0; $month--) {
-            // Monthly salary
-            Transaction::factory()->income()->create([
-                'user_id' => $user->id,
-                'account_id' => $checkingAccount->id,
-                'category_id' => $incomeCategories->where('name', 'Sueldo')->first()?->id,
-                'amount' => fake()->numberBetween(2500000, 3500000),
-                'description' => 'Sueldo mensual',
-                'transaction_date' => now()->subMonths($month)->startOfMonth()->addDays(fake()->numberBetween(1, 5)),
-            ]);
-
-            // Random bonus/extra income
-            if (fake()->boolean(30)) {
-                Transaction::factory()->income()->create([
-                    'user_id' => $user->id,
-                    'account_id' => $checkingAccount->id,
-                    'category_id' => $incomeCategories->random()->id,
-                    'amount' => fake()->numberBetween(100000, 500000),
-                    'description' => fake()->randomElement(['Freelance', 'Venta', 'Reembolso', 'Bono']),
-                    'transaction_date' => now()->subMonths($month)->addDays(fake()->numberBetween(1, 28)),
-                ]);
-            }
-        }
-
-        // Create expense transactions (150+ transactions over 6 months)
-        $merchants = [
-            'Supermercado Lider',
-            'Jumbo',
-            'Santa Isabel',
-            'Starbucks',
-            'McDonald\'s',
-            'Uber',
-            'Uber Eats',
-            'Rappi',
-            'Copec',
-            'Shell',
-            'Farmacias Ahumada',
-            'Falabella',
-            'Ripley',
-            'Paris',
-            'Netflix',
-            'Spotify',
-            'Amazon',
-            'MercadoLibre',
-            'VTR',
-            'Movistar',
-            'Enel',
-            'Aguas Andinas',
-            'Metrogas',
-        ];
-
-        $paymentMethods = [$creditCard, $debitCard, $cashPayment, $transfer];
-
-        for ($i = 0; $i < 180; $i++) {
-            $paymentMethod = fake()->randomElement($paymentMethods);
-            $category = $expenseCategories->random();
-            $daysAgo = fake()->numberBetween(0, 180);
-
-            Transaction::factory()->expense()->create([
-                'user_id' => $user->id,
-                'account_id' => $checkingAccount->id,
-                'payment_method_id' => $paymentMethod->id,
-                'category_id' => $category->id,
-                'amount' => $this->getRealisticAmount($category->name),
-                'description' => $this->getDescriptionForCategory($category->name, $merchants),
-                'transaction_date' => now()->subDays($daysAgo),
-            ]);
-        }
-
-        // Create some credit card settlements
-        for ($month = 4; $month >= 0; $month--) {
-            Transaction::factory()->settlement()->create([
-                'user_id' => $user->id,
-                'account_id' => $checkingAccount->id,
-                'payment_method_id' => $creditCard->id,
-                'category_id' => null,
-                'amount' => fake()->numberBetween(200000, 800000),
-                'description' => 'Pago tarjeta de credito',
-                'transaction_date' => now()->subMonths($month)->day(5),
-            ]);
-        }
-    }
-
     private function seedUserWithModerateData(User $user, $expenseCategories, $incomeCategories): void
     {
-        // Create accounts
-        $checkingAccount = Account::factory()->checking()->default()->create([
+        // Create logical accounts
+        $personalAccount = Account::factory()->default()->create([
             'user_id' => $user->id,
-            'name' => 'Cuenta Corriente BCI',
+            'name' => 'Personal',
             'color' => '#3B82F6',
         ]);
 
-        $savingsAccount = Account::factory()->savings()->create([
+        $casaAccount = Account::factory()->create([
             'user_id' => $user->id,
-            'name' => 'Cuenta Ahorro',
+            'name' => 'Casa',
             'color' => '#10B981',
         ]);
 
-        // Create payment methods
-        $debitCard = PaymentMethod::factory()->debitCard()->default()->create([
+        // Create instruments
+        $mercadoPago = Instrument::factory()->savings()->create([
             'user_id' => $user->id,
-            'name' => 'Debito BCI',
-            'linked_account_id' => $checkingAccount->id,
-            'last_four_digits' => '1234',
+            'name' => 'Mercado Pago',
             'color' => '#3B82F6',
         ]);
 
-        $creditCard = PaymentMethod::factory()->creditCard()->create([
+        $creditCard = Instrument::factory()->creditCard()->create([
             'user_id' => $user->id,
-            'name' => 'Visa BCI',
+            'name' => 'Visa Santander',
             'credit_limit' => 2000000,
             'billing_cycle_day' => 20,
             'payment_due_day' => 10,
@@ -221,11 +75,12 @@ class DummyDataSeeder extends Seeder
             'color' => '#8B5CF6',
         ]);
 
-        // Create income (last 3 months)
+        // Create income (last 3 months) to Personal account
         for ($month = 2; $month >= 0; $month--) {
             Transaction::factory()->income()->create([
                 'user_id' => $user->id,
-                'account_id' => $checkingAccount->id,
+                'account_id' => $personalAccount->id,
+                'instrument_id' => $mercadoPago->id,
                 'category_id' => $incomeCategories->where('name', 'Sueldo')->first()?->id,
                 'amount' => fake()->numberBetween(1800000, 2200000),
                 'description' => 'Sueldo',
@@ -233,7 +88,7 @@ class DummyDataSeeder extends Seeder
             ]);
         }
 
-        // Create expenses (30-40 transactions over 3 months)
+        // Create personal expenses
         $merchants = [
             'Supermercado Lider',
             'Jumbo',
@@ -246,23 +101,50 @@ class DummyDataSeeder extends Seeder
             'Enel',
         ];
 
-        $paymentMethods = [$debitCard, $creditCard];
+        $instruments = [$mercadoPago, $creditCard];
 
-        for ($i = 0; $i < 35; $i++) {
-            $paymentMethod = fake()->randomElement($paymentMethods);
+        for ($i = 0; $i < 25; $i++) {
+            $instrument = fake()->randomElement($instruments);
             $category = $expenseCategories->random();
             $daysAgo = fake()->numberBetween(0, 90);
 
             Transaction::factory()->expense()->create([
                 'user_id' => $user->id,
-                'account_id' => $checkingAccount->id,
-                'payment_method_id' => $paymentMethod->id,
+                'account_id' => $personalAccount->id,
+                'instrument_id' => $instrument->id,
                 'category_id' => $category->id,
                 'amount' => $this->getRealisticAmount($category->name),
                 'description' => $this->getDescriptionForCategory($category->name, $merchants),
                 'transaction_date' => now()->subDays($daysAgo),
             ]);
         }
+
+        // Casa expenses (using credit card across both accounts)
+        for ($i = 0; $i < 10; $i++) {
+            $category = $expenseCategories->random();
+            $daysAgo = fake()->numberBetween(0, 90);
+
+            Transaction::factory()->expense()->create([
+                'user_id' => $user->id,
+                'account_id' => $casaAccount->id,
+                'instrument_id' => $creditCard->id,
+                'category_id' => $category->id,
+                'amount' => $this->getRealisticAmount($category->name),
+                'description' => $this->getDescriptionForCategory($category->name, $merchants),
+                'transaction_date' => now()->subDays($daysAgo),
+            ]);
+        }
+
+        // Credit card settlement (instrument-only, no account impact)
+        Transaction::factory()->settlement()->create([
+            'user_id' => $user->id,
+            'account_id' => null,
+            'instrument_id' => $creditCard->id,
+            'from_instrument_id' => $mercadoPago->id,
+            'amount' => fake()->numberBetween(200000, 500000),
+            'description' => 'Pago tarjeta Visa Santander',
+            'transaction_date' => now()->subDays(5),
+        ]);
     }
 
     private function getRealisticAmount(string $categoryName): int

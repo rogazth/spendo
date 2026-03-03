@@ -25,7 +25,7 @@ test('guests are redirected to login', function () {
 
 test('index renders accounts page for authenticated user', function () {
     $user = User::factory()->create();
-    Account::factory()->checking()->for($user)->create();
+    Account::factory()->for($user)->create();
 
     $this->actingAs($user)->get('/accounts')
         ->assertOk()
@@ -43,14 +43,12 @@ test('store creates an account', function () {
 
     $this->actingAs($user)->post('/accounts', [
         'name' => 'Mi Cuenta',
-        'type' => 'checking',
         'currency' => 'CLP',
     ])->assertRedirect('/accounts');
 
     $this->assertDatabaseHas('accounts', [
         'user_id' => $user->id,
         'name' => 'Mi Cuenta',
-        'type' => 'checking',
         'currency' => 'CLP',
     ]);
 });
@@ -60,7 +58,6 @@ test('store creates an income transaction for initial balance', function () {
 
     $this->actingAs($user)->post('/accounts', [
         'name' => 'Cuenta con saldo',
-        'type' => 'checking',
         'currency' => 'CLP',
         'initial_balance' => 100000,
     ])->assertRedirect('/accounts');
@@ -79,7 +76,7 @@ test('store validates required fields', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post('/accounts', [])
-        ->assertSessionHasErrors(['name', 'type', 'currency']);
+        ->assertSessionHasErrors(['name', 'currency']);
 });
 
 test('store rejects duplicate account names for the same user', function () {
@@ -88,7 +85,6 @@ test('store rejects duplicate account names for the same user', function () {
 
     $this->actingAs($user)->post('/accounts', [
         'name' => 'Mi Banco',
-        'type' => 'checking',
         'currency' => 'CLP',
     ])->assertSessionHasErrors('name');
 });
@@ -98,9 +94,18 @@ test('store rejects invalid currency code', function () {
 
     $this->actingAs($user)->post('/accounts', [
         'name' => 'Cuenta Inválida',
-        'type' => 'checking',
         'currency' => 'XYZ',
     ])->assertSessionHasErrors('currency');
+});
+
+test('store rejects negative initial_balance', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post('/accounts', [
+        'name' => 'Cuenta Negativa',
+        'currency' => 'CLP',
+        'initial_balance' => -100,
+    ])->assertSessionHasErrors('initial_balance');
 });
 
 test('store sets default and clears other defaults', function () {
@@ -109,7 +114,6 @@ test('store sets default and clears other defaults', function () {
 
     $this->actingAs($user)->post('/accounts', [
         'name' => 'Nueva Cuenta',
-        'type' => 'checking',
         'currency' => 'CLP',
         'is_default' => true,
     ]);
@@ -125,16 +129,14 @@ test('store sets default and clears other defaults', function () {
 
 test('update modifies an account', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create(['name' => 'Original']);
+    $account = Account::factory()->for($user)->create(['name' => 'Original']);
 
     $this->actingAs($user)->put("/accounts/{$account->uuid}", [
         'name' => 'Actualizada',
-        'type' => 'savings',
         'currency' => 'CLP',
     ])->assertRedirect('/accounts');
 
     expect($account->fresh()->name)->toBe('Actualizada');
-    expect($account->fresh()->type->value)->toBe('savings');
 });
 
 test('update returns 403 for another user account', function () {
@@ -144,7 +146,6 @@ test('update returns 403 for another user account', function () {
 
     $this->actingAs($other)->put("/accounts/{$account->uuid}", [
         'name' => 'Hack',
-        'type' => 'checking',
         'currency' => 'CLP',
     ])->assertForbidden();
 });

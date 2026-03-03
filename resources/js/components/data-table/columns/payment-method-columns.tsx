@@ -20,24 +20,19 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatCurrency } from '@/lib/currency';
-import type { PaymentMethod } from '@/types';
+import { INSTRUMENT_TYPES } from '@/types';
+import type { Instrument } from '@/types';
 
-function getPaymentMethodTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        credit_card: 'Tarjeta de Crédito',
-        debit_card: 'Tarjeta de Débito',
-        prepaid_card: 'Tarjeta Prepago',
-        cash: 'Efectivo',
-        transfer: 'Transferencia',
-    };
-    return labels[type] || type;
+function getInstrumentTypeLabel(type: string): string {
+    const match = INSTRUMENT_TYPES.find((t) => t.id === type);
+    return match?.label ?? type;
 }
 
 interface PaymentMethodColumnsOptions {
-    onEdit: (paymentMethod: PaymentMethod) => void;
-    onDelete: (paymentMethod: PaymentMethod) => void;
-    onToggleActive: (paymentMethod: PaymentMethod) => void;
-    onMakeDefault: (paymentMethod: PaymentMethod) => void;
+    onEdit: (instrument: Instrument) => void;
+    onDelete: (instrument: Instrument) => void;
+    onToggleActive: (instrument: Instrument) => void;
+    onMakeDefault: (instrument: Instrument) => void;
 }
 
 export function getPaymentMethodColumns({
@@ -45,7 +40,7 @@ export function getPaymentMethodColumns({
     onDelete,
     onToggleActive,
     onMakeDefault,
-}: PaymentMethodColumnsOptions): ColumnDef<PaymentMethod>[] {
+}: PaymentMethodColumnsOptions): ColumnDef<Instrument>[] {
     return [
         {
             accessorKey: 'name',
@@ -68,25 +63,25 @@ export function getPaymentMethodColumns({
                 );
             },
             cell: ({ row }) => {
-                const method = row.original;
+                const instrument = row.original;
                 return (
                     <div className="flex items-center gap-2">
                         <span
                             className="h-3 w-3 rounded-full"
-                            style={{ backgroundColor: method.color }}
+                            style={{ backgroundColor: instrument.color }}
                         />
                         <Link
-                            href={`/transactions?payment_method_ids[]=${method.id}`}
+                            href={`/transactions?instrument_ids[]=${instrument.id}`}
                             className="font-medium hover:underline"
                         >
                             {row.getValue('name')}
                         </Link>
-                        {method.is_default && (
+                        {instrument.is_default && (
                             <Badge variant="secondary">Por defecto</Badge>
                         )}
-                        {method.last_four_digits && (
+                        {instrument.last_four_digits && (
                             <span className="text-muted-foreground text-xs">
-                                •••• {method.last_four_digits}
+                                •••• {instrument.last_four_digits}
                             </span>
                         )}
                     </div>
@@ -98,7 +93,7 @@ export function getPaymentMethodColumns({
             header: 'Tipo',
             cell: ({ row }) => (
                 <span className="text-muted-foreground">
-                    {getPaymentMethodTypeLabel(row.getValue('type'))}
+                    {getInstrumentTypeLabel(row.getValue('type'))}
                 </span>
             ),
         },
@@ -106,23 +101,23 @@ export function getPaymentMethodColumns({
             id: 'credit_info',
             header: 'Crédito',
             cell: ({ row }) => {
-                const method = row.original;
-                if (method.type !== 'credit_card' || !method.credit_limit) {
+                const instrument = row.original;
+                if (instrument.type !== 'credit_card' || !instrument.credit_limit) {
                     return <span className="text-muted-foreground">-</span>;
                 }
                 return (
                     <div className="text-sm">
                         <p>
                             {formatCurrency(
-                                method.current_debt || 0,
-                                method.currency,
-                                method.currency_locale,
+                                instrument.current_debt || 0,
+                                instrument.currency,
+                                instrument.currency_locale,
                             )}{' '}
                             /{' '}
                             {formatCurrency(
-                                method.credit_limit,
-                                method.currency,
-                                method.currency_locale,
+                                instrument.credit_limit,
+                                instrument.currency,
+                                instrument.currency_locale,
                             )}
                         </p>
                     </div>
@@ -147,7 +142,7 @@ export function getPaymentMethodColumns({
         {
             id: 'actions',
             cell: ({ row }) => {
-                const method = row.original;
+                const instrument = row.original;
                 return (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -157,18 +152,18 @@ export function getPaymentMethodColumns({
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            {!method.is_default && (
-                                <DropdownMenuItem onClick={() => onMakeDefault(method)}>
+                            {!instrument.is_default && (
+                                <DropdownMenuItem onClick={() => onMakeDefault(instrument)}>
                                     <StarIcon className="h-4 w-4" />
                                     Marcar como por defecto
                                 </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem onClick={() => onEdit(method)}>
+                            <DropdownMenuItem onClick={() => onEdit(instrument)}>
                                 <PencilIcon className="h-4 w-4" />
                                 Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onToggleActive(method)}>
-                                {method.is_active ? (
+                            <DropdownMenuItem onClick={() => onToggleActive(instrument)}>
+                                {instrument.is_active ? (
                                     <>
                                         <EyeOffIcon className="h-4 w-4" />
                                         Desactivar
@@ -180,7 +175,7 @@ export function getPaymentMethodColumns({
                                     </>
                                 )}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onDelete(method)}>
+                            <DropdownMenuItem onClick={() => onDelete(instrument)}>
                                 <Trash2Icon className="h-4 w-4" />
                                 Eliminar
                             </DropdownMenuItem>

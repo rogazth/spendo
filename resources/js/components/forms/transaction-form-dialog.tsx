@@ -39,7 +39,7 @@ import type {
     Account,
     Category,
     Currency,
-    PaymentMethod,
+    Instrument,
     Transaction,
     TransactionType,
 } from '@/types';
@@ -49,7 +49,7 @@ interface TransactionFormDialogProps {
     onOpenChange: (open: boolean) => void;
     transaction?: Transaction;
     accounts: Account[];
-    paymentMethods: PaymentMethod[];
+    instruments: Instrument[];
     categories: Category[];
 }
 
@@ -68,7 +68,7 @@ export function TransactionFormDialog({
     onOpenChange,
     transaction,
     accounts,
-    paymentMethods,
+    instruments,
     categories,
 }: TransactionFormDialogProps) {
     const isEditing = !!transaction;
@@ -77,7 +77,7 @@ export function TransactionFormDialog({
     const [isDropzoneActive, setIsDropzoneActive] = useState(false);
 
     const defaultAccount = accounts.find((account) => account.is_default) ?? accounts[0];
-    const defaultPaymentMethod = paymentMethods.find((method) => method.is_default) ?? paymentMethods[0];
+    const defaultInstrument = instruments.find((instrument) => instrument.is_default) ?? instruments[0];
     const fallbackDestinationAccount = accounts.find(
         (account) => account.id !== defaultAccount?.id,
     );
@@ -86,7 +86,7 @@ export function TransactionFormDialog({
         account_id: number | null;
         origin_account_id: number | null;
         destination_account_id: number | null;
-        payment_method_id: number | null;
+        instrument_id: number | null;
         category_id: number | null;
         type: TransactionType;
         amount: number | null;
@@ -99,7 +99,7 @@ export function TransactionFormDialog({
         account_id: null,
         origin_account_id: null,
         destination_account_id: null,
-        payment_method_id: null,
+        instrument_id: null,
         category_id: null,
         type: 'expense',
         amount: null,
@@ -133,8 +133,8 @@ export function TransactionFormDialog({
                 transferDestination ??
                 fallbackDestinationAccount?.id ??
                 null,
-            payment_method_id:
-                transaction?.payment_method_id ?? defaultPaymentMethod?.id ?? null,
+            instrument_id:
+                transaction?.instrument_id ?? defaultInstrument?.id ?? null,
             category_id: transaction?.category_id ?? null,
             type:
                 transaction?.type === 'expense' ||
@@ -228,13 +228,13 @@ export function TransactionFormDialog({
         setData('category_id', null);
 
         if (type === 'income') {
-            setData('payment_method_id', null);
+            setData('instrument_id', null);
             setData('exclude_from_budget', false);
             return;
         }
 
         if (type === 'transfer') {
-            setData('payment_method_id', null);
+            setData('instrument_id', null);
             setData('exclude_from_budget', false);
             if (!data.origin_account_id) {
                 setData('origin_account_id', defaultAccount?.id ?? null);
@@ -250,8 +250,8 @@ export function TransactionFormDialog({
             return;
         }
 
-        if (!data.payment_method_id && paymentMethods.length > 0) {
-            setData('payment_method_id', paymentMethods[0].id);
+        if (!data.instrument_id && instruments.length > 0) {
+            setData('instrument_id', instruments[0].id);
         }
     };
 
@@ -295,10 +295,10 @@ export function TransactionFormDialog({
         transform((formData) => ({
             ...formData,
             transaction_date: format(formData.transaction_date, 'yyyy-MM-dd'),
-            payment_method_id:
+            instrument_id:
                 formData.type === 'income' || formData.type === 'transfer'
                     ? null
-                    : formData.payment_method_id,
+                    : formData.instrument_id,
             category_id: formData.type === 'transfer' ? null : formData.category_id,
             account_id: formData.type === 'transfer' ? null : formData.account_id,
             exclude_from_budget:
@@ -549,30 +549,30 @@ export function TransactionFormDialog({
 
                         {isExpense && (
                             <div className="space-y-2">
-                                <Label htmlFor="payment_method_id">
-                                    Método de Pago
+                                <Label htmlFor="instrument_id">
+                                    Instrumento
                                 </Label>
                                 <Select
-                                    value={data.payment_method_id?.toString() || ''}
+                                    value={data.instrument_id?.toString() || ''}
                                     onValueChange={(value) =>
                                         setData(
-                                            'payment_method_id',
+                                            'instrument_id',
                                             value ? parseInt(value, 10) : null,
                                         )
                                     }
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona un método de pago" />
+                                        <SelectValue placeholder="Selecciona un instrumento" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {paymentMethods.map((method) => (
+                                        {instruments.map((instrument) => (
                                             <SelectItem
-                                                key={method.id}
-                                                value={method.id.toString()}
+                                                key={instrument.id}
+                                                value={instrument.id.toString()}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <span>{method.name}</span>
-                                                    {method.is_default && (
+                                                    <span>{instrument.name}</span>
+                                                    {instrument.is_default && (
                                                         <span className="text-muted-foreground text-xs">
                                                             (Por defecto)
                                                         </span>
@@ -582,7 +582,7 @@ export function TransactionFormDialog({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError message={errors.payment_method_id} />
+                                <InputError message={errors.instrument_id} />
                             </div>
                         )}
 

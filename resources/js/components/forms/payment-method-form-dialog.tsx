@@ -22,29 +22,26 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import type { Account, PaymentMethod, PaymentMethodType } from '@/types';
-import { PAYMENT_METHOD_TYPES } from '@/types';
+import type { Instrument, InstrumentType } from '@/types';
+import { INSTRUMENT_TYPES } from '@/types';
 import { DEFAULT_COLORS } from '@/constants/colors';
 
 interface PaymentMethodFormDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    paymentMethod?: PaymentMethod;
-    accounts: Account[];
+    paymentMethod?: Instrument;
 }
 
 export function PaymentMethodFormDialog({
     open,
     onOpenChange,
     paymentMethod,
-    accounts,
 }: PaymentMethodFormDialogProps) {
     const isEditing = !!paymentMethod;
 
     const { data, setData, post, put, processing, errors, reset } = useForm<{
-        linked_account_id: number | null;
         name: string;
-        type: PaymentMethodType;
+        type: InstrumentType;
         last_four_digits: string;
         credit_limit: number | null;
         billing_cycle_day: number | null;
@@ -53,9 +50,8 @@ export function PaymentMethodFormDialog({
         is_active: boolean;
         is_default: boolean;
     }>({
-        linked_account_id: null,
         name: '',
-        type: 'debit_card',
+        type: 'checking',
         last_four_digits: '',
         credit_limit: null,
         billing_cycle_day: null,
@@ -68,9 +64,8 @@ export function PaymentMethodFormDialog({
     useEffect(() => {
         if (open) {
             setData({
-                linked_account_id: paymentMethod?.linked_account_id ?? null,
                 name: paymentMethod?.name ?? '',
-                type: paymentMethod?.type ?? 'debit_card',
+                type: paymentMethod?.type ?? 'checking',
                 last_four_digits: paymentMethod?.last_four_digits ?? '',
                 credit_limit: paymentMethod?.credit_limit ?? null,
                 billing_cycle_day: paymentMethod?.billing_cycle_day ?? null,
@@ -92,19 +87,19 @@ export function PaymentMethodFormDialog({
                 reset();
                 toast.success(
                     isEditing
-                        ? 'Método de pago actualizado'
-                        : 'Método de pago creado',
+                        ? 'Instrumento actualizado'
+                        : 'Instrumento creado',
                 );
             },
             onError: () => {
-                toast.error('Error al guardar el método de pago');
+                toast.error('Error al guardar el instrumento');
             },
         };
 
         if (isEditing) {
-            put(`/payment-methods/${paymentMethod.uuid}`, options);
+            put(`/instruments/${paymentMethod.uuid}`, options);
         } else {
-            post('/payment-methods', options);
+            post('/instruments', options);
         }
     };
 
@@ -113,12 +108,6 @@ export function PaymentMethodFormDialog({
     };
 
     const isCreditCard = data.type === 'credit_card';
-    const requiresLinkedAccount = [
-        'debit_card',
-        'prepaid_card',
-        'cash',
-        'transfer',
-    ].includes(data.type);
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -127,13 +116,13 @@ export function PaymentMethodFormDialog({
                     <DialogHeader>
                         <DialogTitle>
                             {isEditing
-                                ? 'Editar Método de Pago'
-                                : 'Nuevo Método de Pago'}
+                                ? 'Editar Instrumento'
+                                : 'Nuevo Instrumento'}
                         </DialogTitle>
                         <DialogDescription>
                             {isEditing
-                                ? 'Actualiza los datos del método de pago.'
-                                : 'Agrega un nuevo método de pago.'}
+                                ? 'Actualiza los datos del instrumento.'
+                                : 'Agrega un nuevo instrumento.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -142,18 +131,15 @@ export function PaymentMethodFormDialog({
                             <Label htmlFor="type">Tipo</Label>
                             <Select
                                 value={data.type}
-                                onValueChange={(value: PaymentMethodType) => {
+                                onValueChange={(value: InstrumentType) => {
                                     setData('type', value);
-                                    if (value === 'credit_card') {
-                                        setData('linked_account_id', null);
-                                    }
                                 }}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecciona un tipo" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {PAYMENT_METHOD_TYPES.map((type) => (
+                                    {INSTRUMENT_TYPES.map((type) => (
                                         <SelectItem
                                             key={type.id}
                                             value={type.id}
@@ -178,49 +164,6 @@ export function PaymentMethodFormDialog({
                             />
                             <InputError message={errors.name} />
                         </div>
-
-                        {requiresLinkedAccount && accounts.length > 0 && (
-                            <div className="space-y-2">
-                                <Label htmlFor="linked_account_id">
-                                    Cuenta Vinculada
-                                </Label>
-                                <Select
-                                    value={
-                                        data.linked_account_id?.toString() || ''
-                                    }
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'linked_account_id',
-                                            value ? parseInt(value) : null,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona una cuenta" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {accounts.map((account) => (
-                                            <SelectItem
-                                                key={account.id}
-                                                value={account.id.toString()}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span>{account.name}</span>
-                                                    {account.is_default && (
-                                                        <span className="text-muted-foreground text-xs">
-                                                            (Por defecto)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError
-                                    message={errors.linked_account_id}
-                                />
-                            </div>
-                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="last_four_digits">
@@ -329,7 +272,7 @@ export function PaymentMethodFormDialog({
                                     htmlFor="is_active"
                                     className="text-sm font-medium"
                                 >
-                                    Método activo
+                                    Instrumento activo
                                 </Label>
                                 <Switch
                                     id="is_active"
@@ -344,7 +287,7 @@ export function PaymentMethodFormDialog({
                                     htmlFor="is_default"
                                     className="text-sm font-medium"
                                 >
-                                    Método por defecto
+                                    Instrumento por defecto
                                 </Label>
                                 <Switch
                                     id="is_default"

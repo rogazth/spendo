@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\CategoryType;
-use App\Enums\PaymentMethodType;
 use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
@@ -22,9 +21,9 @@ class CreateTransactionTool extends Tool
         Create a new transaction (expense, income, transfer, or settlement).
 
         **For expenses:**
-        - Requires: payment_method_id, category_id, amount, description
-        - If payment method is a credit card, the expense adds to credit card debt
-        - If payment method is debit/cash/transfer, provide account_id (uses linked account if not provided)
+        - Requires: account_id, category_id, amount, description
+        - Optionally: instrument_id (the card or instrument used)
+        - If instrument_id is a credit card, the expense adds to credit card debt
 
         **For income:**
         - Requires: account_id, category_id (income type), amount, description
@@ -34,7 +33,8 @@ class CreateTransactionTool extends Tool
         - Creates linked transfer_out + transfer_in transactions
 
         **For settlements (credit card payments):**
-        - Requires: account_id, payment_method_id (credit card), amount, description
+        - Requires: instrument_id (the credit card being paid), from_instrument_id (the bank instrument paying), amount, description
+        - Does NOT set account_id — settlements do not affect account balance directly
 
         **Amount**: Provide in major currency units (e.g., 572000 for 572,000 CLP)
     MARKDOWN;
@@ -55,7 +55,8 @@ class CreateTransactionTool extends Tool
             'amount' => ['required', 'numeric', 'gt:0'],
             'description' => ['required', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer'],
-            'payment_method_id' => ['nullable', 'integer'],
+            'instrument_id' => ['nullable', 'integer'],
+            'from_instrument_id' => ['nullable', 'integer'],
             'account_id' => ['nullable', 'integer'],
             'origin_account_id' => ['nullable', 'integer'],
             'destination_account_id' => ['nullable', 'integer'],
@@ -79,12 +80,12 @@ class CreateTransactionTool extends Tool
                 ->first();
 
             if ($existing) {
-                $existing->load(['category', 'account', 'paymentMethod']);
+                $existing->load(['category', 'account', 'instrument', 'fromInstrument']);
 
                 // For transfers, return both legs
                 if (in_array($existing->type, [TransactionType::TransferOut, TransactionType::TransferIn])) {
                     $linked = $existing->linked_transaction_id
-                        ? $user->transactions()->with(['category', 'account', 'paymentMethod'])->find($existing->linked_transaction_id)
+                        ? $user->transactions()->with(['category', 'account', 'instrument', 'fromInstrument'])->find($existing->linked_transaction_id)
                         : null;
 
                     $out = $existing->type === TransactionType::TransferOut ? $existing : $linked;
@@ -122,8 +123,8 @@ class CreateTransactionTool extends Tool
             return Response::error('Category is required for expenses. Use GetCategoriesTool to find expense categories.');
         }
 
-        if (empty($validated['payment_method_id'])) {
-            return Response::error('Payment method is required for expenses. Use GetPaymentMethodsTool to find available methods.');
+        if (empty($validated['account_id'])) {
+            return Response::error('Account is required for expenses. Use GetAccountsTool to find available accounts.');
         }
 
         $category = $this->validateCategory($user, $validated['category_id'], CategoryType::Expense);
@@ -131,48 +132,35 @@ class CreateTransactionTool extends Tool
             return $category;
         }
 
-        $paymentMethod = $user->paymentMethods()->find($validated['payment_method_id']);
-        if (! $paymentMethod) {
-            return Response::error('Payment method not found.');
+        $account = $user->accounts()->find($validated['account_id']);
+        if (! $account) {
+            return Response::error('Account not found.');
         }
 
-        $accountId = null;
-        if ($paymentMethod->type !== PaymentMethodType::CreditCard) {
-            if (! empty($validated['account_id'])) {
-                $account = $user->accounts()->find($validated['account_id']);
-                if (! $account) {
-                    return Response::error('Account not found.');
-                }
-                $accountId = $account->id;
-            } elseif ($paymentMethod->linked_account_id) {
-                $accountId = $paymentMethod->linked_account_id;
-            } else {
-                return Response::error('Account is required for this payment method type.');
+        $instrumentId = null;
+        if (! empty($validated['instrument_id'])) {
+            $instrument = $user->instruments()->find($validated['instrument_id']);
+            if (! $instrument) {
+                return Response::error('Instrument not found.');
             }
-        }
-
-        // Derive currency from account or user's default
-        $currency = 'CLP';
-        if ($accountId) {
-            $resolvedAccount = $user->accounts()->find($accountId);
-            $currency = $resolvedAccount?->currency ?? 'CLP';
+            $instrumentId = $instrument->id;
         }
 
         $transaction = Transaction::create([
             'user_id' => $user->id,
             'type' => TransactionType::Expense,
-            'account_id' => $accountId,
-            'payment_method_id' => $paymentMethod->id,
+            'account_id' => $account->id,
+            'instrument_id' => $instrumentId,
             'category_id' => $category->id,
             'amount' => $validated['amount'],
-            'currency' => $currency,
+            'currency' => $account->currency ?? 'CLP',
             'description' => $validated['description'],
             'notes' => $this->buildNotes($validated),
             'exclude_from_budget' => $validated['exclude_from_budget'] ?? false,
             'transaction_date' => $validated['transaction_date'] ?? now(),
         ]);
 
-        $transaction->load(['category', 'account', 'paymentMethod']);
+        $transaction->load(['category', 'account', 'instrument']);
 
         return Response::text(json_encode([
             'success' => true,
@@ -299,26 +287,26 @@ class CreateTransactionTool extends Tool
 
     private function createSettlement(mixed $user, array $validated): Response
     {
-        if (empty($validated['account_id'])) {
-            return Response::error('Account is required for settlements (the account paying the credit card).');
+        if (empty($validated['instrument_id'])) {
+            return Response::error('instrument_id (credit card being paid) is required for settlements.');
         }
 
-        if (empty($validated['payment_method_id'])) {
-            return Response::error('Payment method (credit card) is required for settlements.');
+        if (empty($validated['from_instrument_id'])) {
+            return Response::error('from_instrument_id (bank instrument making the payment) is required for settlements.');
         }
 
-        $account = $user->accounts()->find($validated['account_id']);
-        if (! $account) {
-            return Response::error('Account not found.');
+        $creditCard = $user->instruments()->find($validated['instrument_id']);
+        if (! $creditCard) {
+            return Response::error('Credit card instrument not found.');
         }
 
-        $paymentMethod = $user->paymentMethods()->find($validated['payment_method_id']);
-        if (! $paymentMethod) {
-            return Response::error('Payment method not found.');
+        if (! $creditCard->isCreditCard()) {
+            return Response::error('Settlement is only for credit card payments. The instrument_id must be a credit card or prepaid card.');
         }
 
-        if (! $paymentMethod->isCreditCard()) {
-            return Response::error('Settlement is only for credit card payments. The payment method must be a credit card.');
+        $fromInstrument = $user->instruments()->find($validated['from_instrument_id']);
+        if (! $fromInstrument) {
+            return Response::error('From instrument not found.');
         }
 
         // Find or use system settlement category
@@ -330,18 +318,19 @@ class CreateTransactionTool extends Tool
         $transaction = Transaction::create([
             'user_id' => $user->id,
             'type' => TransactionType::Settlement,
-            'account_id' => $account->id,
-            'payment_method_id' => $paymentMethod->id,
+            'account_id' => null,
+            'instrument_id' => $creditCard->id,
+            'from_instrument_id' => $fromInstrument->id,
             'category_id' => $settlementCategory?->id,
             'amount' => $validated['amount'],
-            'currency' => $account->currency ?? 'CLP',
+            'currency' => $creditCard->currency ?? 'CLP',
             'description' => $validated['description'],
             'notes' => $this->buildNotes($validated),
             'exclude_from_budget' => true,
             'transaction_date' => $validated['transaction_date'] ?? now(),
         ]);
 
-        $transaction->load(['account', 'paymentMethod']);
+        $transaction->load(['instrument', 'fromInstrument']);
 
         return Response::text(json_encode([
             'success' => true,
@@ -367,7 +356,8 @@ class CreateTransactionTool extends Tool
             'transaction_date' => $transaction->transaction_date->format('Y-m-d'),
             'category' => $transaction->category?->full_name,
             'account' => $transaction->account?->name,
-            'payment_method' => $transaction->paymentMethod?->name,
+            'instrument' => $transaction->instrument?->name,
+            'from_instrument' => $transaction->fromInstrument?->name,
         ];
     }
 
@@ -421,10 +411,12 @@ class CreateTransactionTool extends Tool
                 ->required(),
             'category_id' => $schema->integer()
                 ->description('Category ID. Required for expense and income. Use GetCategoriesTool to find categories.'),
-            'payment_method_id' => $schema->integer()
-                ->description('Payment method ID. Required for expense and settlement. Use GetPaymentMethodsTool to find methods.'),
+            'instrument_id' => $schema->integer()
+                ->description('Instrument ID. Optional for expenses (card used). Required for settlements (credit card being paid). Use GetInstrumentsTool.'),
+            'from_instrument_id' => $schema->integer()
+                ->description('Instrument ID of the bank paying the credit card. Required for settlements. Use GetInstrumentsTool.'),
             'account_id' => $schema->integer()
-                ->description('Account ID. Required for income and settlement. For expenses with non-credit card, optional (uses linked account).'),
+                ->description('Account ID. Required for expense and income. Use GetAccountsTool to find accounts.'),
             'origin_account_id' => $schema->integer()
                 ->description('Origin account ID. Required for transfers.'),
             'destination_account_id' => $schema->integer()

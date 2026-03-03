@@ -15,8 +15,9 @@ class GetAccountsTool extends Tool
      * The tool's description.
      */
     protected string $description = <<<'MARKDOWN'
-        Get all user accounts (bank accounts, savings, cash, investments) with their current balances.
-        Optionally filter by account type or active status.
+        Get all user accounts with their current balances.
+        Account balances reflect income and expenses only — settlements do not affect account balance.
+        Optionally filter by active status.
     MARKDOWN;
 
     /**
@@ -32,11 +33,6 @@ class GetAccountsTool extends Tool
 
         $query = $user->accounts();
 
-        // Filter by type if provided
-        if ($type = $request->get('type')) {
-            $query->where('type', $type);
-        }
-
         // Filter by active status (default: only active)
         $includeInactive = $request->get('include_inactive', false);
         if (! $includeInactive) {
@@ -49,8 +45,6 @@ class GetAccountsTool extends Tool
             'id' => $account->id,
             'uuid' => $account->uuid,
             'name' => $account->name,
-            'type' => $account->type->value,
-            'type_label' => $account->type->label(),
             'currency' => $account->currency,
             'current_balance' => $account->current_balance,
             'current_balance_formatted' => '$'.number_format($account->current_balance, 0, ',', '.'),
@@ -73,9 +67,6 @@ class GetAccountsTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'type' => $schema->string()
-                ->description('Filter by account type: checking, savings, cash, investment')
-                ->enum(['checking', 'savings', 'cash', 'investment']),
             'include_inactive' => $schema->boolean()
                 ->description('Include inactive accounts (default: false)'),
         ];

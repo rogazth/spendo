@@ -14,10 +14,13 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->enum('type', ['expense', 'income', 'transfer_out', 'transfer_in', 'settlement']);
             $table->unsignedBigInteger('account_id')->nullable();
-            $table->unsignedBigInteger('payment_method_id')->nullable();
+            $table->unsignedBigInteger('instrument_id')->nullable();
+            $table->unsignedBigInteger('from_instrument_id')->nullable();
             $table->unsignedBigInteger('category_id')->nullable();
             $table->unsignedBigInteger('linked_transaction_id')->nullable();
             $table->bigInteger('amount');
+            $table->bigInteger('instrument_amount')->nullable();
+            $table->decimal('exchange_rate', 15, 6)->nullable();
             $table->string('currency', 3)->default('CLP');
             $table->string('description')->nullable();
             $table->text('notes')->nullable();
@@ -31,9 +34,14 @@ return new class extends Migration
                 ->on('accounts')
                 ->nullOnDelete();
 
-            $table->foreign('payment_method_id')
+            $table->foreign('instrument_id')
                 ->references('id')
-                ->on('payment_methods')
+                ->on('instruments')
+                ->nullOnDelete();
+
+            $table->foreign('from_instrument_id')
+                ->references('id')
+                ->on('instruments')
                 ->nullOnDelete();
 
             $table->foreign('category_id')
@@ -46,7 +54,8 @@ return new class extends Migration
             $table->index(['user_id', 'type', 'exclude_from_budget', 'transaction_date']);
             $table->index(['account_id', 'transaction_date']);
             $table->index('account_id');
-            $table->index('payment_method_id');
+            $table->index('instrument_id');
+            $table->index('from_instrument_id');
             $table->index('category_id');
             $table->index('linked_transaction_id');
         });

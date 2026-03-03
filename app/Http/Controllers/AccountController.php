@@ -19,7 +19,6 @@ class AccountController extends Controller
     {
         $accounts = Auth::user()
             ->accounts()
-            ->withCount('paymentMethods')
             ->latest()
             ->paginate(25)
             ->withQueryString();
@@ -42,7 +41,6 @@ class AccountController extends Controller
 
             $account = Auth::user()->accounts()->create([
                 'name' => $validated['name'],
-                'type' => $validated['type'],
                 'currency' => $validated['currency'],
                 'color' => $validated['color'] ?? '#3B82F6',
                 'icon' => $validated['icon'] ?? null,
@@ -80,7 +78,6 @@ class AccountController extends Controller
 
         $account->update([
             'name' => $validated['name'],
-            'type' => $validated['type'],
             'currency' => $validated['currency'],
             'is_active' => $validated['is_active'] ?? $account->is_active,
             'is_default' => $isDefault,

@@ -1,31 +1,25 @@
 import { Head } from '@inertiajs/react';
-import { PiggyBankIcon, PlusIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { PiggyBankIcon } from 'lucide-react';
 import { getBudgetColumns } from '@/components/data-table/columns/budget-columns';
 import { DataTable } from '@/components/data-table/data-table';
-import { BudgetFormDialog } from '@/components/forms/budget-form-dialog';
-import { Button } from '@/components/ui/button';
 import {
     Empty,
-    EmptyContent,
     EmptyDescription,
     EmptyHeader,
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
 import AppLayout from '@/layouts/app-layout';
+import { Button } from '@/components/ui/button';
 import type {
-    Account,
     BreadcrumbItem,
     Budget,
-    Category,
     PaginatedResponse,
 } from '@/types';
+import { useMemo } from 'react';
 
 interface Props {
     budgets: PaginatedResponse<Budget>;
-    accounts: Account[];
-    categories: Category[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -33,8 +27,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Budgets', href: '/budgets' },
 ];
 
-export default function BudgetsIndex({ budgets, accounts, categories }: Props) {
-    const [formDialogOpen, setFormDialogOpen] = useState(false);
+export default function BudgetsIndex({ budgets }: Props) {
     const columns = useMemo(() => getBudgetColumns(), []);
 
     return (
@@ -43,10 +36,6 @@ export default function BudgetsIndex({ budgets, accounts, categories }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Budgets</h1>
-                    <Button onClick={() => setFormDialogOpen(true)}>
-                        <PlusIcon className="h-4 w-4" />
-                        Nuevo budget
-                    </Button>
                 </div>
 
                 {budgets.data.length === 0 ? (
@@ -57,15 +46,9 @@ export default function BudgetsIndex({ budgets, accounts, categories }: Props) {
                             </EmptyMedia>
                             <EmptyTitle>No tienes budgets creados</EmptyTitle>
                             <EmptyDescription>
-                                Crea un budget para controlar el gasto por
-                                categoría y ciclo.
+                                Los budgets se crean mediante el asistente de IA.
                             </EmptyDescription>
                         </EmptyHeader>
-                        <EmptyContent>
-                            <Button onClick={() => setFormDialogOpen(true)}>
-                                Crear budget
-                            </Button>
-                        </EmptyContent>
                     </Empty>
                 ) : (
                     <DataTable columns={columns} data={budgets.data} />
@@ -90,13 +73,6 @@ export default function BudgetsIndex({ budgets, accounts, categories }: Props) {
                     </div>
                 )}
             </div>
-
-            <BudgetFormDialog
-                open={formDialogOpen}
-                onOpenChange={setFormDialogOpen}
-                accounts={accounts}
-                categories={categories}
-            />
         </AppLayout>
     );
 }

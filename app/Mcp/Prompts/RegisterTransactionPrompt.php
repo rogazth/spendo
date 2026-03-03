@@ -44,7 +44,7 @@ class RegisterTransactionPrompt extends Prompt
 
                 2. **Resolve IDs**: Call the appropriate Get tools to find matching IDs:
                    - GetCategoriesTool for the category
-                   - GetPaymentMethodsTool for the payment method
+                   - GetInstrumentsTool for the instrument (card or bank account used)
                    - GetAccountsTool for the account
                    If ambiguous, ask the user to clarify.
 

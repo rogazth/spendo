@@ -13,7 +13,6 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->enum('type', ['checking', 'savings', 'cash', 'investment']);
             $table->string('currency', 3)->default('CLP');
             $table->string('color', 7)->default('#3B82F6');
             $table->string('icon', 50)->nullable();

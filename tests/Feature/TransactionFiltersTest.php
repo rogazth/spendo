@@ -2,68 +2,41 @@
 
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\CurrencySeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('filters transactions by multiple payment methods', function () {
+test('filters transactions by multiple instruments', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
     $category = Category::factory()->expense()->for($user)->create();
-    $paymentMethodA = PaymentMethod::factory()->debitCard()->for($user)->create([
-        'linked_account_id' => $account->id,
-    ]);
-    $paymentMethodB = PaymentMethod::factory()->creditCard()->for($user)->create();
+    $instrumentA = Instrument::factory()->checking()->for($user)->create();
+    $instrumentB = Instrument::factory()->creditCard()->for($user)->create();
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'payment_method_id' => $paymentMethodA->id,
-        'description' => 'Tx PM A',
+        'instrument_id' => $instrumentA->id,
+        'description' => 'Tx Instrument A',
         'transaction_date' => now()->subDay(),
     ]);
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'payment_method_id' => $paymentMethodB->id,
-        'description' => 'Tx PM B',
+        'instrument_id' => $instrumentB->id,
+        'description' => 'Tx Instrument B',
         'transaction_date' => now(),
     ]);
 
-    $response = $this->actingAs($user)->get('/transactions?payment_method_ids[]='.$paymentMethodA->id);
+    $response = $this->actingAs($user)->get('/transactions?instrument_ids[]='.$instrumentA->id);
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('transactions/index')
-        ->where('filters.payment_method_ids', [$paymentMethodA->id])
-        ->where('transactions.data.0.description', 'Tx PM A')
-    );
-});
-
-test('supports legacy payment_method_id filter in transactions index', function () {
-    $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
-    $category = Category::factory()->expense()->for($user)->create();
-    $paymentMethod = PaymentMethod::factory()->debitCard()->for($user)->create([
-        'linked_account_id' => $account->id,
-    ]);
-
-    Transaction::factory()->expense()->for($user)->create([
-        'account_id' => $account->id,
-        'category_id' => $category->id,
-        'payment_method_id' => $paymentMethod->id,
-        'description' => 'Tx legacy filter',
-    ]);
-
-    $response = $this->actingAs($user)->get('/transactions?payment_method_id='.$paymentMethod->id);
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('transactions/index')
-        ->where('filters.payment_method_ids', [$paymentMethod->id])
-        ->where('transactions.data.0.description', 'Tx legacy filter')
+        ->where('filters.instrument_ids', [$instrumentA->id])
+        ->where('transactions.data.0.description', 'Tx Instrument A')
     );
 });
 
@@ -71,16 +44,14 @@ test('stores and updates exclude_from_budget in transactions', function () {
     $this->seed(CurrencySeeder::class);
 
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
     $category = Category::factory()->expense()->for($user)->create();
-    $paymentMethod = PaymentMethod::factory()->debitCard()->for($user)->create([
-        'linked_account_id' => $account->id,
-    ]);
+    $instrument = Instrument::factory()->checking()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $paymentMethod->id,
+        'instrument_id' => $instrument->id,
         'category_id' => $category->id,
         'amount' => 12345,
         'currency' => 'CLP',
@@ -99,7 +70,7 @@ test('stores and updates exclude_from_budget in transactions', function () {
     $this->actingAs($user)->put("/transactions/{$transaction->uuid}", [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $paymentMethod->id,
+        'instrument_id' => $instrument->id,
         'category_id' => $category->id,
         'amount' => 12345,
         'currency' => 'CLP',

@@ -27,7 +27,7 @@ class GetTransactionsTool extends Tool
         }
 
         $query = $user->transactions()
-            ->with(['category', 'account', 'paymentMethod']);
+            ->with(['category', 'account', 'instrument', 'fromInstrument']);
 
         // Filter by type
         if ($type = $request->get('type')) {
@@ -52,13 +52,13 @@ class GetTransactionsTool extends Tool
             $query->where('account_id', $accountId);
         }
 
-        // Filter by payment method (single or multiple)
-        if ($paymentMethodIds = $request->get('payment_method_ids')) {
-            if (is_array($paymentMethodIds)) {
-                $query->whereIn('payment_method_id', $paymentMethodIds);
+        // Filter by instrument (single or multiple)
+        if ($instrumentIds = $request->get('instrument_ids')) {
+            if (is_array($instrumentIds)) {
+                $query->whereIn('instrument_id', $instrumentIds);
             }
-        } elseif ($paymentMethodId = $request->get('payment_method_id')) {
-            $query->where('payment_method_id', $paymentMethodId);
+        } elseif ($instrumentId = $request->get('instrument_id')) {
+            $query->where('instrument_id', $instrumentId);
         }
 
         // Filter by budget (resolve budget category IDs)
@@ -137,11 +137,17 @@ class GetTransactionsTool extends Tool
                 'uuid' => $t->account->uuid,
                 'name' => $t->account->name,
             ] : null,
-            'payment_method' => $t->paymentMethod ? [
-                'id' => $t->paymentMethod->id,
-                'uuid' => $t->paymentMethod->uuid,
-                'name' => $t->paymentMethod->name,
-                'type' => $t->paymentMethod->type->value,
+            'instrument' => $t->instrument ? [
+                'id' => $t->instrument->id,
+                'uuid' => $t->instrument->uuid,
+                'name' => $t->instrument->name,
+                'type' => $t->instrument->type->value,
+            ] : null,
+            'from_instrument' => $t->fromInstrument ? [
+                'id' => $t->fromInstrument->id,
+                'uuid' => $t->fromInstrument->uuid,
+                'name' => $t->fromInstrument->name,
+                'type' => $t->fromInstrument->type->value,
             ] : null,
         ]);
 
@@ -176,10 +182,10 @@ class GetTransactionsTool extends Tool
                 ->description('Filter by single account ID'),
             'account_ids' => $schema->array()
                 ->description('Filter by multiple account IDs'),
-            'payment_method_id' => $schema->integer()
-                ->description('Filter by single payment method ID'),
-            'payment_method_ids' => $schema->array()
-                ->description('Filter by multiple payment method IDs'),
+            'instrument_id' => $schema->integer()
+                ->description('Filter by single instrument ID'),
+            'instrument_ids' => $schema->array()
+                ->description('Filter by multiple instrument IDs'),
             'budget_id' => $schema->integer()
                 ->description('Filter transactions belonging to a specific budget (by its category scope)'),
             'start_date' => $schema->string()

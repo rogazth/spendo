@@ -3,7 +3,7 @@
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Currency;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -34,7 +34,7 @@ test('index renders transactions page', function () {
         ->assertInertia(fn (Assert $page) => $page->component('transactions/index')
             ->has('transactions')
             ->has('accounts')
-            ->has('paymentMethods')
+            ->has('instruments')
             ->has('categories')
             ->has('filters')
         );
@@ -42,7 +42,7 @@ test('index renders transactions page', function () {
 
 test('index filters by date range', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
 
     Transaction::factory()->income()->for($user)->create([
         'account_id' => $account->id,
@@ -62,8 +62,8 @@ test('index filters by date range', function () {
 
 test('index filters by account', function () {
     $user = User::factory()->create();
-    $accountA = Account::factory()->checking()->for($user)->create();
-    $accountB = Account::factory()->checking()->for($user)->create();
+    $accountA = Account::factory()->for($user)->create();
+    $accountB = Account::factory()->for($user)->create();
 
     Transaction::factory()->income()->for($user)->create(['account_id' => $accountA->id]);
     Transaction::factory()->income()->for($user)->create(['account_id' => $accountA->id]);
@@ -80,14 +80,14 @@ test('index filters by account', function () {
 
 test('store creates an expense transaction', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
+    $instrument = Instrument::factory()->creditCard()->for($user)->create();
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'category_id' => $category->id,
         'amount' => 5000,
         'currency' => 'CLP',
@@ -103,7 +103,7 @@ test('store creates an expense transaction', function () {
 
 test('store creates an income transaction', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'income',
@@ -122,8 +122,8 @@ test('store creates an income transaction', function () {
 
 test('store creates a transfer with two linked legs', function () {
     $user = User::factory()->create();
-    $origin = Account::factory()->checking()->for($user)->create();
-    $destination = Account::factory()->savings()->for($user)->create();
+    $origin = Account::factory()->for($user)->create();
+    $destination = Account::factory()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'transfer',
@@ -139,6 +139,31 @@ test('store creates a transfer with two linked legs', function () {
 
     expect($out->linked_transaction_id)->toBe($in->id);
     expect($in->linked_transaction_id)->toBe($out->id);
+    expect($out->amount)->toEqual($in->amount);
+});
+
+test('destroy transfer_out soft-deletes the linked transfer_in', function () {
+    $user = User::factory()->create();
+    $origin = Account::factory()->for($user)->create();
+    $destination = Account::factory()->for($user)->create();
+
+    $this->actingAs($user)->post('/transactions', [
+        'type' => 'transfer',
+        'origin_account_id' => $origin->id,
+        'destination_account_id' => $destination->id,
+        'amount' => 10000,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ]);
+
+    $out = Transaction::query()->where('type', 'transfer_out')->firstOrFail();
+    $in = Transaction::query()->where('type', 'transfer_in')->firstOrFail();
+
+    $this->actingAs($user)->delete("/transactions/{$out->uuid}")
+        ->assertRedirect('/transactions');
+
+    $this->assertSoftDeleted('transactions', ['id' => $out->id]);
+    $this->assertSoftDeleted('transactions', ['id' => $in->id]);
 });
 
 test('store validates required fields for expense', function () {
@@ -149,7 +174,7 @@ test('store validates required fields for expense', function () {
         'amount' => 100,
         'currency' => 'CLP',
         'transaction_date' => '2026-02-15',
-    ])->assertSessionHasErrors(['account_id', 'payment_method_id']);
+    ])->assertSessionHasErrors(['account_id']);
 });
 
 test('store validates required accounts for transfer', function () {
@@ -165,7 +190,7 @@ test('store validates required accounts for transfer', function () {
 
 test('store rejects invalid currency', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'income',
@@ -178,7 +203,7 @@ test('store rejects invalid currency', function () {
 
 test('store rejects transfer with same origin and destination account', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
         'type' => 'transfer',
@@ -193,33 +218,135 @@ test('store rejects transfer with same origin and destination account', function
 test('store returns 403 when account belongs to another user', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();
-    $account = Account::factory()->checking()->for($owner)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($other)->create();
+    $account = Account::factory()->for($owner)->create();
+    $instrument = Instrument::factory()->creditCard()->for($other)->create();
 
     $this->actingAs($other)->post('/transactions', [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'amount' => 100,
         'currency' => 'CLP',
         'transaction_date' => '2026-02-15',
     ])->assertForbidden();
 });
 
-test('store returns 403 when payment method belongs to another user', function () {
+test('store returns 403 when instrument belongs to another user', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();
-    $account = Account::factory()->checking()->for($other)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($owner)->create();
+    $account = Account::factory()->for($other)->create();
+    $instrument = Instrument::factory()->creditCard()->for($owner)->create();
 
     $this->actingAs($other)->post('/transactions', [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'amount' => 100,
         'currency' => 'CLP',
         'transaction_date' => '2026-02-15',
     ])->assertForbidden();
+});
+
+// ---------------------------------------------------------------------------
+// Store — settlement
+// ---------------------------------------------------------------------------
+
+test('store creates a settlement with account_id null', function () {
+    $user = User::factory()->create();
+    $cc = Instrument::factory()->creditCard()->for($user)->create();
+    $bank = Instrument::factory()->checking()->for($user)->create();
+
+    $this->actingAs($user)->post('/transactions', [
+        'type' => 'settlement',
+        'instrument_id' => $cc->id,
+        'from_instrument_id' => $bank->id,
+        'amount' => 500,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ])->assertRedirect('/transactions');
+
+    $this->assertDatabaseHas('transactions', [
+        'user_id' => $user->id,
+        'type' => 'settlement',
+        'account_id' => null,
+        'instrument_id' => $cc->id,
+        'from_instrument_id' => $bank->id,
+    ]);
+});
+
+test('store returns 403 when settlement from_instrument_id belongs to another user', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $ownerBank = Instrument::factory()->checking()->for($owner)->create();
+    $otherCC = Instrument::factory()->creditCard()->for($other)->create();
+
+    $this->actingAs($other)->post('/transactions', [
+        'type' => 'settlement',
+        'instrument_id' => $otherCC->id,
+        'from_instrument_id' => $ownerBank->id,
+        'amount' => 500,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ])->assertForbidden();
+});
+
+test('store returns 403 when transfer accounts belong to another user', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $ownerAccountA = Account::factory()->for($owner)->create();
+    $ownerAccountB = Account::factory()->for($owner)->create();
+
+    $this->actingAs($other)->post('/transactions', [
+        'type' => 'transfer',
+        'origin_account_id' => $ownerAccountA->id,
+        'destination_account_id' => $ownerAccountB->id,
+        'amount' => 1000,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ])->assertForbidden();
+});
+
+// ---------------------------------------------------------------------------
+// Store — validation completeness
+// ---------------------------------------------------------------------------
+
+test('store requires instrument_id for settlement', function () {
+    $user = User::factory()->create();
+    $bank = Instrument::factory()->checking()->for($user)->create();
+
+    $this->actingAs($user)->post('/transactions', [
+        'type' => 'settlement',
+        'from_instrument_id' => $bank->id,
+        'amount' => 500,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ])->assertSessionHasErrors('instrument_id');
+});
+
+test('store rejects non-positive amount', function () {
+    $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create();
+
+    $this->actingAs($user)->post('/transactions', [
+        'type' => 'income',
+        'account_id' => $account->id,
+        'amount' => 0,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-02-15',
+    ])->assertSessionHasErrors('amount');
+});
+
+test('store rejects invalid transaction_date', function () {
+    $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create();
+
+    $this->actingAs($user)->post('/transactions', [
+        'type' => 'income',
+        'account_id' => $account->id,
+        'amount' => 100,
+        'currency' => 'CLP',
+        'transaction_date' => 'not-a-date',
+    ])->assertSessionHasErrors('transaction_date');
 });
 
 // ---------------------------------------------------------------------------
@@ -228,12 +355,12 @@ test('store returns 403 when payment method belongs to another user', function (
 
 test('update modifies an expense transaction', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
+    $instrument = Instrument::factory()->creditCard()->for($user)->create();
 
     $transaction = Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'amount' => 1000,
         'currency' => 'CLP',
         'transaction_date' => '2026-01-10',
@@ -242,7 +369,7 @@ test('update modifies an expense transaction', function () {
     $this->actingAs($user)->put("/transactions/{$transaction->uuid}", [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'amount' => 2000,
         'currency' => 'CLP',
         'transaction_date' => '2026-01-15',
@@ -254,18 +381,18 @@ test('update modifies an expense transaction', function () {
 test('update returns 403 for another user transaction', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();
-    $account = Account::factory()->checking()->for($owner)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($owner)->create();
+    $account = Account::factory()->for($owner)->create();
+    $instrument = Instrument::factory()->creditCard()->for($owner)->create();
 
     $transaction = Transaction::factory()->expense()->for($owner)->create([
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
     ]);
 
     $this->actingAs($other)->put("/transactions/{$transaction->uuid}", [
         'type' => 'expense',
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
         'amount' => 1,
         'currency' => 'CLP',
         'transaction_date' => '2026-01-01',
@@ -278,12 +405,12 @@ test('update returns 403 for another user transaction', function () {
 
 test('destroy soft-deletes a transaction', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
+    $instrument = Instrument::factory()->creditCard()->for($user)->create();
 
     $transaction = Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
     ]);
 
     $this->actingAs($user)->delete("/transactions/{$transaction->uuid}")
@@ -295,12 +422,12 @@ test('destroy soft-deletes a transaction', function () {
 test('destroy returns 403 for another user transaction', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();
-    $account = Account::factory()->checking()->for($owner)->create();
-    $pm = PaymentMethod::factory()->creditCard()->for($owner)->create();
+    $account = Account::factory()->for($owner)->create();
+    $instrument = Instrument::factory()->creditCard()->for($owner)->create();
 
     $transaction = Transaction::factory()->expense()->for($owner)->create([
         'account_id' => $account->id,
-        'payment_method_id' => $pm->id,
+        'instrument_id' => $instrument->id,
     ]);
 
     $this->actingAs($other)->delete("/transactions/{$transaction->uuid}")

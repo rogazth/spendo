@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PaymentMethodType;
+use App\Enums\InstrumentType;
 use App\Enums\TransactionType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,9 +19,8 @@ class DashboardController extends Controller
             ->where('is_active', true)
             ->get();
 
-        $paymentMethods = $user->paymentMethods()
+        $instruments = $user->instruments()
             ->where('is_active', true)
-            ->with('linkedAccount')
             ->get();
 
         // Calculate total balance across all accounts
@@ -32,13 +31,13 @@ class DashboardController extends Controller
 
         // Calculate total credit card debt
         $totalCreditDebt = 0;
-        foreach ($paymentMethods->where('type', PaymentMethodType::CreditCard) as $card) {
+        foreach ($instruments->filter(fn ($i) => $i->type === InstrumentType::CreditCard || $i->type === InstrumentType::PrepaidCard) as $card) {
             $totalCreditDebt += $card->current_debt;
         }
 
         // Get recent transactions
         $recentTransactions = $user->transactions()
-            ->with(['paymentMethod', 'category', 'account'])
+            ->with(['instrument', 'category', 'account'])
             ->latest('transaction_date')
             ->take(10)
             ->get()
@@ -53,7 +52,7 @@ class DashboardController extends Controller
                 'transaction_date' => $t->transaction_date->format('Y-m-d'),
                 'category' => $t->category?->name,
                 'category_color' => $t->category?->color,
-                'payment_method' => $t->paymentMethod?->name,
+                'instrument' => $t->instrument?->name,
                 'account' => $t->account?->name,
             ]);
 
@@ -75,25 +74,23 @@ class DashboardController extends Controller
                 'id' => $a->id,
                 'uuid' => $a->uuid,
                 'name' => $a->name,
-                'type' => $a->type->value,
-                'type_label' => $a->type->label(),
                 'currency' => $a->currency,
                 'current_balance' => $a->current_balance,
                 'formatted_balance' => $a->formatted_balance,
                 'color' => $a->color,
                 'icon' => $a->icon,
             ]),
-            'paymentMethods' => $paymentMethods->map(fn ($pm) => [
-                'id' => $pm->id,
-                'uuid' => $pm->uuid,
-                'name' => $pm->name,
-                'type' => $pm->type->value,
-                'type_label' => $pm->type->label(),
-                'current_debt' => $pm->current_debt,
-                'formatted_debt' => $pm->formatted_debt,
-                'credit_limit' => $pm->credit_limit,
-                'color' => $pm->color,
-                'icon' => $pm->icon,
+            'instruments' => $instruments->map(fn ($i) => [
+                'id' => $i->id,
+                'uuid' => $i->uuid,
+                'name' => $i->name,
+                'type' => $i->type->value,
+                'type_label' => $i->type->label(),
+                'current_debt' => $i->current_debt,
+                'formatted_debt' => $i->formatted_debt,
+                'credit_limit' => $i->credit_limit,
+                'color' => $i->color,
+                'icon' => $i->icon,
             ]),
             'recentTransactions' => $recentTransactions,
             'summary' => [

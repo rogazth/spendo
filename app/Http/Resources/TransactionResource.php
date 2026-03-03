@@ -9,8 +9,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class TransactionResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
-     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -31,11 +29,13 @@ class TransactionResource extends JsonResource
             'exclude_from_budget' => $this->exclude_from_budget,
             'transaction_date' => $this->transaction_date,
             'account_id' => $this->account_id,
-            'payment_method_id' => $this->payment_method_id,
+            'instrument_id' => $this->instrument_id,
+            'from_instrument_id' => $this->from_instrument_id,
             'category_id' => $this->category_id,
             'linked_transaction_id' => $this->linked_transaction_id,
             'account' => new AccountResource($this->whenLoaded('account')),
-            'payment_method' => new PaymentMethodResource($this->whenLoaded('paymentMethod')),
+            'instrument' => new InstrumentResource($this->whenLoaded('instrument')),
+            'from_instrument' => new InstrumentResource($this->whenLoaded('fromInstrument')),
             'category' => new CategoryResource($this->whenLoaded('category')),
             'linked_transaction' => new TransactionResource($this->whenLoaded('linkedTransaction')),
             'created_at' => $this->created_at,

@@ -1,12 +1,3 @@
-// Account types
-export const ACCOUNT_TYPES = [
-    { id: 'checking', label: 'Cuenta Corriente' },
-    { id: 'savings', label: 'Cuenta de Ahorro' },
-    { id: 'cash', label: 'Efectivo' },
-    { id: 'investment', label: 'Inversión' },
-] as const;
-export type AccountType = typeof ACCOUNT_TYPES[number]['id'];
-
 // Transaction types
 export const TRANSACTION_TYPES = [
     { id: 'expense', label: 'Gasto' },
@@ -26,15 +17,16 @@ export const CATEGORY_TYPES = [
 ] as const;
 export type CategoryType = typeof CATEGORY_TYPES[number]['id'];
 
-// Payment method types
-export const PAYMENT_METHOD_TYPES = [
-    { id: 'credit_card', label: 'Tarjeta de Crédito' },
-    { id: 'debit_card', label: 'Tarjeta de Débito' },
-    { id: 'prepaid_card', label: 'Tarjeta Prepago' },
+// Instrument types
+export const INSTRUMENT_TYPES = [
+    { id: 'checking', label: 'Cuenta Corriente' },
+    { id: 'savings', label: 'Cuenta de Ahorro' },
     { id: 'cash', label: 'Efectivo' },
-    { id: 'transfer', label: 'Transferencia' },
+    { id: 'investment', label: 'Inversión' },
+    { id: 'credit_card', label: 'Tarjeta de Crédito' },
+    { id: 'prepaid_card', label: 'Tarjeta Prepago' },
 ] as const;
-export type PaymentMethodType = typeof PAYMENT_METHOD_TYPES[number]['id'];
+export type InstrumentType = typeof INSTRUMENT_TYPES[number]['id'];
 
 // Budget frequencies
 export const BUDGET_FREQUENCIES = [
@@ -63,7 +55,6 @@ export interface Currency {
 export interface Account extends Model {
     user_id: number;
     name: string;
-    type: AccountType;
     currency: string;
     currency_locale?: string;
     current_balance: number;
@@ -75,7 +66,6 @@ export interface Account extends Model {
     formatted_balance?: string;
     // Relations
     transactions?: Transaction[];
-    payment_methods?: PaymentMethod[];
 }
 
 // Category model
@@ -93,12 +83,11 @@ export interface Category extends Model {
     transactions?: Transaction[];
 }
 
-// Payment Method model
-export interface PaymentMethod extends Model {
+// Instrument model
+export interface Instrument extends Model {
     user_id: number;
-    linked_account_id: number | null;
     name: string;
-    type: PaymentMethodType;
+    type: InstrumentType;
     currency: string;
     currency_locale?: string;
     credit_limit: number | null;
@@ -111,10 +100,10 @@ export interface PaymentMethod extends Model {
     is_default: boolean;
     sort_order: number;
     // Computed
+    current_balance?: number;
     current_debt?: number;
     available_credit?: number | null;
     // Relations
-    linkedAccount?: Account;
     transactions?: Transaction[];
 }
 
@@ -122,7 +111,8 @@ export interface PaymentMethod extends Model {
 export interface Transaction extends Model {
     user_id: number;
     account_id: number | null;
-    payment_method_id: number | null;
+    instrument_id: number | null;
+    from_instrument_id: number | null;
     category_id: number | null;
     linked_transaction_id: number | null;
     type: TransactionType;
@@ -137,7 +127,8 @@ export interface Transaction extends Model {
     formatted_amount?: string;
     // Relations
     account?: Account;
-    payment_method?: PaymentMethod;
+    instrument?: Instrument;
+    from_instrument?: Instrument;
     category?: Category;
     linked_transaction?: Transaction;
     attachments?: Attachment[];
@@ -184,7 +175,7 @@ export interface BudgetItem extends Model {
 export interface RecurringTransaction extends Model {
     user_id: number;
     account_id: number;
-    payment_method_id: number | null;
+    instrument_id: number | null;
     category_id: number | null;
     amount: number;
     currency: string;
@@ -199,7 +190,7 @@ export interface RecurringTransaction extends Model {
     is_active: boolean;
     // Relations
     account?: Account;
-    payment_method?: PaymentMethod;
+    instrument?: Instrument;
     category?: Category;
     transactions?: Transaction[];
 }
@@ -223,7 +214,7 @@ export interface UserSettings extends Model {
     user_id: number;
     default_currency: string;
     default_account_id: number | null;
-    default_payment_method_id: number | null;
+    default_instrument_id: number | null;
     locale: string;
     timezone: string;
     date_format: string;
@@ -232,7 +223,7 @@ export interface UserSettings extends Model {
     budget_cycle_start_day: number;
     // Relations
     default_account?: Account;
-    default_payment_method?: PaymentMethod;
+    default_instrument?: Instrument;
 }
 
 // Pagination types
@@ -259,7 +250,6 @@ export interface PaginatedResponse<T> {
 // Form data types for creating/updating resources
 export interface AccountFormData {
     name: string;
-    type: AccountType;
     currency: string;
     initial_balance: number | null;
     color: string;
@@ -275,10 +265,9 @@ export interface CategoryFormData {
     color: string;
 }
 
-export interface PaymentMethodFormData {
-    linked_account_id: number | null;
+export interface InstrumentFormData {
     name: string;
-    type: PaymentMethodType;
+    type: InstrumentType;
     currency: string;
     credit_limit: number | null;
     billing_cycle_day: number | null;
@@ -291,7 +280,7 @@ export interface PaymentMethodFormData {
 
 export interface TransactionFormData {
     account_id: number | null;
-    payment_method_id: number | null;
+    instrument_id: number | null;
     category_id: number | null;
     type: TransactionType;
     amount: number;

@@ -3,10 +3,9 @@ export type * from './navigation';
 export type * from './ui';
 export type * from './models';
 export {
-    ACCOUNT_TYPES,
     TRANSACTION_TYPES,
     CATEGORY_TYPES,
-    PAYMENT_METHOD_TYPES,
+    INSTRUMENT_TYPES,
     BUDGET_FREQUENCIES,
 } from './models';
 

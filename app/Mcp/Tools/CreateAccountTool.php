@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\AccountType;
 use App\Enums\TransactionType;
 use App\Models\Currency;
 use App\Models\Transaction;
@@ -16,7 +15,6 @@ class CreateAccountTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Create a new bank account.
 
-        **Types**: checking, savings, cash, investment
         **Currency**: 3-letter code (e.g., CLP). Use CLP for Chilean pesos.
         **Initial balance**: Optional. If provided, creates an income transaction to set the starting balance.
     MARKDOWN;
@@ -31,7 +29,6 @@ class CreateAccountTool extends Tool
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'string', 'in:checking,savings,cash,investment'],
             'currency' => ['required', 'string', 'size:3'],
             'initial_balance' => ['nullable', 'numeric', 'min:0'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -40,8 +37,6 @@ class CreateAccountTool extends Tool
         ], [
             'name.required' => 'Account name is required.',
             'name.max' => 'Account name cannot exceed 255 characters.',
-            'type.required' => 'Account type is required (checking, savings, cash, investment).',
-            'type.in' => 'Account type must be checking, savings, cash, or investment.',
             'currency.required' => 'Currency code is required (e.g., CLP).',
             'currency.size' => 'Currency must be a 3-letter code.',
         ]);
@@ -64,7 +59,6 @@ class CreateAccountTool extends Tool
 
         $account = $user->accounts()->create([
             'name' => $validated['name'],
-            'type' => AccountType::from($validated['type']),
             'currency' => $validated['currency'],
             'color' => $validated['color'] ?? '#6B7280',
             'icon' => $validated['icon'] ?? null,
@@ -97,7 +91,6 @@ class CreateAccountTool extends Tool
                 'id' => $account->id,
                 'uuid' => $account->uuid,
                 'name' => $account->name,
-                'type' => $account->type->value,
                 'currency' => $account->currency,
                 'current_balance' => $account->current_balance,
                 'is_active' => $account->is_active,
@@ -111,10 +104,6 @@ class CreateAccountTool extends Tool
         return [
             'name' => $schema->string()
                 ->description('Account name (e.g., "Cuenta Corriente BCI")')
-                ->required(),
-            'type' => $schema->string()
-                ->description('Account type')
-                ->enum(['checking', 'savings', 'cash', 'investment'])
                 ->required(),
             'currency' => $schema->string()
                 ->description('3-letter currency code (e.g., CLP)')

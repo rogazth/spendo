@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\AccountType;
 use App\Models\Currency;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -33,7 +32,6 @@ class UpdateAccountRequest extends FormRequest
                     ->whereNull('deleted_at'))
                     ->ignore($account?->id),
             ],
-            'type' => ['required', 'string', Rule::enum(AccountType::class)],
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
@@ -49,8 +47,6 @@ class UpdateAccountRequest extends FormRequest
             'name.required' => 'El nombre es requerido.',
             'name.max' => 'El nombre no puede exceder 255 caracteres.',
             'name.unique' => 'Ya existe una cuenta con este nombre.',
-            'type.required' => 'El tipo de cuenta es requerido.',
-            'type.enum' => 'El tipo de cuenta no es valido.',
             'currency.required' => 'La moneda es requerida.',
             'currency.size' => 'La moneda debe tener 3 caracteres.',
         ];

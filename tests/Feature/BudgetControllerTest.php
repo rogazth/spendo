@@ -63,7 +63,7 @@ test('store creates a budget with items', function () {
 
 test('store links budget to an account', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create(['currency' => 'CLP']);
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/budgets', [
@@ -102,6 +102,35 @@ test('store validates required fields', function () {
         ->assertSessionHasErrors(['name', 'currency', 'frequency', 'anchor_date', 'items']);
 });
 
+test('store rejects budget item with amount of zero', function () {
+    $user = User::factory()->create();
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Invalid Budget',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'items' => [['category_id' => $category->id, 'amount' => 0]],
+    ])->assertSessionHasErrors('items.0.amount');
+});
+
+test('store rejects duplicate category in same budget', function () {
+    $user = User::factory()->create();
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Duplicate Cat Budget',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 1000],
+            ['category_id' => $category->id, 'amount' => 500],
+        ],
+    ])->assertSessionHasErrors('items.0.category_id');
+});
+
 test('store rejects invalid currency code', function () {
     $user = User::factory()->create();
     $category = Category::factory()->expense()->for($user)->create();
@@ -117,7 +146,7 @@ test('store rejects invalid currency code', function () {
 
 test('store rejects account with mismatched currency', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create(['currency' => 'USD']);
+    $account = Account::factory()->for($user)->create(['currency' => 'USD']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/budgets', [
@@ -152,7 +181,7 @@ test('show renders budget detail with spending summary', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $account = Account::factory()->checking()->for($user)->create();
+    $account = Account::factory()->for($user)->create();
     $category = Category::factory()->expense()->for($user)->create(['parent_id' => null]);
 
     $budget = Budget::factory()->for($user)->create([
@@ -166,7 +195,7 @@ test('show renders budget detail with spending summary', function () {
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'payment_method_id' => null,
+        'instrument_id' => null,
         'amount' => 500,
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',

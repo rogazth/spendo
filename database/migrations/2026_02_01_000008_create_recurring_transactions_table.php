@@ -13,7 +13,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->unsignedBigInteger('account_id')->nullable();
-            $table->unsignedBigInteger('payment_method_id')->nullable();
+            $table->unsignedBigInteger('instrument_id')->nullable();
             $table->unsignedBigInteger('category_id')->nullable();
             $table->bigInteger('amount');
             $table->string('currency', 3)->default('CLP');
@@ -34,9 +34,9 @@ return new class extends Migration
                 ->on('accounts')
                 ->nullOnDelete();
 
-            $table->foreign('payment_method_id')
+            $table->foreign('instrument_id')
                 ->references('id')
-                ->on('payment_methods')
+                ->on('instruments')
                 ->nullOnDelete();
 
             $table->foreign('category_id')

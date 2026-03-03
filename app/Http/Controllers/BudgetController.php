@@ -76,7 +76,6 @@ class BudgetController extends Controller
                 'id' => $account->id,
                 'uuid' => $account->uuid,
                 'name' => $account->name,
-                'type' => $account->type->value,
                 'currency' => $account->currency,
                 'currency_locale' => Currency::localeFor($account->currency),
                 'is_active' => $account->is_active,
@@ -380,7 +379,7 @@ class BudgetController extends Controller
         $query = Auth::user()->transactions();
 
         if ($withRelations) {
-            $query->with(['paymentMethod', 'category', 'account', 'linkedTransaction.account']);
+            $query->with(['instrument', 'category', 'account', 'linkedTransaction.account']);
         }
 
         $query->where('type', 'expense')

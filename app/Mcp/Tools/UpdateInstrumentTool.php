@@ -7,11 +7,11 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
 
-class UpdateAccountTool extends Tool
+class UpdateInstrumentTool extends Tool
 {
     protected string $description = <<<'MARKDOWN'
-        Update an existing account. Only provided fields will be updated.
-        Use GetAccountsTool first to find the account ID.
+        Update an existing instrument. Only provided fields will be updated.
+        Use GetInstrumentsTool first to find the instrument ID.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -23,30 +23,30 @@ class UpdateAccountTool extends Tool
         }
 
         $validated = $request->validate([
-            'account_id' => ['required', 'integer'],
+            'instrument_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'icon' => ['nullable', 'string', 'max:50'],
             'is_active' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
         ], [
-            'account_id.required' => 'Account ID is required. Use GetAccountsTool to find accounts.',
+            'instrument_id.required' => 'Instrument ID is required. Use GetInstrumentsTool to find instruments.',
         ]);
 
-        $account = $user->accounts()->find($validated['account_id']);
+        $instrument = $user->instruments()->find($validated['instrument_id']);
 
-        if (! $account) {
-            return Response::error('Account not found.');
+        if (! $instrument) {
+            return Response::error('Instrument not found.');
         }
 
-        if (isset($validated['name']) && $validated['name'] !== $account->name) {
-            $duplicate = $user->accounts()
+        if (isset($validated['name']) && $validated['name'] !== $instrument->name) {
+            $duplicate = $user->instruments()
                 ->where('name', $validated['name'])
-                ->where('id', '!=', $account->id)
+                ->where('id', '!=', $instrument->id)
                 ->first();
 
             if ($duplicate) {
-                return Response::error("An account named \"{$validated['name']}\" already exists.");
+                return Response::error("An instrument named \"{$validated['name']}\" already exists.");
             }
         }
 
@@ -59,22 +59,25 @@ class UpdateAccountTool extends Tool
         ], fn ($value) => $value !== null);
 
         if (! empty($updates['is_default']) && $updates['is_default']) {
-            $user->accounts()->where('id', '!=', $account->id)->update(['is_default' => false]);
+            $user->instruments()->where('id', '!=', $instrument->id)->update(['is_default' => false]);
         }
 
-        $account->update($updates);
+        $instrument->update($updates);
 
         return Response::text(json_encode([
             'success' => true,
-            'message' => "Account \"{$account->name}\" updated successfully.",
-            'account' => [
-                'id' => $account->id,
-                'uuid' => $account->uuid,
-                'name' => $account->name,
-                'currency' => $account->currency,
-                'current_balance' => $account->current_balance,
-                'is_active' => $account->is_active,
-                'is_default' => $account->is_default,
+            'message' => "Instrument \"{$instrument->name}\" updated successfully.",
+            'instrument' => [
+                'id' => $instrument->id,
+                'uuid' => $instrument->uuid,
+                'name' => $instrument->name,
+                'type' => $instrument->type->value,
+                'type_label' => $instrument->type->label(),
+                'currency' => $instrument->currency,
+                'is_credit_card' => $instrument->isCreditCard(),
+                'credit_limit' => $instrument->credit_limit,
+                'is_active' => $instrument->is_active,
+                'is_default' => $instrument->is_default,
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
@@ -82,11 +85,11 @@ class UpdateAccountTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'account_id' => $schema->integer()
-                ->description('The ID of the account to update')
+            'instrument_id' => $schema->integer()
+                ->description('The ID of the instrument to update')
                 ->required(),
             'name' => $schema->string()
-                ->description('New account name'),
+                ->description('New instrument name'),
             'color' => $schema->string()
                 ->description('New hex color code'),
             'icon' => $schema->string()
@@ -94,7 +97,7 @@ class UpdateAccountTool extends Tool
             'is_active' => $schema->boolean()
                 ->description('Set active/inactive status'),
             'is_default' => $schema->boolean()
-                ->description('Set as default account'),
+                ->description('Set as default instrument'),
         ];
     }
 }

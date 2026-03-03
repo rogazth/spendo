@@ -5,22 +5,23 @@ namespace App\Mcp\Servers;
 use App\Mcp\Prompts\BudgetStatusPrompt;
 use App\Mcp\Prompts\RegisterTransactionPrompt;
 use App\Mcp\Prompts\SetupBudgetPrompt;
+use App\Mcp\Tools\BulkCreateTransactionsTool;
 use App\Mcp\Tools\CreateAccountTool;
 use App\Mcp\Tools\CreateBudgetTool;
 use App\Mcp\Tools\CreateCategoryTool;
-use App\Mcp\Tools\CreatePaymentMethodTool;
+use App\Mcp\Tools\CreateInstrumentTool;
 use App\Mcp\Tools\CreateTransactionTool;
 use App\Mcp\Tools\GetAccountsTool;
 use App\Mcp\Tools\GetBudgetMetricsTool;
 use App\Mcp\Tools\GetBudgetsTool;
 use App\Mcp\Tools\GetCategoriesTool;
 use App\Mcp\Tools\GetFinancialSummaryTool;
-use App\Mcp\Tools\GetPaymentMethodsTool;
+use App\Mcp\Tools\GetInstrumentsTool;
 use App\Mcp\Tools\GetTransactionsTool;
 use App\Mcp\Tools\UpdateAccountTool;
 use App\Mcp\Tools\UpdateBudgetTool;
 use App\Mcp\Tools\UpdateCategoryTool;
-use App\Mcp\Tools\UpdatePaymentMethodTool;
+use App\Mcp\Tools\UpdateInstrumentTool;
 use Laravel\Mcp\Server;
 
 class SpendoServer extends Server
@@ -46,8 +47,8 @@ class SpendoServer extends Server
     protected string $instructions = <<<'MARKDOWN'
         Spendo is a personal finance management application for managing personal and household finances. Use this server to:
 
-        - **Accounts**: Create, update, and list bank accounts (checking, savings, cash, investments)
-        - **Payment Methods**: Create, update, and list payment methods (credit cards, debit cards, cash)
+        - **Accounts**: Create, update, and list bank accounts (simple containers with balance)
+        - **Instruments**: Create, update, and list financial instruments (checking, savings, cash, investment, credit_card, prepaid_card)
         - **Categories**: Create, update, and list expense/income categories (hierarchical)
         - **Budgets**: Create, update, and list monthly budgets with category-level caps
         - **Transactions**: Record expenses, income, transfers, and credit card settlements
@@ -56,10 +57,10 @@ class SpendoServer extends Server
         **Currency**: All amounts use **major currency units** (e.g., 572000 means 572,000 CLP). Do NOT use centavos.
 
         **Transaction Types**:
-        - `expense`: Money spent (affects account if not credit card, or adds to credit card debt)
-        - `income`: Money received (adds to account balance)
+        - `expense`: Money spent — requires account_id; optionally instrument_id (the card used)
+        - `income`: Money received — requires account_id
         - `transfer`: Money moved between two accounts (creates linked transfer_out + transfer_in)
-        - `settlement`: Credit card payment (reduces account balance and credit card debt)
+        - `settlement`: Credit card payment — requires instrument_id (CC being paid) and from_instrument_id (bank paying). Does NOT affect account balance.
 
         **Budget Model**: Budgets have a frequency (weekly/biweekly/monthly/bimonthly), an anchor date, and category items with caps. Only expense transactions within the budget's categories count toward spending.
 
@@ -75,7 +76,7 @@ class SpendoServer extends Server
         // Read tools
         GetFinancialSummaryTool::class,
         GetAccountsTool::class,
-        GetPaymentMethodsTool::class,
+        GetInstrumentsTool::class,
         GetCategoriesTool::class,
         GetTransactionsTool::class,
         GetBudgetsTool::class,
@@ -85,9 +86,9 @@ class SpendoServer extends Server
         CreateAccountTool::class,
         UpdateAccountTool::class,
 
-        // Write tools - Payment Methods
-        CreatePaymentMethodTool::class,
-        UpdatePaymentMethodTool::class,
+        // Write tools - Instruments
+        CreateInstrumentTool::class,
+        UpdateInstrumentTool::class,
 
         // Write tools - Categories
         CreateCategoryTool::class,
@@ -99,6 +100,7 @@ class SpendoServer extends Server
 
         // Write tools - Transactions
         CreateTransactionTool::class,
+        BulkCreateTransactionsTool::class,
     ];
 
     /**

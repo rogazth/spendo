@@ -5,7 +5,7 @@ use App\Mcp\Servers\SpendoServer;
 use App\Mcp\Tools\CreateAccountTool;
 use App\Mcp\Tools\CreateBudgetTool;
 use App\Mcp\Tools\CreateCategoryTool;
-use App\Mcp\Tools\CreatePaymentMethodTool;
+use App\Mcp\Tools\CreateInstrumentTool;
 use App\Mcp\Tools\GetBudgetMetricsTool;
 use App\Mcp\Tools\GetBudgetsTool;
 use App\Mcp\Tools\GetCategoriesTool;
@@ -13,12 +13,12 @@ use App\Mcp\Tools\GetTransactionsTool;
 use App\Mcp\Tools\UpdateAccountTool;
 use App\Mcp\Tools\UpdateBudgetTool;
 use App\Mcp\Tools\UpdateCategoryTool;
-use App\Mcp\Tools\UpdatePaymentMethodTool;
+use App\Mcp\Tools\UpdateInstrumentTool;
 use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Currency;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 
@@ -30,12 +30,11 @@ beforeEach(function () {
 // ─── CreateAccountTool ──────────────────────────────────────────────────────
 
 describe('CreateAccountTool', function () {
-    it('creates a checking account', function () {
+    it('creates an account', function () {
         $user = User::factory()->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateAccountTool::class, [
             'name' => 'Cuenta Corriente BCI',
-            'type' => 'checking',
             'currency' => 'CLP',
         ]);
 
@@ -46,7 +45,6 @@ describe('CreateAccountTool', function () {
         $this->assertDatabaseHas('accounts', [
             'user_id' => $user->id,
             'name' => 'Cuenta Corriente BCI',
-            'type' => 'checking',
             'currency' => 'CLP',
         ]);
     });
@@ -62,7 +60,6 @@ describe('CreateAccountTool', function () {
 
         $response = SpendoServer::actingAs($user)->tool(CreateAccountTool::class, [
             'name' => 'Savings Account',
-            'type' => 'savings',
             'currency' => 'CLP',
             'initial_balance' => 500000,
         ]);
@@ -78,11 +75,10 @@ describe('CreateAccountTool', function () {
 
     it('rejects duplicate account names', function () {
         $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create(['name' => 'My Account']);
+        Account::factory()->for($user)->create(['name' => 'My Account']);
 
         $response = SpendoServer::actingAs($user)->tool(CreateAccountTool::class, [
             'name' => 'My Account',
-            'type' => 'checking',
             'currency' => 'CLP',
         ]);
 
@@ -92,7 +88,6 @@ describe('CreateAccountTool', function () {
     it('returns error when not authenticated', function () {
         $response = SpendoServer::tool(CreateAccountTool::class, [
             'name' => 'Test',
-            'type' => 'checking',
             'currency' => 'CLP',
         ]);
 
@@ -105,7 +100,7 @@ describe('CreateAccountTool', function () {
 describe('UpdateAccountTool', function () {
     it('updates an account name', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create(['name' => 'Old Name']);
+        $account = Account::factory()->for($user)->create(['name' => 'Old Name']);
 
         $response = SpendoServer::actingAs($user)->tool(UpdateAccountTool::class, [
             'account_id' => $account->id,
@@ -122,8 +117,8 @@ describe('UpdateAccountTool', function () {
 
     it('prevents updating to an existing name', function () {
         $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create(['name' => 'Existing']);
-        $account = Account::factory()->checking()->for($user)->create(['name' => 'My Account']);
+        Account::factory()->for($user)->create(['name' => 'Existing']);
+        $account = Account::factory()->for($user)->create(['name' => 'My Account']);
 
         $response = SpendoServer::actingAs($user)->tool(UpdateAccountTool::class, [
             'account_id' => $account->id,
@@ -136,7 +131,7 @@ describe('UpdateAccountTool', function () {
     it('does not allow updating another user account', function () {
         $user = User::factory()->create();
         $other = User::factory()->create();
-        $account = Account::factory()->checking()->for($other)->create();
+        $account = Account::factory()->for($other)->create();
 
         $response = SpendoServer::actingAs($user)->tool(UpdateAccountTool::class, [
             'account_id' => $account->id,
@@ -147,13 +142,13 @@ describe('UpdateAccountTool', function () {
     });
 });
 
-// ─── CreatePaymentMethodTool ────────────────────────────────────────────────
+// ─── CreateInstrumentTool ───────────────────────────────────────────────────
 
-describe('CreatePaymentMethodTool', function () {
-    it('creates a credit card', function () {
+describe('CreateInstrumentTool', function () {
+    it('creates a credit card instrument', function () {
         $user = User::factory()->create();
 
-        $response = SpendoServer::actingAs($user)->tool(CreatePaymentMethodTool::class, [
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
             'name' => 'Visa BCI',
             'type' => 'credit_card',
             'credit_limit' => 2000000,
@@ -163,7 +158,7 @@ describe('CreatePaymentMethodTool', function () {
 
         $response->assertOk()->assertSee('Visa BCI');
 
-        $this->assertDatabaseHas('payment_methods', [
+        $this->assertDatabaseHas('instruments', [
             'user_id' => $user->id,
             'name' => 'Visa BCI',
             'type' => 'credit_card',
@@ -171,24 +166,28 @@ describe('CreatePaymentMethodTool', function () {
         ]);
     });
 
-    it('creates a debit card linked to account', function () {
+    it('creates a checking instrument', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
 
-        $response = SpendoServer::actingAs($user)->tool(CreatePaymentMethodTool::class, [
-            'name' => 'Débito BCI',
-            'type' => 'debit_card',
-            'linked_account_id' => $account->id,
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
+            'name' => 'Cuenta BCI',
+            'type' => 'checking',
         ]);
 
-        $response->assertOk()->assertSee('Débito BCI');
+        $response->assertOk()->assertSee('Cuenta BCI');
+
+        $this->assertDatabaseHas('instruments', [
+            'user_id' => $user->id,
+            'name' => 'Cuenta BCI',
+            'type' => 'checking',
+        ]);
     });
 
     it('rejects duplicate names', function () {
         $user = User::factory()->create();
-        PaymentMethod::factory()->creditCard()->for($user)->create(['name' => 'My Card']);
+        Instrument::factory()->creditCard()->for($user)->create(['name' => 'My Card']);
 
-        $response = SpendoServer::actingAs($user)->tool(CreatePaymentMethodTool::class, [
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
             'name' => 'My Card',
             'type' => 'credit_card',
         ]);
@@ -196,45 +195,131 @@ describe('CreatePaymentMethodTool', function () {
         $response->assertHasErrors(['already exists']);
     });
 
-    it('rejects invalid linked account', function () {
+    it('rejects credit_limit on non-credit-card types', function () {
         $user = User::factory()->create();
 
-        $response = SpendoServer::actingAs($user)->tool(CreatePaymentMethodTool::class, [
-            'name' => 'Debit',
-            'type' => 'debit_card',
-            'linked_account_id' => 99999,
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
+            'name' => 'Cuenta',
+            'type' => 'checking',
+            'credit_limit' => 1000000,
         ]);
 
-        $response->assertHasErrors(['Linked account not found']);
+        $response->assertHasErrors(['credit_limit is only valid for credit_card']);
+    });
+
+    it('creates a cash type instrument', function () {
+        $user = User::factory()->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
+            'name' => 'Wallet',
+            'type' => 'cash',
+        ]);
+
+        $response->assertOk()->assertSee('Wallet');
+
+        $this->assertDatabaseHas('instruments', [
+            'user_id' => $user->id,
+            'name' => 'Wallet',
+            'type' => 'cash',
+        ]);
+    });
+
+    it('creates an investment type instrument', function () {
+        $user = User::factory()->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
+            'name' => 'Portfolio',
+            'type' => 'investment',
+        ]);
+
+        $response->assertOk()->assertSee('Portfolio');
+
+        $this->assertDatabaseHas('instruments', [
+            'user_id' => $user->id,
+            'name' => 'Portfolio',
+            'type' => 'investment',
+        ]);
+    });
+
+    it('creates a prepaid_card instrument with last_four_digits', function () {
+        $user = User::factory()->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateInstrumentTool::class, [
+            'name' => 'Prepaid CLP',
+            'type' => 'prepaid_card',
+            'last_four_digits' => '1234',
+        ]);
+
+        $response->assertOk()->assertSee('Prepaid CLP');
+
+        $this->assertDatabaseHas('instruments', [
+            'user_id' => $user->id,
+            'name' => 'Prepaid CLP',
+            'type' => 'prepaid_card',
+            'last_four_digits' => '1234',
+        ]);
     });
 });
 
-// ─── UpdatePaymentMethodTool ────────────────────────────────────────────────
+// ─── UpdateInstrumentTool ───────────────────────────────────────────────────
 
-describe('UpdatePaymentMethodTool', function () {
-    it('updates a payment method', function () {
+describe('UpdateInstrumentTool', function () {
+    it('updates an instrument name', function () {
         $user = User::factory()->create();
-        $pm = PaymentMethod::factory()->creditCard()->for($user)->create(['name' => 'Old Card']);
+        $instrument = Instrument::factory()->creditCard()->for($user)->create(['name' => 'Old Card']);
 
-        $response = SpendoServer::actingAs($user)->tool(UpdatePaymentMethodTool::class, [
-            'payment_method_id' => $pm->id,
+        $response = SpendoServer::actingAs($user)->tool(UpdateInstrumentTool::class, [
+            'instrument_id' => $instrument->id,
             'name' => 'New Card',
         ]);
 
         $response->assertOk()->assertSee('New Card');
     });
 
-    it('does not allow updating another user payment method', function () {
+    it('does not allow updating another user instrument', function () {
         $user = User::factory()->create();
         $other = User::factory()->create();
-        $pm = PaymentMethod::factory()->creditCard()->for($other)->create();
+        $instrument = Instrument::factory()->creditCard()->for($other)->create();
 
-        $response = SpendoServer::actingAs($user)->tool(UpdatePaymentMethodTool::class, [
-            'payment_method_id' => $pm->id,
+        $response = SpendoServer::actingAs($user)->tool(UpdateInstrumentTool::class, [
+            'instrument_id' => $instrument->id,
             'name' => 'Hacked',
         ]);
 
-        $response->assertHasErrors(['Payment method not found.']);
+        $response->assertHasErrors(['Instrument not found.']);
+    });
+
+    it('rejects duplicate name on update', function () {
+        $user = User::factory()->create();
+        Instrument::factory()->checking()->for($user)->create(['name' => 'Existing Instrument']);
+        $instrument = Instrument::factory()->creditCard()->for($user)->create(['name' => 'My Card']);
+
+        $response = SpendoServer::actingAs($user)->tool(UpdateInstrumentTool::class, [
+            'instrument_id' => $instrument->id,
+            'name' => 'Existing Instrument',
+        ]);
+
+        $response->assertHasErrors(['already exists']);
+    });
+
+    it('setting is_default true clears the previous default', function () {
+        $user = User::factory()->create();
+        $oldDefault = Instrument::factory()->checking()->for($user)->create([
+            'name' => 'Old Default',
+            'is_default' => true,
+        ]);
+        $newInstrument = Instrument::factory()->creditCard()->for($user)->create([
+            'name' => 'New Default',
+            'is_default' => false,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(UpdateInstrumentTool::class, [
+            'instrument_id' => $newInstrument->id,
+            'is_default' => true,
+        ])->assertOk();
+
+        expect($oldDefault->fresh()->is_default)->toBeFalse();
+        expect($newInstrument->fresh()->is_default)->toBeTrue();
     });
 });
 
@@ -431,7 +516,7 @@ describe('CreateBudgetTool', function () {
 
     it('validates account currency matches budget currency', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create(['currency' => 'USD']);
+        $account = Account::factory()->usd()->for($user)->create();
         $cat = Category::factory()->expense()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateBudgetTool::class, [
@@ -564,10 +649,7 @@ describe('GetBudgetMetricsTool', function () {
     it('returns current cycle metrics with category breakdown', function () {
         $user = User::factory()->create();
         $cat = Category::factory()->expense()->for($user)->create(['name' => 'Groceries']);
-        $account = Account::factory()->checking()->for($user)->create();
-        $pm = PaymentMethod::factory()->debitCard()->for($user)->create([
-            'linked_account_id' => $account->id,
-        ]);
+        $account = Account::factory()->for($user)->create();
 
         $budget = Budget::factory()->for($user)->create([
             'name' => 'House',
@@ -578,7 +660,7 @@ describe('GetBudgetMetricsTool', function () {
         // Create an expense within the cycle
         Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
-            'payment_method_id' => $pm->id,
+            'instrument_id' => null,
             'category_id' => $cat->id,
             'amount' => 5000000, // 50000 CLP in cents
             'transaction_date' => now(),
@@ -653,11 +735,12 @@ describe('GetCategoriesTool - Cross-user isolation', function () {
 describe('GetTransactionsTool - Pagination safety', function () {
     it('handles per_page=0 without crashing', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
         Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
+            'instrument_id' => null,
         ]);
 
         $response = SpendoServer::actingAs($user)->tool(GetTransactionsTool::class, [

@@ -20,16 +20,6 @@ import {
 import { formatCurrency } from '@/lib/currency';
 import type { Account } from '@/types';
 
-function getAccountTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        checking: 'Cuenta Corriente',
-        savings: 'Cuenta de Ahorro',
-        cash: 'Efectivo',
-        investment: 'Inversión',
-    };
-    return labels[type] || type;
-}
-
 interface AccountColumnsOptions {
     onEdit: (account: Account) => void;
     onDelete: (account: Account) => void;
@@ -78,15 +68,6 @@ export function getAccountColumns({
                         <Badge variant="secondary">Por defecto</Badge>
                     )}
                 </div>
-            ),
-        },
-        {
-            accessorKey: 'type',
-            header: 'Tipo',
-            cell: ({ row }) => (
-                <span className="text-muted-foreground">
-                    {getAccountTypeLabel(row.getValue('type'))}
-                </span>
             ),
         },
         {

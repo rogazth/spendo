@@ -37,8 +37,8 @@ const mainNavItems: NavItem[] = [
         icon: Tag,
     },
     {
-        title: 'Métodos de Pago',
-        href: '/payment-methods',
+        title: 'Instrumentos',
+        href: '/instruments',
         icon: CreditCard,
     },
     {

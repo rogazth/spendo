@@ -2,12 +2,13 @@
 
 use App\Enums\CategoryType;
 use App\Mcp\Servers\SpendoServer;
+use App\Mcp\Tools\BulkCreateTransactionsTool;
 use App\Mcp\Tools\CreateTransactionTool;
 use App\Mcp\Tools\GetTransactionsTool;
 use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 
@@ -16,8 +17,8 @@ use App\Models\User;
 describe('CreateTransactionTool - Transfer', function () {
     it('creates a transfer between accounts', function () {
         $user = User::factory()->create();
-        $origin = Account::factory()->checking()->for($user)->create(['name' => 'Origin']);
-        $dest = Account::factory()->savings()->for($user)->create(['name' => 'Destination']);
+        $origin = Account::factory()->for($user)->create(['name' => 'Origin']);
+        $dest = Account::factory()->for($user)->create(['name' => 'Destination']);
 
         Category::factory()->create([
             'user_id' => null,
@@ -54,9 +55,36 @@ describe('CreateTransactionTool - Transfer', function () {
         ]);
     });
 
+    it('creates bidirectional linked_transaction_id for transfer', function () {
+        $user = User::factory()->create();
+        $origin = Account::factory()->for($user)->create();
+        $dest = Account::factory()->for($user)->create();
+
+        Category::factory()->create([
+            'user_id' => null,
+            'name' => 'Transferencia',
+            'type' => CategoryType::System,
+            'is_system' => true,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
+            'type' => 'transfer',
+            'amount' => 50000,
+            'description' => 'Link test',
+            'origin_account_id' => $origin->id,
+            'destination_account_id' => $dest->id,
+        ])->assertOk();
+
+        $out = Transaction::where('type', 'transfer_out')->where('account_id', $origin->id)->firstOrFail();
+        $in = Transaction::where('type', 'transfer_in')->where('account_id', $dest->id)->firstOrFail();
+
+        expect($out->linked_transaction_id)->toBe($in->id);
+        expect($in->linked_transaction_id)->toBe($out->id);
+    });
+
     it('rejects transfer to same account', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
             'type' => 'transfer',
@@ -71,7 +99,7 @@ describe('CreateTransactionTool - Transfer', function () {
 
     it('rejects transfer without origin account', function () {
         $user = User::factory()->create();
-        $dest = Account::factory()->savings()->for($user)->create();
+        $dest = Account::factory()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
             'type' => 'transfer',
@@ -89,12 +117,12 @@ describe('CreateTransactionTool - Transfer', function () {
 describe('CreateTransactionTool - Settlement', function () {
     it('creates a credit card settlement', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
-        $creditCard = PaymentMethod::factory()->creditCard()->for($user)->create(['name' => 'Visa']);
+        $creditCard = Instrument::factory()->creditCard()->for($user)->create(['name' => 'Visa']);
+        $bankInstrument = Instrument::factory()->checking()->for($user)->create(['name' => 'BCI Corriente']);
 
         Category::factory()->create([
             'user_id' => null,
-            'name' => 'Pago Tarjeta',
+            'name' => 'Liquidación TDC',
             'type' => CategoryType::System,
             'is_system' => true,
         ]);
@@ -103,8 +131,8 @@ describe('CreateTransactionTool - Settlement', function () {
             'type' => 'settlement',
             'amount' => 500000,
             'description' => 'Credit card payment',
-            'account_id' => $account->id,
-            'payment_method_id' => $creditCard->id,
+            'instrument_id' => $creditCard->id,
+            'from_instrument_id' => $bankInstrument->id,
         ]);
 
         $response->assertOk()
@@ -114,26 +142,55 @@ describe('CreateTransactionTool - Settlement', function () {
         $this->assertDatabaseHas('transactions', [
             'user_id' => $user->id,
             'type' => 'settlement',
+            'account_id' => null,
+            'instrument_id' => $creditCard->id,
+            'from_instrument_id' => $bankInstrument->id,
             'amount' => 50000000,
         ]);
     });
 
-    it('rejects settlement for non-credit card', function () {
+    it('rejects settlement for non-credit card instrument', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
-        $debit = PaymentMethod::factory()->debitCard()->for($user)->create([
-            'linked_account_id' => $account->id,
-        ]);
+        $checking = Instrument::factory()->checking()->for($user)->create();
+        $bankInstrument = Instrument::factory()->checking()->for($user)->create(['name' => 'Other Bank']);
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
             'type' => 'settlement',
             'amount' => 500000,
             'description' => 'Bad settlement',
-            'account_id' => $account->id,
-            'payment_method_id' => $debit->id,
+            'instrument_id' => $checking->id,
+            'from_instrument_id' => $bankInstrument->id,
         ]);
 
         $response->assertHasErrors(['credit card']);
+    });
+
+    it('rejects settlement without instrument_id', function () {
+        $user = User::factory()->create();
+        $bankInstrument = Instrument::factory()->checking()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
+            'type' => 'settlement',
+            'amount' => 500000,
+            'description' => 'Missing instrument',
+            'from_instrument_id' => $bankInstrument->id,
+        ]);
+
+        $response->assertHasErrors(['instrument_id']);
+    });
+
+    it('rejects settlement without from_instrument_id', function () {
+        $user = User::factory()->create();
+        $creditCard = Instrument::factory()->creditCard()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
+            'type' => 'settlement',
+            'amount' => 500000,
+            'description' => 'Missing from_instrument',
+            'instrument_id' => $creditCard->id,
+        ]);
+
+        $response->assertHasErrors(['from_instrument_id']);
     });
 });
 
@@ -142,7 +199,7 @@ describe('CreateTransactionTool - Settlement', function () {
 describe('CreateTransactionTool - Idempotency', function () {
     it('deduplicates transactions with same idempotency key', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->income()->for($user)->create();
 
         $params = [
@@ -172,10 +229,7 @@ describe('CreateTransactionTool - Idempotency', function () {
 describe('CreateTransactionTool - Money Contract', function () {
     it('stores amount correctly in cents from major units', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
-        $pm = PaymentMethod::factory()->debitCard()->for($user)->create([
-            'linked_account_id' => $account->id,
-        ]);
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
@@ -183,7 +237,7 @@ describe('CreateTransactionTool - Money Contract', function () {
             'amount' => 58900, // 58,900 CLP
             'description' => 'Grocery shopping',
             'category_id' => $category->id,
-            'payment_method_id' => $pm->id,
+            'account_id' => $account->id,
         ]);
 
         $response->assertOk();
@@ -200,16 +254,208 @@ describe('CreateTransactionTool - Money Contract', function () {
     });
 });
 
+// ─── BulkCreateTransactionsTool ─────────────────────────────────────────────
+
+describe('BulkCreateTransactionsTool', function () {
+    it('creates multiple transactions in one request', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $incomeCategory = Category::factory()->income()->for($user)->create();
+        $expenseCategory = Category::factory()->expense()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [
+                [
+                    'type' => 'income',
+                    'amount' => 1000000,
+                    'description' => 'Salary',
+                    'category_id' => $incomeCategory->id,
+                    'account_id' => $account->id,
+                ],
+                [
+                    'type' => 'expense',
+                    'amount' => 50000,
+                    'description' => 'Groceries',
+                    'category_id' => $expenseCategory->id,
+                    'account_id' => $account->id,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertSee('"succeeded": 2')
+            ->assertSee('"failed": 0')
+            ->assertSee('Income created successfully')
+            ->assertSee('Expense created successfully');
+
+        expect(Transaction::where('user_id', $user->id)->count())->toBe(2);
+    });
+
+    it('reports partial failures without rolling back successes', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $incomeCategory = Category::factory()->income()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [
+                [
+                    'type' => 'income',
+                    'amount' => 500000,
+                    'description' => 'Valid income',
+                    'category_id' => $incomeCategory->id,
+                    'account_id' => $account->id,
+                ],
+                [
+                    'type' => 'expense',
+                    'amount' => 10000,
+                    'description' => 'Missing account and category',
+                    // account_id and category_id deliberately omitted
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertSee('"succeeded": 1')
+            ->assertSee('"failed": 1');
+
+        // The successful income was committed
+        expect(Transaction::where('user_id', $user->id)->count())->toBe(1);
+    });
+
+    it('deduplicates bulk items with idempotency keys', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->income()->for($user)->create();
+
+        $params = [
+            'transactions' => [
+                [
+                    'type' => 'income',
+                    'amount' => 500000,
+                    'description' => 'Salary',
+                    'category_id' => $category->id,
+                    'account_id' => $account->id,
+                    'idempotency_key' => 'salary-bulk-march',
+                ],
+            ],
+        ];
+
+        SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, $params)->assertOk();
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, $params);
+
+        $response->assertOk()->assertSee('already exists (idempotent)');
+        expect(Transaction::where('user_id', $user->id)->count())->toBe(1);
+    });
+
+    it('rejects an empty transactions array', function () {
+        $user = User::factory()->create();
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [],
+        ]);
+
+        $response->assertHasErrors();
+    });
+
+    it('includes index in each result', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->income()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [
+                [
+                    'type' => 'income',
+                    'amount' => 100000,
+                    'description' => 'Test',
+                    'category_id' => $category->id,
+                    'account_id' => $account->id,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()->assertSee('"index": 0');
+    });
+
+    it('bulk settlement stores account_id as null and reduces CC debt', function () {
+        $user = User::factory()->create();
+        $cc = Instrument::factory()->creditCard()->for($user)->create(['name' => 'Visa']);
+        $bank = Instrument::factory()->checking()->for($user)->create(['name' => 'BCI']);
+
+        Category::factory()->create([
+            'user_id' => null,
+            'name' => 'Liquidación TDC',
+            'type' => CategoryType::System,
+            'is_system' => true,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [
+                [
+                    'type' => 'settlement',
+                    'amount' => 200000,
+                    'description' => 'CC payment',
+                    'instrument_id' => $cc->id,
+                    'from_instrument_id' => $bank->id,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()->assertSee('"succeeded": 1');
+
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $user->id,
+            'type' => 'settlement',
+            'account_id' => null,
+            'instrument_id' => $cc->id,
+        ]);
+    });
+
+    it('bulk transfer creates both legs and links them', function () {
+        $user = User::factory()->create();
+        $origin = Account::factory()->for($user)->create();
+        $dest = Account::factory()->for($user)->create();
+
+        Category::factory()->create([
+            'user_id' => null,
+            'name' => 'Transferencia',
+            'type' => CategoryType::System,
+            'is_system' => true,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(BulkCreateTransactionsTool::class, [
+            'transactions' => [
+                [
+                    'type' => 'transfer',
+                    'amount' => 100000,
+                    'description' => 'Bulk transfer',
+                    'origin_account_id' => $origin->id,
+                    'destination_account_id' => $dest->id,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()->assertSee('"succeeded": 1');
+
+        $out = Transaction::where('type', 'transfer_out')->where('account_id', $origin->id)->firstOrFail();
+        $in = Transaction::where('type', 'transfer_in')->where('account_id', $dest->id)->firstOrFail();
+
+        expect($out->linked_transaction_id)->toBe($in->id);
+        expect($in->linked_transaction_id)->toBe($out->id);
+    });
+});
+
 // ─── GetTransactionsTool - Enhanced ─────────────────────────────────────────
 
 describe('GetTransactionsTool - Enhanced', function () {
     it('returns totals block', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
         Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
+            'instrument_id' => null,
         ]);
 
         $response = SpendoServer::actingAs($user)->tool(GetTransactionsTool::class);
@@ -225,7 +471,7 @@ describe('GetTransactionsTool - Enhanced', function () {
         $user = User::factory()->create();
         $cat1 = Category::factory()->expense()->for($user)->create(['name' => 'Budget Cat']);
         $cat2 = Category::factory()->expense()->for($user)->create(['name' => 'Other Cat']);
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
 
         $budget = Budget::factory()->for($user)->create([
             'anchor_date' => now()->startOfMonth(),
@@ -237,6 +483,7 @@ describe('GetTransactionsTool - Enhanced', function () {
             'category_id' => $cat1->id,
             'description' => 'Budget expense',
             'transaction_date' => now(),
+            'instrument_id' => null,
         ]);
 
         Transaction::factory()->expense()->for($user)->create([
@@ -244,6 +491,7 @@ describe('GetTransactionsTool - Enhanced', function () {
             'category_id' => $cat2->id,
             'description' => 'Non-budget expense',
             'transaction_date' => now(),
+            'instrument_id' => null,
         ]);
 
         $response = SpendoServer::actingAs($user)->tool(GetTransactionsTool::class, [
@@ -257,7 +505,7 @@ describe('GetTransactionsTool - Enhanced', function () {
 
     it('supports pagination', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
 
         for ($i = 0; $i < 5; $i++) {
@@ -265,6 +513,7 @@ describe('GetTransactionsTool - Enhanced', function () {
                 'account_id' => $account->id,
                 'category_id' => $category->id,
                 'description' => "Transaction {$i}",
+                'instrument_id' => null,
             ]);
         }
 

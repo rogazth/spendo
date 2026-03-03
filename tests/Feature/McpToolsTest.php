@@ -5,11 +5,11 @@ use App\Mcp\Tools\CreateTransactionTool;
 use App\Mcp\Tools\GetAccountsTool;
 use App\Mcp\Tools\GetCategoriesTool;
 use App\Mcp\Tools\GetFinancialSummaryTool;
-use App\Mcp\Tools\GetPaymentMethodsTool;
+use App\Mcp\Tools\GetInstrumentsTool;
 use App\Mcp\Tools\GetTransactionsTool;
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\PaymentMethod;
+use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,9 +19,9 @@ uses(RefreshDatabase::class);
 describe('GetFinancialSummaryTool', function () {
     it('returns financial summary for authenticated user', function () {
         $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create();
-        Account::factory()->savings()->for($user)->create();
-        PaymentMethod::factory()->creditCard()->for($user)->create();
+        Account::factory()->for($user)->create();
+        Account::factory()->for($user)->create();
+        Instrument::factory()->creditCard()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(GetFinancialSummaryTool::class);
 
@@ -29,6 +29,46 @@ describe('GetFinancialSummaryTool', function () {
             ->assertSee('total_account_balance')
             ->assertSee('total_credit_debt')
             ->assertSee('net_balance');
+    });
+
+    it('returns exact total_account_balance in major units', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->income()->for($user)->create();
+
+        SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
+            'type' => 'income',
+            'amount' => 1000,
+            'description' => 'Test income',
+            'category_id' => $category->id,
+            'account_id' => $account->id,
+            'transaction_date' => now()->toDateString(),
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetFinancialSummaryTool::class);
+
+        $response->assertOk()->assertSee('"total_account_balance": 1000');
+    });
+
+    it('returns exact total_credit_debt in major units', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $cc = Instrument::factory()->creditCard()->for($user)->create();
+        $category = Category::factory()->expense()->for($user)->create();
+
+        SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
+            'type' => 'expense',
+            'amount' => 500,
+            'description' => 'CC charge',
+            'category_id' => $category->id,
+            'account_id' => $account->id,
+            'instrument_id' => $cc->id,
+            'transaction_date' => now()->toDateString(),
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetFinancialSummaryTool::class);
+
+        $response->assertOk()->assertSee('"total_credit_debt": 500');
     });
 
     it('returns error when user is not authenticated', function () {
@@ -41,8 +81,8 @@ describe('GetFinancialSummaryTool', function () {
 describe('GetAccountsTool', function () {
     it('returns all active accounts for user', function () {
         $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create(['name' => 'Test Checking']);
-        Account::factory()->savings()->for($user)->create(['name' => 'Test Savings']);
+        Account::factory()->for($user)->create(['name' => 'Test Checking']);
+        Account::factory()->for($user)->create(['name' => 'Test Savings']);
         Account::factory()->inactive()->for($user)->create(['name' => 'Inactive Account']);
 
         $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
@@ -51,20 +91,6 @@ describe('GetAccountsTool', function () {
             ->assertSee('Test Checking')
             ->assertSee('Test Savings')
             ->assertDontSee('Inactive Account');
-    });
-
-    it('filters accounts by type', function () {
-        $user = User::factory()->create();
-        Account::factory()->checking()->for($user)->create(['name' => 'My Checking']);
-        Account::factory()->savings()->for($user)->create(['name' => 'My Savings']);
-
-        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class, [
-            'type' => 'checking',
-        ]);
-
-        $response->assertOk()
-            ->assertSee('My Checking')
-            ->assertDontSee('My Savings');
     });
 
     it('includes inactive accounts when requested', function () {
@@ -78,6 +104,19 @@ describe('GetAccountsTool', function () {
         $response->assertOk()->assertSee('Inactive Account');
     });
 
+    it('returns only the authenticated user accounts', function () {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        Account::factory()->for($userA)->create(['name' => 'Account A']);
+        Account::factory()->for($userB)->create(['name' => 'Account B']);
+
+        $response = SpendoServer::actingAs($userA)->tool(GetAccountsTool::class);
+
+        $response->assertOk()
+            ->assertSee('Account A')
+            ->assertDontSee('Account B');
+    });
+
     it('returns error when user is not authenticated', function () {
         $response = SpendoServer::tool(GetAccountsTool::class);
 
@@ -85,35 +124,57 @@ describe('GetAccountsTool', function () {
     });
 });
 
-describe('GetPaymentMethodsTool', function () {
-    it('returns all active payment methods for user', function () {
+describe('GetInstrumentsTool', function () {
+    it('returns all active instruments for user', function () {
         $user = User::factory()->create();
-        PaymentMethod::factory()->creditCard()->for($user)->create(['name' => 'My Credit Card']);
-        PaymentMethod::factory()->debitCard()->for($user)->create(['name' => 'My Debit Card']);
+        Instrument::factory()->creditCard()->for($user)->create(['name' => 'My Credit Card']);
+        Instrument::factory()->checking()->for($user)->create(['name' => 'My Checking']);
 
-        $response = SpendoServer::actingAs($user)->tool(GetPaymentMethodsTool::class);
+        $response = SpendoServer::actingAs($user)->tool(GetInstrumentsTool::class);
 
         $response->assertOk()
             ->assertSee('My Credit Card')
-            ->assertSee('My Debit Card');
+            ->assertSee('My Checking');
     });
 
-    it('filters payment methods by type', function () {
-        $user = User::factory()->create();
-        PaymentMethod::factory()->creditCard()->for($user)->create(['name' => 'Credit']);
-        PaymentMethod::factory()->debitCard()->for($user)->create(['name' => 'Debit']);
+    it('returns only the authenticated user instruments', function () {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        Instrument::factory()->creditCard()->for($userA)->create(['name' => 'Card A']);
+        Instrument::factory()->creditCard()->for($userB)->create(['name' => 'Card B']);
 
-        $response = SpendoServer::actingAs($user)->tool(GetPaymentMethodsTool::class, [
-            'type' => 'credit_card',
-        ]);
+        $response = SpendoServer::actingAs($userA)->tool(GetInstrumentsTool::class);
 
         $response->assertOk()
-            ->assertSee('Credit')
-            ->assertDontSee('"name": "Debit"');
+            ->assertSee('Card A')
+            ->assertDontSee('Card B');
+    });
+
+    it('excludes inactive instruments by default', function () {
+        $user = User::factory()->create();
+        Instrument::factory()->checking()->for($user)->create(['name' => 'Active Card', 'is_active' => true]);
+        Instrument::factory()->checking()->for($user)->create(['name' => 'Inactive Card', 'is_active' => false]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetInstrumentsTool::class);
+
+        $response->assertOk()
+            ->assertSee('Active Card')
+            ->assertDontSee('Inactive Card');
+    });
+
+    it('includes inactive instruments when requested', function () {
+        $user = User::factory()->create();
+        Instrument::factory()->checking()->for($user)->create(['name' => 'Inactive Card', 'is_active' => false]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetInstrumentsTool::class, [
+            'include_inactive' => true,
+        ]);
+
+        $response->assertOk()->assertSee('Inactive Card');
     });
 
     it('returns error when user is not authenticated', function () {
-        $response = SpendoServer::tool(GetPaymentMethodsTool::class);
+        $response = SpendoServer::tool(GetInstrumentsTool::class);
 
         $response->assertHasErrors(['User not authenticated.']);
     });
@@ -156,17 +217,44 @@ describe('GetCategoriesTool', function () {
 describe('GetTransactionsTool', function () {
     it('returns user transactions', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
         Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
             'description' => 'Test Transaction',
+            'instrument_id' => null,
         ]);
 
         $response = SpendoServer::actingAs($user)->tool(GetTransactionsTool::class);
 
         $response->assertOk()->assertSee('Test Transaction');
+    });
+
+    it('returns only the authenticated user transactions', function () {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $accountA = Account::factory()->for($userA)->create();
+        $accountB = Account::factory()->for($userB)->create();
+        $category = Category::factory()->expense()->for($userA)->create();
+
+        Transaction::factory()->expense()->for($userA)->create([
+            'account_id' => $accountA->id,
+            'category_id' => $category->id,
+            'description' => 'User A transaction',
+            'instrument_id' => null,
+        ]);
+        Transaction::factory()->expense()->for($userB)->create([
+            'account_id' => $accountB->id,
+            'description' => 'User B transaction',
+            'instrument_id' => null,
+        ]);
+
+        $response = SpendoServer::actingAs($userA)->tool(GetTransactionsTool::class);
+
+        $response->assertOk()
+            ->assertSee('User A transaction')
+            ->assertDontSee('User B transaction');
     });
 
     it('returns error when user is not authenticated', function () {
@@ -176,13 +264,52 @@ describe('GetTransactionsTool', function () {
     });
 });
 
+describe('CreateTransactionTool - Authorization', function () {
+    it('rejects cross-user account_id and creates no transaction', function () {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $accountA = Account::factory()->for($userA)->create();
+        $category = Category::factory()->expense()->for($userB)->create();
+
+        $response = SpendoServer::actingAs($userB)->tool(CreateTransactionTool::class, [
+            'type' => 'expense',
+            'amount' => 500,
+            'description' => 'Cross-user attempt',
+            'category_id' => $category->id,
+            'account_id' => $accountA->id, // belongs to User A
+            'transaction_date' => now()->toDateString(),
+        ]);
+
+        $response->assertHasErrors();
+        expect(Transaction::where('user_id', $userB->id)->count())->toBe(0);
+    });
+
+    it('rejects cross-user instrument_id and creates no transaction', function () {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $accountB = Account::factory()->for($userB)->create();
+        $instrumentA = Instrument::factory()->creditCard()->for($userA)->create();
+        $category = Category::factory()->expense()->for($userB)->create();
+
+        $response = SpendoServer::actingAs($userB)->tool(CreateTransactionTool::class, [
+            'type' => 'expense',
+            'amount' => 500,
+            'description' => 'Cross-user instrument',
+            'category_id' => $category->id,
+            'account_id' => $accountB->id,
+            'instrument_id' => $instrumentA->id, // belongs to User A
+            'transaction_date' => now()->toDateString(),
+        ]);
+
+        $response->assertHasErrors();
+        expect(Transaction::where('user_id', $userB->id)->count())->toBe(0);
+    });
+});
+
 describe('CreateTransactionTool', function () {
     it('creates an expense transaction', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
-        $paymentMethod = PaymentMethod::factory()->debitCard()->for($user)->create([
-            'linked_account_id' => $account->id,
-        ]);
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
@@ -190,7 +317,7 @@ describe('CreateTransactionTool', function () {
             'amount' => 15000,
             'description' => 'Lunch at restaurant',
             'category_id' => $category->id,
-            'payment_method_id' => $paymentMethod->id,
+            'account_id' => $account->id,
             'transaction_date' => now()->toDateString(),
         ]);
 
@@ -205,7 +332,7 @@ describe('CreateTransactionTool', function () {
 
     it('creates an income transaction', function () {
         $user = User::factory()->create();
-        $account = Account::factory()->checking()->for($user)->create();
+        $account = Account::factory()->for($user)->create();
         $category = Category::factory()->income()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
@@ -232,7 +359,7 @@ describe('CreateTransactionTool', function () {
             'amount' => 15000,
             'description' => 'Test',
             'category_id' => 1,
-            'payment_method_id' => 1,
+            'account_id' => 1,
             'transaction_date' => now()->toDateString(),
         ]);
 
