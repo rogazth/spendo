@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreTransactionRequest;
 use App\Http\Requests\UpdateTransactionRequest;
 use App\Http\Resources\TransactionResource;
+use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
@@ -22,6 +23,27 @@ class TransactionController extends Controller
         $instrumentIds = $this->extractIdFilter($request, 'instrument_ids');
         $accountIds = $this->extractIdFilter($request, 'account_ids');
         $categoryIds = $this->extractIdFilter($request, 'category_ids');
+        $budgetId = $request->input('budget_id') ? (int) $request->input('budget_id') : null;
+
+        // Budget filter: scope by the budget's categories and account
+        $activeBudget = null;
+        $budgetAccountId = null;
+
+        if ($budgetId) {
+            $activeBudget = Auth::user()
+                ->budgets()
+                ->with('items')
+                ->find($budgetId);
+
+            if ($activeBudget) {
+                $categoryIds = $activeBudget->items->pluck('category_id')->toArray();
+
+                if ($activeBudget->account_id) {
+                    $budgetAccountId = $activeBudget->account_id;
+                    $accountIds = [$activeBudget->account_id];
+                }
+            }
+        }
 
         $query = Auth::user()
             ->transactions()
@@ -62,6 +84,11 @@ class TransactionController extends Controller
             ->where('is_active', true)
             ->get();
 
+        $budgets = Auth::user()
+            ->budgets()
+            ->orderBy('name')
+            ->get();
+
         $categories = Category::query()
             ->where(function ($query) {
                 $query->whereNull('user_id')
@@ -92,6 +119,12 @@ class TransactionController extends Controller
                 'is_active' => $instrument->is_active,
                 'is_default' => $instrument->is_default,
             ])->toArray(),
+            'budgets' => $budgets->map(fn ($budget) => [
+                'id' => $budget->id,
+                'uuid' => $budget->uuid,
+                'name' => $budget->name,
+                'account_id' => $budget->account_id,
+            ])->toArray(),
             'categories' => $categories->map(fn ($cat) => [
                 'id' => $cat->id,
                 'uuid' => $cat->uuid,
@@ -107,8 +140,10 @@ class TransactionController extends Controller
                 ])->toArray(),
             ])->toArray(),
             'filters' => [
+                'budget_id' => $budgetId,
+                'budget_account_id' => $budgetAccountId,
                 'instrument_ids' => $instrumentIds,
-                'account_ids' => $accountIds,
+                'account_ids' => $request->input('budget_id') ? [] : $this->extractIdFilter($request, 'account_ids'),
                 'category_ids' => $categoryIds,
                 'date_from' => $request->input('date_from'),
                 'date_to' => $request->input('date_to'),
