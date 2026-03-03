@@ -5,6 +5,7 @@ use App\Mcp\Servers\SpendoServer;
 use App\Mcp\Tools\BulkCreateTransactionsTool;
 use App\Mcp\Tools\CreateTransactionTool;
 use App\Mcp\Tools\GetTransactionsTool;
+use App\Mcp\Tools\UpdateTransactionTool;
 use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
@@ -525,5 +526,105 @@ describe('GetTransactionsTool - Enhanced', function () {
         $response->assertOk()
             ->assertSee('"per_page": 2')
             ->assertSee('"total_pages": 3');
+    });
+});
+
+// ─── UpdateTransactionTool ───────────────────────────────────────────────────
+
+describe('UpdateTransactionTool', function () {
+    it('updates description, amount, and date of an expense', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->expense()->for($user)->create();
+
+        $transaction = Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'instrument_id' => null,
+            'description' => 'Old description',
+            'amount' => 10000,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(UpdateTransactionTool::class, [
+            'transaction_id' => $transaction->id,
+            'description' => 'New description',
+            'amount' => 15000,
+            'transaction_date' => '2026-03-01',
+        ]);
+
+        $response->assertOk()->assertSee('updated successfully');
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'description' => 'New description',
+            'transaction_date' => '2026-03-01 00:00:00',
+        ]);
+    });
+
+    it('updates the category', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $oldCategory = Category::factory()->expense()->for($user)->create();
+        $newCategory = Category::factory()->expense()->for($user)->create();
+
+        $transaction = Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $account->id,
+            'category_id' => $oldCategory->id,
+            'instrument_id' => null,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(UpdateTransactionTool::class, [
+            'transaction_id' => $transaction->id,
+            'category_id' => $newCategory->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'category_id' => $newCategory->id,
+        ]);
+    });
+
+    it('returns error for transfer transactions', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+
+        $transfer = Transaction::factory()->transferOut()->for($user)->create([
+            'account_id' => $account->id,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(UpdateTransactionTool::class, [
+            'transaction_id' => $transfer->id,
+            'description' => 'New desc',
+        ])->assertHasErrors(['Transfer transactions cannot be updated.']);
+    });
+
+    it('returns error for transaction belonging to another user', function () {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $account = Account::factory()->for($other)->create();
+
+        $transaction = Transaction::factory()->expense()->for($other)->create([
+            'account_id' => $account->id,
+            'instrument_id' => null,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(UpdateTransactionTool::class, [
+            'transaction_id' => $transaction->id,
+            'description' => 'Hacked',
+        ])->assertHasErrors(['Transaction not found.']);
+    });
+
+    it('returns error when no fields are provided', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+
+        $transaction = Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $account->id,
+            'instrument_id' => null,
+        ]);
+
+        SpendoServer::actingAs($user)->tool(UpdateTransactionTool::class, [
+            'transaction_id' => $transaction->id,
+        ])->assertHasErrors(['No fields provided to update.']);
     });
 });

@@ -25,6 +25,7 @@ use App\Mcp\Tools\UpdateAccountTool;
 use App\Mcp\Tools\UpdateBudgetTool;
 use App\Mcp\Tools\UpdateCategoryTool;
 use App\Mcp\Tools\UpdateInstrumentTool;
+use App\Mcp\Tools\UpdateTransactionTool;
 use Laravel\Mcp\Server;
 
 class SpendoServer extends Server
@@ -76,38 +77,37 @@ class SpendoServer extends Server
      * @var array<int, class-string<\Laravel\Mcp\Server\Tool>>
      */
     protected array $tools = [
-        // Read tools
+        // Summary
         GetFinancialSummaryTool::class,
-        GetAccountsTool::class,
-        GetInstrumentsTool::class,
-        GetCategoriesTool::class,
-        GetTransactionsTool::class,
-        GetBudgetsTool::class,
-        GetBudgetMetricsTool::class,
 
-        // Write tools - Accounts
+        // Accounts
+        GetAccountsTool::class,
         CreateAccountTool::class,
         UpdateAccountTool::class,
+        DeleteAccountTool::class,
 
-        // Write tools - Instruments
+        // Instruments
+        GetInstrumentsTool::class,
         CreateInstrumentTool::class,
         UpdateInstrumentTool::class,
+        DeleteInstrumentTool::class,
 
-        // Write tools - Categories
+        // Categories
+        GetCategoriesTool::class,
         CreateCategoryTool::class,
         UpdateCategoryTool::class,
 
-        // Write tools - Budgets
+        // Budgets
+        GetBudgetsTool::class,
+        GetBudgetMetricsTool::class,
         CreateBudgetTool::class,
         UpdateBudgetTool::class,
 
-        // Write tools - Transactions
+        // Transactions
+        GetTransactionsTool::class,
         CreateTransactionTool::class,
         BulkCreateTransactionsTool::class,
-
-        // Delete tools
-        DeleteAccountTool::class,
-        DeleteInstrumentTool::class,
+        UpdateTransactionTool::class,
         DeleteTransactionTool::class,
     ];
 
