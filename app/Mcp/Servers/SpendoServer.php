@@ -11,6 +11,9 @@ use App\Mcp\Tools\CreateBudgetTool;
 use App\Mcp\Tools\CreateCategoryTool;
 use App\Mcp\Tools\CreateInstrumentTool;
 use App\Mcp\Tools\CreateTransactionTool;
+use App\Mcp\Tools\DeleteAccountTool;
+use App\Mcp\Tools\DeleteInstrumentTool;
+use App\Mcp\Tools\DeleteTransactionTool;
 use App\Mcp\Tools\GetAccountsTool;
 use App\Mcp\Tools\GetBudgetMetricsTool;
 use App\Mcp\Tools\GetBudgetsTool;
@@ -101,6 +104,11 @@ class SpendoServer extends Server
         // Write tools - Transactions
         CreateTransactionTool::class,
         BulkCreateTransactionsTool::class,
+
+        // Delete tools
+        DeleteAccountTool::class,
+        DeleteInstrumentTool::class,
+        DeleteTransactionTool::class,
     ];
 
     /**

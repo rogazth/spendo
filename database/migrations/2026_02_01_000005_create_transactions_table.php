@@ -32,12 +32,12 @@ return new class extends Migration
             $table->foreign('account_id')
                 ->references('id')
                 ->on('accounts')
-                ->nullOnDelete();
+                ->cascadeOnDelete();
 
             $table->foreign('instrument_id')
                 ->references('id')
                 ->on('instruments')
-                ->nullOnDelete();
+                ->cascadeOnDelete();
 
             $table->foreign('from_instrument_id')
                 ->references('id')
