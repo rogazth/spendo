@@ -12,20 +12,20 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class CategoryFactory extends Factory
 {
-    /** @var array<int, array{name: string, icon: string, color: string}> */
+    /** @var array<int, array{name: string, emoji: string, color: string}> */
     private static array $expenseCategories = [
-        ['name' => 'Alimentación', 'icon' => 'shopping-cart', 'color' => '#EF4444'],
-        ['name' => 'Transporte', 'icon' => 'car', 'color' => '#3B82F6'],
-        ['name' => 'Entretenimiento', 'icon' => 'film', 'color' => '#8B5CF6'],
-        ['name' => 'Salud', 'icon' => 'heart', 'color' => '#10B981'],
-        ['name' => 'Servicios', 'icon' => 'home', 'color' => '#F59E0B'],
-        ['name' => 'Educación', 'icon' => 'book', 'color' => '#06B6D4'],
-        ['name' => 'Ropa', 'icon' => 'shopping-bag', 'color' => '#EC4899'],
-        ['name' => 'Restaurantes', 'icon' => 'utensils', 'color' => '#F97316'],
-        ['name' => 'Tecnología', 'icon' => 'laptop', 'color' => '#6366F1'],
-        ['name' => 'Hogar', 'icon' => 'home', 'color' => '#84CC16'],
-        ['name' => 'Mascotas', 'icon' => 'paw', 'color' => '#A855F7'],
-        ['name' => 'Otros Gastos', 'icon' => 'tag', 'color' => '#6B7280'],
+        ['name' => 'Alimentación', 'emoji' => '🛒', 'color' => '#EF4444'],
+        ['name' => 'Transporte', 'emoji' => '🚗', 'color' => '#3B82F6'],
+        ['name' => 'Entretenimiento', 'emoji' => '🎬', 'color' => '#8B5CF6'],
+        ['name' => 'Salud', 'emoji' => '❤️', 'color' => '#10B981'],
+        ['name' => 'Servicios', 'emoji' => '🏠', 'color' => '#F59E0B'],
+        ['name' => 'Educación', 'emoji' => '📚', 'color' => '#06B6D4'],
+        ['name' => 'Ropa', 'emoji' => '👕', 'color' => '#EC4899'],
+        ['name' => 'Restaurantes', 'emoji' => '🍽️', 'color' => '#F97316'],
+        ['name' => 'Tecnología', 'emoji' => '💻', 'color' => '#6366F1'],
+        ['name' => 'Hogar', 'emoji' => '🪑', 'color' => '#84CC16'],
+        ['name' => 'Mascotas', 'emoji' => '🐾', 'color' => '#A855F7'],
+        ['name' => 'Otros Gastos', 'emoji' => '🏷️', 'color' => '#6B7280'],
     ];
 
     public function definition(): array
@@ -37,7 +37,7 @@ class CategoryFactory extends Factory
             'parent_id' => null,
             'name' => $category['name'],
             'type' => CategoryType::Expense,
-            'icon' => $category['icon'],
+            'emoji' => $category['emoji'],
             'color' => $category['color'],
             'is_system' => false,
             'sort_order' => 0,
@@ -56,7 +56,7 @@ class CategoryFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'type' => CategoryType::Income,
             'name' => fake()->randomElement(['Sueldo', 'Freelance', 'Inversiones', 'Arriendo', 'Reembolsos', 'Otros Ingresos']),
-            'icon' => 'wallet',
+            'emoji' => '💼',
             'color' => '#10B981',
         ]);
     }
@@ -91,7 +91,7 @@ class CategoryFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'name' => 'Alimentación',
             'type' => CategoryType::Expense,
-            'icon' => 'shopping-cart',
+            'emoji' => '🛒',
             'color' => '#EF4444',
         ]);
     }
@@ -101,7 +101,7 @@ class CategoryFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'name' => 'Transporte',
             'type' => CategoryType::Expense,
-            'icon' => 'car',
+            'emoji' => '🚗',
             'color' => '#3B82F6',
         ]);
     }
@@ -111,7 +111,7 @@ class CategoryFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'name' => 'Restaurantes',
             'type' => CategoryType::Expense,
-            'icon' => 'utensils',
+            'emoji' => '🍽️',
             'color' => '#F97316',
         ]);
     }

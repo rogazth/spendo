@@ -15,7 +15,7 @@ class UpdateAccountAction
             $user->accounts()->where('id', '!=', $account->id)->update(['is_default' => false]);
         }
 
-        $allowedFields = ['name', 'currency', 'color', 'icon', 'is_active', 'is_default'];
+        $allowedFields = ['name', 'currency', 'color', 'emoji', 'is_active', 'is_default'];
 
         $updates = array_intersect_key($data, array_flip($allowedFields));
 

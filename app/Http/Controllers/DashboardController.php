@@ -62,7 +62,7 @@ class DashboardController extends Controller
                 'current_balance' => $a->current_balance,
                 'formatted_balance' => $a->formatted_balance,
                 'color' => $a->color,
-                'icon' => $a->icon,
+                'emoji' => $a->emoji,
             ]),
             'recentTransactions' => $recentTransactions,
             'summary' => [

@@ -55,7 +55,7 @@ class UpdateCategoryRequest extends FormRequest
                         ->where('id', '!=', $category->id);
                 }),
             ],
-            'icon' => ['nullable', 'string', 'max:100'],
+            'emoji' => ['nullable', 'string', 'max:10'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];

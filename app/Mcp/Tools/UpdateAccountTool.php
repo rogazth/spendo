@@ -28,7 +28,7 @@ class UpdateAccountTool extends Tool
             'account_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'icon' => ['nullable', 'string', 'max:50'],
+            'emoji' => ['nullable', 'string', 'max:50'],
             'is_active' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
         ], [
@@ -53,7 +53,7 @@ class UpdateAccountTool extends Tool
         }
 
         $data = array_filter(
-            array_intersect_key($validated, array_flip(['name', 'color', 'icon', 'is_active', 'is_default'])),
+            array_intersect_key($validated, array_flip(['name', 'color', 'emoji', 'is_active', 'is_default'])),
             fn ($value) => $value !== null
         );
 
@@ -76,8 +76,8 @@ class UpdateAccountTool extends Tool
                 ->description('New account name'),
             'color' => $schema->string()
                 ->description('New hex color code'),
-            'icon' => $schema->string()
-                ->description('New icon name'),
+            'emoji' => $schema->string()
+                ->description('New emoji (e.g., 🏦, 💳, 💵)'),
             'is_active' => $schema->boolean()
                 ->description('Set active/inactive status'),
             'is_default' => $schema->boolean()

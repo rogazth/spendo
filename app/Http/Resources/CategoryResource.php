@@ -21,7 +21,7 @@ class CategoryResource extends JsonResource
             'full_name' => $this->full_name,
             'type' => $this->type->value,
             'type_label' => $this->type->label(),
-            'icon' => $this->icon,
+            'emoji' => $this->emoji,
             'color' => $this->color,
             'is_system' => $this->is_system,
             'is_parent' => $this->isParent(),

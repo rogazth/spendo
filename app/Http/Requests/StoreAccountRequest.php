@@ -33,7 +33,7 @@ class StoreAccountRequest extends FormRequest
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'initial_balance' => ['nullable', 'numeric', 'min:0'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'icon' => ['nullable', 'string', 'max:50'],
+            'emoji' => ['nullable', 'string', 'max:10'],
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
         ];

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->string('name');
             $table->enum('type', ['expense', 'income', 'system']);
-            $table->string('icon', 50)->default('tag');
+            $table->string('emoji', 10)->default('🏷️');
             $table->string('color', 7)->default('#6366F1');
             $table->boolean('is_system')->default(false);
             $table->unsignedInteger('sort_order')->default(0);

@@ -17,7 +17,7 @@ class AccountFactory extends Factory
             'name' => fake()->randomElement(['Personal', 'Casa', 'Ahorros', 'Inversiones', 'Gastos Fijos']),
             'currency' => 'CLP',
             'color' => fake()->hexColor(),
-            'icon' => null,
+            'emoji' => null,
             'is_active' => true,
             'is_default' => false,
             'sort_order' => 0,

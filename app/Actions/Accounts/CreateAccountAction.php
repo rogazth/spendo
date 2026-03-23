@@ -24,7 +24,7 @@ class CreateAccountAction
                 'name' => $data['name'],
                 'currency' => $data['currency'],
                 'color' => $data['color'] ?? '#3B82F6',
-                'icon' => $data['icon'] ?? null,
+                'emoji' => $data['emoji'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
                 'is_default' => $isDefault,
             ]);

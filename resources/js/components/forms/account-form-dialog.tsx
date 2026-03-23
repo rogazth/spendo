@@ -53,7 +53,7 @@ export function AccountFormDialog({
         currency: string;
         initial_balance: number | null;
         color: string;
-        icon: string;
+        emoji: string | null;
         is_active: boolean;
         is_default: boolean;
     }>({
@@ -61,7 +61,7 @@ export function AccountFormDialog({
         currency: 'CLP',
         initial_balance: null,
         color: '#3B82F6',
-        icon: 'wallet',
+        emoji: null,
         is_active: true,
         is_default: false,
     });
@@ -73,7 +73,7 @@ export function AccountFormDialog({
                 currency: account?.currency ?? 'CLP',
                 initial_balance: null,
                 color: account?.color ?? '#3B82F6',
-                icon: account?.icon ?? 'wallet',
+                emoji: account?.emoji ?? null,
                 is_active: account?.is_active ?? true,
                 is_default: account?.is_default ?? false,
             });

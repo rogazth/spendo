@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('currency', 3)->default('CLP');
             $table->string('color', 7)->default('#3B82F6');
-            $table->string('icon', 50)->nullable();
+            $table->string('emoji', 10)->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('is_default')->default(false);
             $table->unsignedInteger('sort_order')->default(0);

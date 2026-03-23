@@ -22,7 +22,7 @@ class AccountResource extends JsonResource
             'current_balance' => $this->current_balance,
             'formatted_balance' => $this->formatted_balance,
             'color' => $this->color,
-            'icon' => $this->icon,
+            'emoji' => $this->emoji,
             'is_active' => $this->is_active,
             'is_default' => $this->is_default,
             'sort_order' => $this->sort_order,

@@ -19,7 +19,7 @@ class Category extends Model
         'parent_id',
         'name',
         'type',
-        'icon',
+        'emoji',
         'color',
         'is_system',
         'sort_order',

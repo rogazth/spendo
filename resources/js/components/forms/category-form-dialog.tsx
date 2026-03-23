@@ -45,13 +45,13 @@ export function CategoryFormDialog({
         parent_id: number | null;
         name: string;
         type: CategoryType;
-        icon: string;
+        emoji: string | null;
         color: string;
     }>({
         parent_id: null,
         name: '',
         type: 'expense',
-        icon: 'tag',
+        emoji: null,
         color: '#3B82F6',
     });
 
@@ -61,7 +61,7 @@ export function CategoryFormDialog({
                 parent_id: category?.parent_id ?? null,
                 name: category?.name ?? '',
                 type: category?.type ?? 'expense',
-                icon: category?.icon ?? 'tag',
+                emoji: category?.emoji ?? null,
                 color: category?.color ?? '#3B82F6',
             });
         }

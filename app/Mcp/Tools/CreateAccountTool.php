@@ -32,7 +32,7 @@ class CreateAccountTool extends Tool
             'currency' => ['required', 'string', 'size:3'],
             'initial_balance' => ['nullable', 'numeric', 'min:0'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'icon' => ['nullable', 'string', 'max:50'],
+            'emoji' => ['nullable', 'string', 'max:50'],
             'is_default' => ['nullable', 'boolean'],
         ], [
             'name.required' => 'Account name is required.',
@@ -75,8 +75,8 @@ class CreateAccountTool extends Tool
                 ->description('Initial balance in major currency units (e.g., 500000 for 500,000 CLP)'),
             'color' => $schema->string()
                 ->description('Hex color code (e.g., #3B82F6)'),
-            'icon' => $schema->string()
-                ->description('Icon name'),
+            'emoji' => $schema->string()
+                ->description('Emoji (e.g., 🏦, 💳, 💵)'),
             'is_default' => $schema->boolean()
                 ->description('Set as default account'),
         ];

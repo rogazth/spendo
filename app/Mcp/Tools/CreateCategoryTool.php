@@ -33,7 +33,7 @@ class CreateCategoryTool extends Tool
             'name' => ['required', 'string', 'max:255'],
             'type' => ['nullable', 'string', 'in:expense,income'],
             'parent_id' => ['nullable', 'integer'],
-            'icon' => ['nullable', 'string', 'max:100'],
+            'emoji' => ['nullable', 'string', 'max:100'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ], [
             'name.required' => 'Category name is required.',
@@ -74,7 +74,7 @@ class CreateCategoryTool extends Tool
             'name' => $validated['name'],
             'type' => $categoryType?->value,
             'parent_id' => $validated['parent_id'] ?? null,
-            'icon' => $validated['icon'] ?? 'tag',
+            'emoji' => $validated['emoji'] ?? '🏷️',
             'color' => $validated['color'] ?? '#6B7280',
             'sort_order' => 0,
         ]);
@@ -97,8 +97,8 @@ class CreateCategoryTool extends Tool
                 ->enum(['expense', 'income']),
             'parent_id' => $schema->integer()
                 ->description('Parent category ID for subcategories. Use GetCategoriesTool to find parent categories.'),
-            'icon' => $schema->string()
-                ->description('Icon name (default: tag)'),
+            'emoji' => $schema->string()
+                ->description('Emoji (e.g., 🛒, 🚗, 💡). Defaults to 🏷️'),
             'color' => $schema->string()
                 ->description('Hex color code (e.g., #10B981)'),
         ];

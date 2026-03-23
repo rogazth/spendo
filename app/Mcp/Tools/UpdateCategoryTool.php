@@ -28,7 +28,7 @@ class UpdateCategoryTool extends Tool
         $validated = $request->validate([
             'category_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
-            'icon' => ['nullable', 'string', 'max:100'],
+            'emoji' => ['nullable', 'string', 'max:100'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ], [
             'category_id.required' => 'Category ID is required. Use GetCategoriesTool to find categories.',
@@ -56,7 +56,7 @@ class UpdateCategoryTool extends Tool
 
         $updates = array_filter([
             'name' => $validated['name'] ?? null,
-            'icon' => $validated['icon'] ?? null,
+            'emoji' => $validated['emoji'] ?? null,
             'color' => $validated['color'] ?? null,
         ], fn ($value) => $value !== null);
 
@@ -83,8 +83,8 @@ class UpdateCategoryTool extends Tool
                 ->required(),
             'name' => $schema->string()
                 ->description('New category name'),
-            'icon' => $schema->string()
-                ->description('New icon name'),
+            'emoji' => $schema->string()
+                ->description('New emoji (e.g., 🛒, 🚗, 💡)'),
             'color' => $schema->string()
                 ->description('New hex color code'),
         ];

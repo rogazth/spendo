@@ -18,7 +18,7 @@ class Account extends Model
         'name',
         'currency',
         'color',
-        'icon',
+        'emoji',
         'is_active',
         'is_default',
         'sort_order',

@@ -59,7 +59,7 @@ export interface Account extends Model {
     currency_locale?: string;
     current_balance: number;
     color: string;
-    icon: string;
+    emoji: string | null;
     is_active: boolean;
     is_default: boolean;
     // Computed
@@ -74,7 +74,7 @@ export interface Category extends Model {
     parent_id: number | null;
     name: string;
     type: CategoryType;
-    icon: string;
+    emoji: string | null;
     color: string;
     is_system: boolean;
     // Relations
@@ -251,7 +251,7 @@ export interface AccountFormData {
     currency: string;
     initial_balance: number | null;
     color: string;
-    icon: string;
+    emoji: string | null;
     is_active: boolean;
 }
 
@@ -259,7 +259,7 @@ export interface CategoryFormData {
     parent_id: number | null;
     name: string;
     type: CategoryType;
-    icon: string;
+    emoji: string | null;
     color: string;
 }
 

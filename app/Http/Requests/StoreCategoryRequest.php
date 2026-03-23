@@ -53,7 +53,7 @@ class StoreCategoryRequest extends FormRequest
                         ->where('is_system', false);
                 }),
             ],
-            'icon' => ['nullable', 'string', 'max:100'],
+            'emoji' => ['nullable', 'string', 'max:10'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];
