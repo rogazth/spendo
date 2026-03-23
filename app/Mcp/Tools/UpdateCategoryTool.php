@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Categories\UpdateCategoryAction;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -38,10 +39,6 @@ class UpdateCategoryTool extends Tool
             return Response::error('Category not found. Only user-created categories can be modified.');
         }
 
-        if ($category->is_system) {
-            return Response::error('System categories cannot be modified.');
-        }
-
         if (isset($validated['name']) && $validated['name'] !== $category->name) {
             $duplicate = Category::where('name', $validated['name'])
                 ->where('id', '!=', $category->id)
@@ -62,7 +59,11 @@ class UpdateCategoryTool extends Tool
             'color' => $validated['color'] ?? null,
         ], fn ($value) => $value !== null);
 
-        $category->update($updates);
+        try {
+            app(UpdateCategoryAction::class)->handle($category, $updates);
+        } catch (\InvalidArgumentException $e) {
+            return Response::error($e->getMessage());
+        }
 
         return Response::text(json_encode([
             'success' => true,

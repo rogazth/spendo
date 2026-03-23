@@ -4,7 +4,6 @@ use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Currency;
-use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -15,7 +14,7 @@ beforeEach(function () {
     Currency::updateOrCreate(['code' => 'CLP'], ['name' => 'Peso chileno', 'locale' => 'es-CL']);
 });
 
-test('creates a budget with multiple categories and optional account', function () {
+test('creates a budget with multiple categories', function () {
     $user = User::factory()->create();
     $categoryA = Category::factory()->expense()->for($user)->create();
     $categoryB = Category::factory()->expense()->for($user)->create();
@@ -23,7 +22,6 @@ test('creates a budget with multiple categories and optional account', function 
     $this->actingAs($user)->post('/budgets', [
         'name' => 'Budget test',
         'description' => 'Presupuesto principal',
-        'account_id' => null,
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
@@ -35,7 +33,6 @@ test('creates a budget with multiple categories and optional account', function 
     ])->assertRedirect('/budgets');
 
     $budget = Budget::query()->where('name', 'Budget test')->firstOrFail();
-    expect($budget->account_id)->toBeNull();
     expect($budget->frequency)->toBe('monthly');
 
     $this->assertDatabaseHas('budget_items', [
@@ -75,8 +72,8 @@ test('calculates current cycle spending including children and excluding flagged
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $accountA = Account::factory()->for($user)->create();
-    $accountB = Account::factory()->for($user)->create();
+    $accountA = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $accountB = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $parentCategory = Category::factory()->expense()->for($user)->create([
         'parent_id' => null,
         'name' => 'Comida',
@@ -92,7 +89,6 @@ test('calculates current cycle spending including children and excluding flagged
         'frequency' => 'monthly',
         'anchor_date' => '2026-01-10',
         'ends_at' => null,
-        'account_id' => null,
     ]);
     $budget->items()->create([
         'category_id' => $parentCategory->id,
@@ -102,8 +98,8 @@ test('calculates current cycle spending including children and excluding flagged
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $childCategory->id,
-        'instrument_id' => null,
         'amount' => 100,
+        'currency' => 'CLP',
         'description' => 'Gasto ciclo cuenta A',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-15',
@@ -111,8 +107,8 @@ test('calculates current cycle spending including children and excluding flagged
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $accountB->id,
         'category_id' => $childCategory->id,
-        'instrument_id' => null,
         'amount' => 40,
+        'currency' => 'CLP',
         'description' => 'Gasto ciclo cuenta B',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-16',
@@ -120,8 +116,8 @@ test('calculates current cycle spending including children and excluding flagged
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $childCategory->id,
-        'instrument_id' => null,
         'amount' => 30,
+        'currency' => 'CLP',
         'description' => 'Gasto excluido',
         'exclude_from_budget' => true,
         'transaction_date' => '2026-02-17',
@@ -129,8 +125,8 @@ test('calculates current cycle spending including children and excluding flagged
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $childCategory->id,
-        'instrument_id' => null,
         'amount' => 60,
+        'currency' => 'CLP',
         'description' => 'Gasto ciclo anterior',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-01-20',
@@ -150,67 +146,32 @@ test('calculates current cycle spending including children and excluding flagged
     Carbon::setTestNow();
 });
 
-test('settlement is excluded from budget spending', function () {
-    Carbon::setTestNow('2026-02-20 10:00:00');
-
-    $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
-    $cc = Instrument::factory()->for($user)->create(['type' => 'credit_card']);
-    $category = Category::factory()->expense()->for($user)->create();
-
-    $budget = Budget::factory()->for($user)->create([
-        'frequency' => 'monthly',
-        'anchor_date' => '2026-02-01',
-        'account_id' => null,
-    ]);
-    $budget->items()->create(['category_id' => $category->id, 'amount' => 500]);
-
-    Transaction::factory()->settlement()->for($user)->create([
-        'account_id' => null,
-        'instrument_id' => $cc->id,
-        'category_id' => $category->id,
-        'exclude_from_budget' => false,
-        'transaction_date' => '2026-02-10',
-    ]);
-
-    $this->actingAs($user)->get("/budgets/{$budget->uuid}")
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('budgets/show')
-            ->where('summary.spent', 0)
-        );
-
-    Carbon::setTestNow();
-});
-
 test('only expense type counts toward budget spending', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $accountA = Account::factory()->for($user)->create();
-    $accountB = Account::factory()->for($user)->create();
+    $accountA = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-01',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
 
-    // Income in the budget category
     Transaction::factory()->income()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
+        'currency' => 'CLP',
         'amount' => 200,
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',
     ]);
-    // Transfer out in the budget category
     Transaction::factory()->transferOut()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $category->id,
+        'currency' => 'CLP',
         'amount' => 100,
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',
@@ -225,27 +186,68 @@ test('only expense type counts toward budget spending', function () {
     Carbon::setTestNow();
 });
 
+test('budget only counts transactions matching its currency', function () {
+    Carbon::setTestNow('2026-02-20 10:00:00');
+
+    $user = User::factory()->create();
+    $clpAccount = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $usdAccount = Account::factory()->for($user)->create(['currency' => 'USD']);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $clpBudget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+    ]);
+    $clpBudget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
+
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $clpAccount->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
+        'amount' => 300,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+    ]);
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $usdAccount->id,
+        'category_id' => $category->id,
+        'currency' => 'USD',
+        'amount' => 100,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+    ]);
+
+    $this->actingAs($user)->get("/budgets/{$clpBudget->uuid}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.spent', 300)
+        );
+
+    Carbon::setTestNow();
+});
+
 test('cycle boundary: exact anchor date is included in budget spending', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-10',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
+        'currency' => 'CLP',
         'amount' => 50,
         'exclude_from_budget' => false,
-        'transaction_date' => '2026-02-10', // exactly on anchor_date
+        'transaction_date' => '2026-02-10',
     ]);
 
     $this->actingAs($user)->get("/budgets/{$budget->uuid}")
@@ -258,27 +260,26 @@ test('cycle boundary: exact anchor date is included in budget spending', functio
 });
 
 test('cycle boundary: exact end date is included in budget spending', function () {
-    // At now=Mar 9, anchor=Feb 10 monthly → cycle is Feb 10 – Mar 9. Mar 9 is the last day.
     Carbon::setTestNow('2026-03-09 10:00:00');
 
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-10',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
+        'currency' => 'CLP',
         'amount' => 75,
         'exclude_from_budget' => false,
-        'transaction_date' => '2026-03-09', // exactly the last day of the cycle
+        'transaction_date' => '2026-03-09',
     ]);
 
     $this->actingAs($user)->get("/budgets/{$budget->uuid}")
@@ -295,23 +296,23 @@ test('transaction one day before cycle start is excluded from budget', function 
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-10',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
+        'currency' => 'CLP',
         'amount' => 100,
         'exclude_from_budget' => false,
-        'transaction_date' => '2026-02-09', // one day before anchor_date
+        'transaction_date' => '2026-02-09',
     ]);
 
     $this->actingAs($user)->get("/budgets/{$budget->uuid}")
@@ -324,24 +325,23 @@ test('transaction one day before cycle start is excluded from budget', function 
 });
 
 test('biweekly frequency computes correct cycle range', function () {
-    // Anchor March 1, test date March 10 → range is March 1–14
     Carbon::setTestNow('2026-03-10 10:00:00');
 
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'biweekly',
         'anchor_date' => '2026-03-01',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
+        'currency' => 'CLP',
         'amount' => 80,
         'exclude_from_budget' => false,
         'transaction_date' => '2026-03-10',
@@ -358,87 +358,50 @@ test('biweekly frequency computes correct cycle range', function () {
     Carbon::setTestNow();
 });
 
-test('supports history scope and account-specific budget filtering', function () {
+test('history scope returns all transactions since anchor date', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
-    $accountA = Account::factory()->for($user)->create();
-    $accountB = Account::factory()->for($user)->create();
-    $parentCategory = Category::factory()->expense()->for($user)->create([
-        'parent_id' => null,
-    ]);
-    $childCategory = Category::factory()->expense()->for($user)->create([
-        'parent_id' => $parentCategory->id,
-    ]);
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $category = Category::factory()->expense()->for($user)->create();
 
-    $sharedBudget = Budget::factory()->for($user)->create([
+    $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-01-10',
         'ends_at' => null,
-        'account_id' => null,
     ]);
-    $sharedBudget->items()->create([
-        'category_id' => $parentCategory->id,
+    $budget->items()->create([
+        'category_id' => $category->id,
         'amount' => 800,
     ]);
 
-    $accountBudget = Budget::factory()->for($user)->create([
-        'frequency' => 'monthly',
-        'anchor_date' => '2026-01-10',
-        'ends_at' => null,
-        'account_id' => $accountA->id,
-    ]);
-    $accountBudget->items()->create([
-        'category_id' => $parentCategory->id,
-        'amount' => 500,
-    ]);
-
     Transaction::factory()->expense()->for($user)->create([
-        'account_id' => $accountA->id,
-        'category_id' => $childCategory->id,
+        'account_id' => $account->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
         'amount' => 100,
-        'description' => 'Shared current A',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-15',
     ]);
     Transaction::factory()->expense()->for($user)->create([
-        'account_id' => $accountB->id,
-        'category_id' => $childCategory->id,
-        'amount' => 40,
-        'description' => 'Shared current B',
-        'exclude_from_budget' => false,
-        'transaction_date' => '2026-02-16',
-    ]);
-    Transaction::factory()->expense()->for($user)->create([
-        'account_id' => $accountA->id,
-        'category_id' => $childCategory->id,
+        'account_id' => $account->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
         'amount' => 60,
-        'description' => 'Shared historical',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-01-20',
     ]);
 
-    $historyResponse = $this->actingAs($user)->get(
-        "/budgets/{$sharedBudget->uuid}?scope=history",
-    );
-
-    $historyResponse->assertOk();
-    $historyResponse->assertInertia(fn (Assert $page) => $page
-        ->component('budgets/show')
-        ->where('scope', 'history')
-        ->where('range.start', '2026-01-10')
-        ->where('range.end', '2026-02-20')
-        ->where('transactions.meta.total', 3)
-    );
-
-    $accountResponse = $this->actingAs($user)->get("/budgets/{$accountBudget->uuid}");
-
-    $accountResponse->assertOk();
-    $accountResponse->assertInertia(fn (Assert $page) => $page
-        ->component('budgets/show')
-        ->where('summary.spent', 100)
-        ->where('transactions.meta.total', 1)
-    );
+    $this->actingAs($user)->get("/budgets/{$budget->uuid}?scope=history")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('budgets/show')
+            ->where('scope', 'history')
+            ->where('range.start', '2026-01-10')
+            ->where('range.end', '2026-02-20')
+            ->where('transactions.meta.total', 2)
+        );
 
     Carbon::setTestNow();
 });

@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Budgets\UpdateBudgetAction;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -74,27 +74,12 @@ class UpdateBudgetTool extends Tool
             }
         }
 
-        DB::transaction(function () use ($budget, $validated) {
-            $updates = array_filter([
-                'name' => $validated['name'] ?? null,
-                'description' => $validated['description'] ?? null,
-                'is_active' => $validated['is_active'] ?? null,
-            ], fn ($value) => $value !== null);
-
-            if (! empty($updates)) {
-                $budget->update($updates);
-            }
-
-            if (isset($validated['items'])) {
-                $budget->items()->delete();
-                foreach ($validated['items'] as $item) {
-                    $budget->items()->create([
-                        'category_id' => $item['category_id'],
-                        'amount' => $item['amount'],
-                    ]);
-                }
-            }
-        });
+        app(UpdateBudgetAction::class)->handle($budget, $user, array_filter([
+            'name' => $validated['name'] ?? null,
+            'description' => $validated['description'] ?? null,
+            'is_active' => $validated['is_active'] ?? null,
+            'items' => $validated['items'] ?? null,
+        ], fn ($value) => $value !== null));
 
         $budget->load('items.category');
 

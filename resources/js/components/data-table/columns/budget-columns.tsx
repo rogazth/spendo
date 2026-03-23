@@ -83,18 +83,6 @@ export function getBudgetColumns(): ColumnDef<Budget>[] {
             },
         },
         {
-            id: 'account',
-            header: 'Cuenta',
-            cell: ({ row }) => {
-                const budget = row.original;
-                return (
-                    <span className="text-sm text-muted-foreground">
-                        {budget.account?.name ?? 'Todas las cuentas'}
-                    </span>
-                );
-            },
-        },
-        {
             accessorKey: 'ends_at',
             header: 'Finaliza',
             cell: ({ row }) => (

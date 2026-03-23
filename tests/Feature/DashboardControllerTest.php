@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Instrument;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -34,7 +33,6 @@ test('dashboard renders for authenticated user', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('dashboard')
             ->has('accounts')
-            ->has('instruments')
             ->has('recentTransactions')
             ->has('summary')
         );
@@ -46,39 +44,15 @@ test('dashboard shows correct total account balance', function () {
     $accountB = Account::factory()->for($user)->create();
 
     // accountA: +1000 - 300 = 700
-    Transaction::factory()->income()->for($user)->create(['account_id' => $accountA->id, 'amount' => 1000, 'instrument_id' => null]);
-    Transaction::factory()->expense()->for($user)->create(['account_id' => $accountA->id, 'amount' => 300, 'instrument_id' => null]);
+    Transaction::factory()->income()->for($user)->create(['account_id' => $accountA->id, 'amount' => 1000]);
+    Transaction::factory()->expense()->for($user)->create(['account_id' => $accountA->id, 'amount' => 300]);
     // accountB: +500
-    Transaction::factory()->income()->for($user)->create(['account_id' => $accountB->id, 'amount' => 500, 'instrument_id' => null]);
+    Transaction::factory()->income()->for($user)->create(['account_id' => $accountB->id, 'amount' => 500]);
 
     $this->actingAs($user)->get('/dashboard')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('summary.totalAccountBalance', 1200)
-        );
-});
-
-test('dashboard shows correct credit debt', function () {
-    $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create();
-    $creditCard = Instrument::factory()->creditCard()->for($user)->create();
-
-    // expense 800 (account debited at purchase), settlement 200 (instrument-only, account_id=null) → debt = 600
-    Transaction::factory()->expense()->for($user)->create([
-        'account_id' => $account->id,
-        'instrument_id' => $creditCard->id,
-        'amount' => 800,
-    ]);
-    Transaction::factory()->settlement()->for($user)->create([
-        'account_id' => null,
-        'instrument_id' => $creditCard->id,
-        'amount' => 200,
-    ]);
-
-    $this->actingAs($user)->get('/dashboard')
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('summary.totalCreditDebt', 600)
         );
 });
 

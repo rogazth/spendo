@@ -41,7 +41,7 @@ class GetBudgetMetricsTool extends Tool
             'budget_id.required' => 'Budget ID is required. Use GetBudgetsTool to find budgets.',
         ]);
 
-        $budget = $user->budgets()->with(['account', 'items.category.children'])->find($validated['budget_id']);
+        $budget = $user->budgets()->with(['items.category.children'])->find($validated['budget_id']);
 
         if (! $budget) {
             return Response::error('Budget not found.');
@@ -199,9 +199,7 @@ class GetBudgetMetricsTool extends Tool
             ->whereDate('transaction_date', '<=', $endDate->toDateString())
             ->whereIn('category_id', $categoryIds);
 
-        if ($budget->account_id !== null) {
-            $query->where('account_id', $budget->account_id);
-        }
+        $query->where('currency', $budget->currency);
 
         $transactions = $query->get(['category_id', 'amount']);
 

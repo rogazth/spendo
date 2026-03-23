@@ -137,7 +137,6 @@ export interface Transaction extends Model {
 // Budget model
 export interface Budget extends Model {
     user_id: number;
-    account_id: number | null;
     name: string;
     description: string | null;
     currency: string;
@@ -153,7 +152,6 @@ export interface Budget extends Model {
     current_cycle_end?: string;
     total_spent?: number;
     // Relations
-    account?: Account;
     items?: BudgetItem[];
 }
 

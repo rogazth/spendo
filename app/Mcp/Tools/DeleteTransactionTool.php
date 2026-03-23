@@ -2,9 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Transaction;
+use App\Actions\Transactions\DeleteTransactionAction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -41,19 +40,12 @@ class DeleteTransactionTool extends Tool
 
         $description = $transaction->description ?? 'no description';
         $type = $transaction->type->value;
-        $deletedLinked = false;
+        $hasLinked = $transaction->linked_transaction_id !== null;
 
-        DB::transaction(function () use ($transaction, &$deletedLinked) {
-            if ($transaction->linked_transaction_id !== null) {
-                Transaction::query()->find($transaction->linked_transaction_id)?->delete();
-                $deletedLinked = true;
-            }
-
-            $transaction->delete();
-        });
+        app(DeleteTransactionAction::class)->handle($transaction);
 
         $message = "Transaction \"{$description}\" deleted.";
-        if ($deletedLinked) {
+        if ($hasLinked) {
             $message .= ' The linked transfer leg was also deleted.';
         }
 
@@ -63,7 +55,7 @@ class DeleteTransactionTool extends Tool
             'deleted' => [
                 'description' => $description,
                 'type' => $type,
-                'linked_leg_deleted' => $deletedLinked,
+                'linked_leg_deleted' => $hasLinked,
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }

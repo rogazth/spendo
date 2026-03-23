@@ -54,7 +54,6 @@ export function BudgetFormDialog({
     const { data, setData, post, processing, errors, reset, transform } = useForm<{
         name: string;
         description: string;
-        account_id: number | null;
         currency: string;
         frequency: BudgetFrequency;
         anchor_date: Date;
@@ -66,7 +65,6 @@ export function BudgetFormDialog({
     }>({
         name: '',
         description: '',
-        account_id: null,
         currency: defaultAccount?.currency ?? 'CLP',
         frequency: 'monthly',
         anchor_date: new Date(),
@@ -79,7 +77,6 @@ export function BudgetFormDialog({
             setData({
                 name: '',
                 description: '',
-                account_id: null,
                 currency: defaultAccount?.currency ?? 'CLP',
                 frequency: 'monthly',
                 anchor_date: new Date(),
@@ -88,11 +85,6 @@ export function BudgetFormDialog({
             });
         }
     }, [open]);
-
-    const filteredAccounts = useMemo(
-        () => accounts.filter((a) => a.currency === data.currency),
-        [accounts, data.currency],
-    );
 
     const categoryOptions = useMemo(() => {
         return categories.flatMap((category) => {
@@ -227,66 +219,13 @@ export function BudgetFormDialog({
                             </div>
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="account_id">Cuenta (opcional)</Label>
-                                <Select
-                                    value={data.account_id?.toString() ?? 'all'}
-                                    onValueChange={(value) => {
-                                        if (value === 'all') {
-                                            setData('account_id', null);
-                                            return;
-                                        }
-
-                                        const accountId = parseInt(value, 10);
-                                        setData('account_id', accountId);
-                                        const selectedAccount = accounts.find(
-                                            (account) =>
-                                                account.id === accountId,
-                                        );
-                                        if (selectedAccount?.currency) {
-                                            setData(
-                                                'currency',
-                                                selectedAccount.currency,
-                                            );
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger id="account_id">
-                                        <SelectValue placeholder="Todas las cuentas" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">
-                                            Todas las cuentas
-                                        </SelectItem>
-                                        {filteredAccounts.map((account) => (
-                                            <SelectItem
-                                                key={account.id}
-                                                value={account.id.toString()}
-                                            >
-                                                {account.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.account_id} />
-                            </div>
-
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="currency">Moneda</Label>
                                 <Select
                                     value={data.currency}
                                     onValueChange={(value) => {
                                         setData('currency', value);
-                                        const currentAccount = accounts.find(
-                                            (a) => a.id === data.account_id,
-                                        );
-                                        if (
-                                            currentAccount &&
-                                            currentAccount.currency !== value
-                                        ) {
-                                            setData('account_id', null);
-                                        }
                                     }}
                                 >
                                     <SelectTrigger id="currency">

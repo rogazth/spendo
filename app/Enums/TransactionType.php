@@ -8,7 +8,6 @@ enum TransactionType: string
     case Income = 'income';
     case TransferOut = 'transfer_out';
     case TransferIn = 'transfer_in';
-    case Settlement = 'settlement';
 
     public function label(): string
     {
@@ -17,7 +16,6 @@ enum TransactionType: string
             self::Income => 'Ingreso',
             self::TransferOut => 'Transferencia Saliente',
             self::TransferIn => 'Transferencia Entrante',
-            self::Settlement => 'Liquidación TDC',
         };
     }
 
@@ -28,14 +26,13 @@ enum TransactionType: string
             self::Income => 'arrow-down',
             self::TransferOut => 'arrow-right',
             self::TransferIn => 'arrow-left',
-            self::Settlement => 'credit-card',
         };
     }
 
     public function isDebit(): bool
     {
         return match ($this) {
-            self::Expense, self::TransferOut, self::Settlement => true,
+            self::Expense, self::TransferOut => true,
             default => false,
         };
     }

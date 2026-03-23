@@ -61,21 +61,19 @@ test('store creates a budget with items', function () {
     $this->assertDatabaseHas('budget_items', ['budget_id' => $budget->id, 'category_id' => $categoryB->id]);
 });
 
-test('store links budget to an account', function () {
+test('store creates budget with correct currency', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/budgets', [
-        'name' => 'Budget Cuenta',
-        'currency' => 'CLP',
+        'name' => 'Budget USD',
+        'currency' => 'USD',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_id' => $account->id,
         'items' => [['category_id' => $category->id, 'amount' => 80000]],
     ])->assertRedirect('/budgets');
 
-    $this->assertDatabaseHas('budgets', ['name' => 'Budget Cuenta', 'account_id' => $account->id]);
+    $this->assertDatabaseHas('budgets', ['name' => 'Budget USD', 'currency' => 'USD']);
 });
 
 test('store rejects parent and child categories together', function () {
@@ -144,19 +142,17 @@ test('store rejects invalid currency code', function () {
     ])->assertSessionHasErrors('currency');
 });
 
-test('store rejects account with mismatched currency', function () {
+test('store rejects unknown currency code', function () {
     $user = User::factory()->create();
-    $account = Account::factory()->for($user)->create(['currency' => 'USD']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/budgets', [
-        'name' => 'Currency Mismatch',
-        'currency' => 'CLP',
+        'name' => 'Budget inválido',
+        'currency' => 'GBP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_id' => $account->id,
         'items' => [['category_id' => $category->id, 'amount' => 1000]],
-    ])->assertSessionHasErrors('account_id');
+    ])->assertSessionHasErrors('currency');
 });
 
 test('store rejects ends_at before anchor_date', function () {
@@ -188,15 +184,14 @@ test('show renders budget detail with spending summary', function () {
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-01',
-        'account_id' => null,
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 200000]);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'instrument_id' => null,
         'amount' => 500,
+        'currency' => 'CLP',
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',
     ]);

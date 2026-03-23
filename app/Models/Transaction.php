@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -20,13 +21,9 @@ class Transaction extends Model
         'user_id',
         'type',
         'account_id',
-        'instrument_id',
-        'from_instrument_id',
         'category_id',
         'linked_transaction_id',
         'amount',
-        'instrument_amount',
-        'exchange_rate',
         'currency',
         'description',
         'notes',
@@ -39,8 +36,6 @@ class Transaction extends Model
         return [
             'type' => TransactionType::class,
             'amount' => 'integer',
-            'instrument_amount' => 'integer',
-            'exchange_rate' => 'decimal:6',
             'exclude_from_budget' => 'boolean',
             'transaction_date' => 'datetime',
         ];
@@ -54,16 +49,6 @@ class Transaction extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
-    }
-
-    public function instrument(): BelongsTo
-    {
-        return $this->belongsTo(Instrument::class);
-    }
-
-    public function fromInstrument(): BelongsTo
-    {
-        return $this->belongsTo(Instrument::class, 'from_instrument_id');
     }
 
     public function category(): BelongsTo
@@ -86,6 +71,11 @@ class Transaction extends Model
         return $this->hasMany(Attachment::class);
     }
 
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class, 'transaction_tag');
+    }
+
     /**
      * Get and set the amount (stored as cents in DB).
      */
@@ -94,17 +84,6 @@ class Transaction extends Model
         return Attribute::make(
             get: fn ($value) => $value / 100,
             set: fn ($value) => (int) round($value * 100),
-        );
-    }
-
-    /**
-     * Get and set the instrument_amount (stored as cents in DB).
-     */
-    protected function instrumentAmount(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => $value !== null ? $value / 100 : null,
-            set: fn ($value) => $value !== null ? (int) round($value * 100) : null,
         );
     }
 

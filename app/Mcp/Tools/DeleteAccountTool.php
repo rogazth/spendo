@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Accounts\DeleteAccountAction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -40,7 +41,7 @@ class DeleteAccountTool extends Tool
         $transactionCount = $account->transactions()->count();
         $accountName = $account->name;
 
-        $account->forceDelete();
+        app(DeleteAccountAction::class)->handle($account);
 
         return Response::text(json_encode([
             'success' => true,

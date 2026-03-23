@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\TransactionType;
+use App\Actions\Accounts\CreateAccountAction;
+use App\Actions\Accounts\DeleteAccountAction;
+use App\Actions\Accounts\UpdateAccountAction;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Http\Resources\AccountResource;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -28,83 +29,40 @@ class AccountController extends Controller
         ]);
     }
 
-    public function store(StoreAccountRequest $request): RedirectResponse
+    public function store(StoreAccountRequest $request, CreateAccountAction $createAccount): RedirectResponse
     {
-        $validated = $request->validated();
-        $isDefault = $validated['is_default'] ?? false;
-        $initialBalance = $validated['initial_balance'] ?? 0;
-
-        DB::transaction(function () use ($validated, $isDefault, $initialBalance) {
-            if ($isDefault) {
-                Auth::user()->accounts()->update(['is_default' => false]);
-            }
-
-            $account = Auth::user()->accounts()->create([
-                'name' => $validated['name'],
-                'currency' => $validated['currency'],
-                'color' => $validated['color'] ?? '#3B82F6',
-                'icon' => $validated['icon'] ?? null,
-                'is_active' => $validated['is_active'] ?? true,
-                'is_default' => $isDefault,
-            ]);
-
-            if ($initialBalance > 0) {
-                Auth::user()->transactions()->create([
-                    'type' => TransactionType::Income,
-                    'account_id' => $account->id,
-                    'amount' => $initialBalance,
-                    'currency' => $account->currency,
-                    'description' => 'Balance inicial',
-                    'transaction_date' => now(),
-                ]);
-            }
-        });
+        $createAccount->handle(Auth::user(), $request->validated());
 
         return redirect()
             ->route('accounts.index')
             ->with('success', 'Cuenta creada exitosamente.');
     }
 
-    public function update(UpdateAccountRequest $request, Account $account): RedirectResponse
+    public function update(UpdateAccountRequest $request, Account $account, UpdateAccountAction $updateAccount): RedirectResponse
     {
         $this->authorizeAccount($account);
 
-        $validated = $request->validated();
-        $isDefault = $validated['is_default'] ?? $account->is_default;
-
-        if ($isDefault && ! $account->is_default) {
-            Auth::user()->accounts()->where('id', '!=', $account->id)->update(['is_default' => false]);
-        }
-
-        $account->update([
-            'name' => $validated['name'],
-            'currency' => $validated['currency'],
-            'is_active' => $validated['is_active'] ?? $account->is_active,
-            'is_default' => $isDefault,
-        ]);
+        $updateAccount->handle($account, Auth::user(), $request->validated());
 
         return redirect()
             ->route('accounts.index')
             ->with('success', 'Cuenta actualizada exitosamente.');
     }
 
-    public function makeDefault(Account $account): RedirectResponse
+    public function makeDefault(Account $account, UpdateAccountAction $updateAccount): RedirectResponse
     {
         $this->authorizeAccount($account);
 
-        if (! $account->is_default) {
-            Auth::user()->accounts()->where('id', '!=', $account->id)->update(['is_default' => false]);
-            $account->update(['is_default' => true]);
-        }
+        $updateAccount->handle($account, Auth::user(), ['is_default' => true]);
 
         return back();
     }
 
-    public function destroy(Account $account): RedirectResponse
+    public function destroy(Account $account, DeleteAccountAction $deleteAccount): RedirectResponse
     {
         $this->authorizeAccount($account);
 
-        $account->delete();
+        $deleteAccount->handle($account);
 
         return redirect()
             ->route('accounts.index')

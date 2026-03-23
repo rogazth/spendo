@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Categories\CreateCategoryAction;
 use App\Enums\CategoryType;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -50,7 +51,6 @@ class CreateCategoryTool extends Tool
             return Response::error("A category named \"{$validated['name']}\" already exists.");
         }
 
-        $parentCategory = null;
         $categoryType = isset($validated['type']) ? CategoryType::from($validated['type']) : null;
 
         if (! empty($validated['parent_id'])) {
@@ -65,19 +65,16 @@ class CreateCategoryTool extends Tool
             if (! $parentCategory) {
                 return Response::error('Parent category not found or not valid (must be a top-level, non-system category).');
             }
-
-            $categoryType = $parentCategory->type;
         } elseif ($categoryType === null) {
             return Response::error('Category type (expense or income) is required when not creating a subcategory.');
         }
 
-        $category = $user->categories()->create([
+        $category = app(CreateCategoryAction::class)->handle($user, [
             'name' => $validated['name'],
-            'type' => $categoryType,
-            'parent_id' => $parentCategory?->id,
+            'type' => $categoryType?->value,
+            'parent_id' => $validated['parent_id'] ?? null,
             'icon' => $validated['icon'] ?? 'tag',
             'color' => $validated['color'] ?? '#6B7280',
-            'is_system' => false,
             'sort_order' => 0,
         ]);
 

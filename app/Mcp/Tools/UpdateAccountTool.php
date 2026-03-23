@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Accounts\UpdateAccountAction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -50,19 +51,12 @@ class UpdateAccountTool extends Tool
             }
         }
 
-        $updates = array_filter([
-            'name' => $validated['name'] ?? null,
-            'color' => $validated['color'] ?? null,
-            'icon' => $validated['icon'] ?? null,
-            'is_active' => $validated['is_active'] ?? null,
-            'is_default' => $validated['is_default'] ?? null,
-        ], fn ($value) => $value !== null);
+        $data = array_filter(
+            array_intersect_key($validated, array_flip(['name', 'color', 'icon', 'is_active', 'is_default'])),
+            fn ($value) => $value !== null
+        );
 
-        if (! empty($updates['is_default']) && $updates['is_default']) {
-            $user->accounts()->where('id', '!=', $account->id)->update(['is_default' => false]);
-        }
-
-        $account->update($updates);
+        $account = app(UpdateAccountAction::class)->handle($account, $user, $data);
 
         return Response::text(json_encode([
             'success' => true,

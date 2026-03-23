@@ -24,7 +24,6 @@ class StoreBudgetRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'biweekly', 'monthly', 'bimonthly'])],
             'anchor_date' => ['required', 'date'],
@@ -62,16 +61,6 @@ class StoreBudgetRequest extends FormRequest
             $user = Auth::user();
             if (! $user) {
                 return;
-            }
-
-            $accountId = $this->input('account_id');
-            if ($accountId !== null) {
-                $account = $user->accounts()->whereKey($accountId)->first();
-                if (! $account) {
-                    $validator->errors()->add('account_id', 'La cuenta seleccionada no pertenece al usuario autenticado.');
-                } elseif ($account->currency !== $this->input('currency')) {
-                    $validator->errors()->add('account_id', 'La moneda de la cuenta no coincide con la moneda del budget.');
-                }
             }
 
             $items = $this->input('items', []);

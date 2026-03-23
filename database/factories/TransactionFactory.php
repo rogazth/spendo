@@ -5,7 +5,6 @@ namespace Database\Factories;
 use App\Enums\TransactionType;
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\Instrument;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -52,13 +51,9 @@ class TransactionFactory extends Factory
             'user_id' => User::factory(),
             'type' => TransactionType::Expense,
             'account_id' => Account::factory(),
-            'instrument_id' => Instrument::factory(),
-            'from_instrument_id' => null,
             'category_id' => Category::factory(),
             'linked_transaction_id' => null,
             'amount' => fake()->numberBetween(100000, 15000000),
-            'instrument_amount' => null,
-            'exchange_rate' => null,
             'currency' => 'CLP',
             'description' => 'Compra en '.fake()->randomElement(self::$merchants),
             'notes' => fake()->optional(0.2)->sentence(),
@@ -81,17 +76,6 @@ class TransactionFactory extends Factory
             'type' => TransactionType::Income,
             'amount' => fake()->numberBetween(50000000, 300000000),
             'description' => fake()->randomElement(['Sueldo', 'Transferencia recibida', 'Pago freelance', 'Devolución']),
-            'instrument_id' => null,
-        ]);
-    }
-
-    public function settlement(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'type' => TransactionType::Settlement,
-            'account_id' => null,
-            'amount' => fake()->numberBetween(10000000, 100000000),
-            'description' => 'Pago de tarjeta de crédito',
         ]);
     }
 
@@ -101,7 +85,6 @@ class TransactionFactory extends Factory
             'type' => TransactionType::TransferOut,
             'amount' => fake()->numberBetween(1000000, 50000000),
             'description' => 'Transferencia saliente',
-            'instrument_id' => null,
         ]);
     }
 
@@ -111,7 +94,6 @@ class TransactionFactory extends Factory
             'type' => TransactionType::TransferIn,
             'amount' => fake()->numberBetween(1000000, 50000000),
             'description' => 'Transferencia entrante',
-            'instrument_id' => null,
         ]);
     }
 

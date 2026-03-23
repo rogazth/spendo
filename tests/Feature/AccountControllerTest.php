@@ -184,7 +184,7 @@ test('destroy soft-deletes an account', function () {
     $this->actingAs($user)->delete("/accounts/{$account->uuid}")
         ->assertRedirect('/accounts');
 
-    $this->assertSoftDeleted('accounts', ['id' => $account->id]);
+    $this->assertModelMissing($account);
 });
 
 test('destroy returns 403 for another user account', function () {

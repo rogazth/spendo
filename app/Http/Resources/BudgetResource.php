@@ -18,7 +18,6 @@ class BudgetResource extends JsonResource
             'id' => $this->id,
             'uuid' => $this->uuid,
             'user_id' => $this->user_id,
-            'account_id' => $this->account_id,
             'name' => $this->name,
             'description' => $this->description,
             'currency' => $this->currency,
@@ -43,7 +42,6 @@ class BudgetResource extends JsonResource
                 isset($this->current_cycle_end),
                 $this->current_cycle_end
             ),
-            'account' => new AccountResource($this->whenLoaded('account')),
             'items' => $this->whenLoaded('items', function () {
                 return $this->items->map(function ($item) {
                     return [

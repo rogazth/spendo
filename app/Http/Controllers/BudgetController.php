@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Budgets\CreateBudgetAction;
+use App\Actions\Budgets\DeleteBudgetAction;
 use App\Http\Requests\StoreBudgetRequest;
 use App\Http\Resources\BudgetResource;
 use App\Http\Resources\TransactionResource;
 use App\Models\Budget;
 use App\Models\BudgetItem;
 use App\Models\Category;
-use App\Models\Currency;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,7 +26,7 @@ class BudgetController extends Controller
 
         $budgets = Auth::user()
             ->budgets()
-            ->with(['account', 'items.category.children'])
+            ->with(['items.category.children'])
             ->latest()
             ->paginate(25)
             ->withQueryString();
@@ -48,11 +48,6 @@ class BudgetController extends Controller
             return $budget;
         });
 
-        $accounts = Auth::user()
-            ->accounts()
-            ->where('is_active', true)
-            ->get();
-
         $categories = Category::query()
             ->where(function ($query) {
                 $query->whereNull('user_id')
@@ -72,15 +67,6 @@ class BudgetController extends Controller
 
         return Inertia::render('budgets/index', [
             'budgets' => BudgetResource::collection($budgets),
-            'accounts' => $accounts->map(fn ($account) => [
-                'id' => $account->id,
-                'uuid' => $account->uuid,
-                'name' => $account->name,
-                'currency' => $account->currency,
-                'currency_locale' => Currency::localeFor($account->currency),
-                'is_active' => $account->is_active,
-                'is_default' => $account->is_default,
-            ])->toArray(),
             'categories' => $categories->map(fn ($category) => [
                 'id' => $category->id,
                 'uuid' => $category->uuid,
@@ -97,30 +83,9 @@ class BudgetController extends Controller
         ]);
     }
 
-    public function store(StoreBudgetRequest $request): RedirectResponse
+    public function store(StoreBudgetRequest $request, CreateBudgetAction $action): RedirectResponse
     {
-        $validated = $request->validated();
-        $items = $validated['items'];
-
-        DB::transaction(function () use ($validated, $items) {
-            $budget = Auth::user()->budgets()->create([
-                'account_id' => $validated['account_id'] ?? null,
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'currency' => $validated['currency'],
-                'frequency' => $validated['frequency'],
-                'anchor_date' => $validated['anchor_date'],
-                'ends_at' => $validated['ends_at'] ?? null,
-                'is_active' => true,
-            ]);
-
-            foreach ($items as $item) {
-                $budget->items()->create([
-                    'category_id' => $item['category_id'],
-                    'amount' => $item['amount'],
-                ]);
-            }
-        });
+        $action->handle(Auth::user(), $request->validated());
 
         return redirect()
             ->route('budgets.index')
@@ -136,7 +101,7 @@ class BudgetController extends Controller
             : 'current';
         $referenceDate = CarbonImmutable::now()->startOfDay();
 
-        $budget->load(['account', 'items.category.children']);
+        $budget->load(['items.category.children']);
         $categoryGroups = $this->budgetItemCategoryGroups($budget);
         $categoryIds = collect($categoryGroups)->flatten()->unique()->values()->all();
 
@@ -194,6 +159,17 @@ class BudgetController extends Controller
                 'end' => $scopeEnd->toDateString(),
             ],
         ]);
+    }
+
+    public function destroy(Budget $budget, DeleteBudgetAction $action): RedirectResponse
+    {
+        $this->authorizeBudget($budget);
+
+        $action->handle($budget);
+
+        return redirect()
+            ->route('budgets.index')
+            ->with('success', 'Budget eliminado exitosamente.');
     }
 
     private function authorizeBudget(Budget $budget): void
@@ -379,17 +355,14 @@ class BudgetController extends Controller
         $query = Auth::user()->transactions();
 
         if ($withRelations) {
-            $query->with(['instrument', 'category', 'account', 'linkedTransaction.account']);
+            $query->with(['category', 'account', 'linkedTransaction.account']);
         }
 
         $query->where('type', 'expense')
             ->where('exclude_from_budget', false)
             ->whereDate('transaction_date', '>=', $startDate->toDateString())
-            ->whereDate('transaction_date', '<=', $endDate->toDateString());
-
-        if ($budget->account_id !== null) {
-            $query->where('account_id', $budget->account_id);
-        }
+            ->whereDate('transaction_date', '<=', $endDate->toDateString())
+            ->where('currency', $budget->currency);
 
         if ($categoryIds === []) {
             $query->whereRaw('1 = 0');

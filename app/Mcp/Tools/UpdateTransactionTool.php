@@ -2,8 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\CategoryType;
-use App\Models\Category;
+use App\Actions\Transactions\UpdateTransactionAction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -15,7 +14,7 @@ class UpdateTransactionTool extends Tool
         Update an existing transaction. Only provided fields will be changed.
         Use GetTransactionsTool first to find the transaction ID.
 
-        **Supported types**: expense, income, settlement.
+        **Supported types**: expense, income.
         Transfers (transfer_out / transfer_in) cannot be updated — delete and recreate them instead.
 
         **Amount**: Provide in major currency units (e.g., 572000 for 572,000 CLP).
@@ -35,7 +34,8 @@ class UpdateTransactionTool extends Tool
             'amount' => ['nullable', 'numeric', 'gt:0'],
             'category_id' => ['nullable', 'integer'],
             'account_id' => ['nullable', 'integer'],
-            'instrument_id' => ['nullable', 'integer'],
+            'tag_ids' => ['nullable', 'array'],
+            'tag_ids.*' => ['integer'],
             'transaction_date' => ['nullable', 'date'],
             'exclude_from_budget' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
@@ -47,76 +47,28 @@ class UpdateTransactionTool extends Tool
             return Response::error('Transaction not found.');
         }
 
-        if (in_array($transaction->type->value, ['transfer_out', 'transfer_in'])) {
-            return Response::error('Transfer transactions cannot be updated. Delete and recreate them instead.');
+        $data = array_filter($validated, fn ($v, $k) => $k !== 'transaction_id', ARRAY_FILTER_USE_BOTH);
+
+        // Preserve tag_ids key even if empty so sync is triggered when explicitly passed
+        if (array_key_exists('tag_ids', $validated)) {
+            $data['tag_ids'] = $validated['tag_ids'] ?? [];
         }
 
-        $updates = [];
+        $hasUpdatableFields = array_filter($data, fn ($v, $k) => $k !== 'tag_ids' && $v !== null, ARRAY_FILTER_USE_BOTH);
 
-        if (array_key_exists('description', $validated) && $validated['description'] !== null) {
-            $updates['description'] = $validated['description'];
-        }
-
-        if (array_key_exists('amount', $validated) && $validated['amount'] !== null) {
-            $updates['amount'] = $validated['amount'];
-        }
-
-        if (array_key_exists('transaction_date', $validated) && $validated['transaction_date'] !== null) {
-            $updates['transaction_date'] = $validated['transaction_date'];
-        }
-
-        if (array_key_exists('exclude_from_budget', $validated) && $validated['exclude_from_budget'] !== null) {
-            $updates['exclude_from_budget'] = $validated['exclude_from_budget'];
-        }
-
-        if (array_key_exists('notes', $validated) && $validated['notes'] !== null) {
-            $updates['notes'] = $validated['notes'];
-        }
-
-        if (! empty($validated['category_id'])) {
-            $expectedType = $transaction->type->value === 'income' ? CategoryType::Income : CategoryType::Expense;
-
-            $category = Category::where(function ($q) use ($user) {
-                $q->whereNull('user_id')->orWhere('user_id', $user->id);
-            })->find($validated['category_id']);
-
-            if (! $category) {
-                return Response::error('Category not found or not accessible.');
-            }
-
-            if ($category->type !== $expectedType) {
-                return Response::error("Use a {$expectedType->value} category for this transaction type.");
-            }
-
-            $updates['category_id'] = $category->id;
-        }
-
-        if (! empty($validated['account_id'])) {
-            $account = $user->accounts()->find($validated['account_id']);
-            if (! $account) {
-                return Response::error('Account not found.');
-            }
-            $updates['account_id'] = $account->id;
-        }
-
-        if (array_key_exists('instrument_id', $validated)) {
-            if ($validated['instrument_id'] !== null) {
-                $instrument = $user->instruments()->find($validated['instrument_id']);
-                if (! $instrument) {
-                    return Response::error('Instrument not found.');
-                }
-                $updates['instrument_id'] = $instrument->id;
-            } else {
-                $updates['instrument_id'] = null;
-            }
-        }
-
-        if (empty($updates)) {
+        if (empty($hasUpdatableFields) && ! array_key_exists('tag_ids', $data)) {
             return Response::error('No fields provided to update.');
         }
 
-        $transaction->update($updates);
-        $transaction->load(['category', 'account', 'instrument', 'fromInstrument']);
+        try {
+            $transaction = app(UpdateTransactionAction::class)->handle($transaction, $user, $data);
+        } catch (\InvalidArgumentException $e) {
+            return Response::error($e->getMessage());
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error($e->getMessage());
+        }
+
+        $transaction->load(['category', 'account', 'tags']);
 
         return Response::text(json_encode([
             'success' => true,
@@ -133,8 +85,7 @@ class UpdateTransactionTool extends Tool
                 'notes' => $transaction->notes,
                 'category' => $transaction->category?->full_name,
                 'account' => $transaction->account?->name,
-                'instrument' => $transaction->instrument?->name,
-                'from_instrument' => $transaction->fromInstrument?->name,
+                'tags' => $transaction->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->all(),
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
@@ -153,8 +104,8 @@ class UpdateTransactionTool extends Tool
                 ->description('New category ID. Use GetCategoriesTool to find categories.'),
             'account_id' => $schema->integer()
                 ->description('New account ID. Use GetAccountsTool to find accounts.'),
-            'instrument_id' => $schema->integer()
-                ->description('New instrument ID, or null to remove. Use GetInstrumentsTool.'),
+            'tag_ids' => $schema->array()
+                ->description('Array of tag IDs to set on the transaction. Pass an empty array to remove all tags.'),
             'transaction_date' => $schema->string()
                 ->description('New transaction date (YYYY-MM-DD).'),
             'exclude_from_budget' => $schema->boolean()

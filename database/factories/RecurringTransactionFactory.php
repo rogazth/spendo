@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\PaymentMethod;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -18,7 +17,6 @@ class RecurringTransactionFactory extends Factory
         return [
             'user_id' => User::factory(),
             'account_id' => Account::factory(),
-            'payment_method_id' => PaymentMethod::factory(),
             'category_id' => Category::factory(),
             'amount' => fake()->numberBetween(500000, 10000000),
             'currency' => 'CLP',

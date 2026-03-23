@@ -26,7 +26,7 @@ class GetBudgetsTool extends Tool
             return Response::error('User not authenticated.');
         }
 
-        $query = $user->budgets()->with(['account', 'items.category.children']);
+        $query = $user->budgets()->with(['items.category.children']);
 
         $includeInactive = $request->get('include_inactive', false);
         if (! $includeInactive) {
@@ -56,10 +56,6 @@ class GetBudgetsTool extends Tool
                 'anchor_date' => $budget->anchor_date->format('Y-m-d'),
                 'ends_at' => $budget->ends_at?->format('Y-m-d'),
                 'is_active' => $budget->is_active,
-                'account' => $budget->account ? [
-                    'id' => $budget->account->id,
-                    'name' => $budget->account->name,
-                ] : null,
                 'total_budgeted' => $totalBudgeted,
                 'current_cycle' => [
                     'start' => $cycleStart->toDateString(),
@@ -151,9 +147,7 @@ class GetBudgetsTool extends Tool
             ->whereDate('transaction_date', '<=', $endDate->toDateString())
             ->whereIn('category_id', $categoryIds);
 
-        if ($budget->account_id !== null) {
-            $query->where('account_id', $budget->account_id);
-        }
+        $query->where('currency', $budget->currency);
 
         return $query->sum('amount') / 100;
     }

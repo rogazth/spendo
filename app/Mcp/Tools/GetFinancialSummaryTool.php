@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\InstrumentType;
 use App\Enums\TransactionType;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -19,8 +18,7 @@ class GetFinancialSummaryTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Get a complete financial summary including:
         - Total balance across all accounts
-        - Total credit card debt (from credit card instruments)
-        - Net balance (accounts - debt)
+        - Net balance
         - Monthly transaction count and expenses
         - Account totals
     MARKDOWN;
@@ -44,27 +42,6 @@ class GetFinancialSummaryTool extends Tool
             $totalAccountBalance += $account->current_balance;
         }
 
-        // Get credit card instruments and their outstanding debt
-        $creditCardInstruments = $user->instruments()
-            ->where('is_active', true)
-            ->whereIn('type', [InstrumentType::CreditCard->value, InstrumentType::PrepaidCard->value])
-            ->get();
-
-        $totalCreditDebt = 0;
-        $creditCardBreakdown = [];
-        foreach ($creditCardInstruments as $card) {
-            $debt = $card->current_debt;
-            $totalCreditDebt += $debt;
-            $creditCardBreakdown[] = [
-                'id' => $card->id,
-                'name' => $card->name,
-                'current_debt' => $debt,
-                'current_debt_formatted' => '$'.number_format($debt, 0, ',', '.'),
-                'credit_limit' => $card->credit_limit,
-                'available_credit' => $card->available_credit,
-            ];
-        }
-
         // Get this month's stats
         $monthlyTransactionCount = $user->transactions()
             ->whereMonth('transaction_date', now()->month)
@@ -86,13 +63,9 @@ class GetFinancialSummaryTool extends Tool
         $summary = [
             'total_account_balance' => $totalAccountBalance,
             'total_account_balance_formatted' => '$'.number_format($totalAccountBalance, 0, ',', '.'),
-            'total_credit_debt' => $totalCreditDebt,
-            'total_credit_debt_formatted' => '$'.number_format($totalCreditDebt, 0, ',', '.'),
-            'net_balance' => $totalAccountBalance - $totalCreditDebt,
-            'net_balance_formatted' => '$'.number_format($totalAccountBalance - $totalCreditDebt, 0, ',', '.'),
+            'net_balance' => $totalAccountBalance,
+            'net_balance_formatted' => '$'.number_format($totalAccountBalance, 0, ',', '.'),
             'accounts_count' => $accounts->count(),
-            'credit_cards_count' => $creditCardInstruments->count(),
-            'credit_cards' => $creditCardBreakdown,
             'monthly_stats' => [
                 'month' => now()->format('F Y'),
                 'transaction_count' => $monthlyTransactionCount,

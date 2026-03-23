@@ -32,10 +32,9 @@ interface Props {
     transactions: PaginatedResponse<Transaction>;
     accounts: Account[];
     instruments: Instrument[];
-    budgets: Pick<Budget, 'id' | 'uuid' | 'name' | 'account_id'>[];
+    budgets: Pick<Budget, 'id' | 'uuid' | 'name'>[];
     filters: {
         budget_id?: number | null;
-        budget_account_id?: number | null;
         instrument_ids?: number[];
         account_ids?: number[];
         date_from?: string;
@@ -96,15 +95,12 @@ export default function TransactionsIndex({
         ? String(filters.instrument_ids[0])
         : ALL;
 
-    // Budget has a scoped account — the account filter is locked
-    const budgetLocksAccount = !!(filters.budget_id && filters.budget_account_id);
-
     function buildParams(overrides: Record<string, string> = {}) {
         const params: Record<string, string | string[]> = {};
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
         if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
-        if (selectedAccountId !== ALL && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
+        if (selectedAccountId !== ALL) params['account_ids[]'] = selectedAccountId;
         if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
         return { ...params, ...overrides };
     }
@@ -116,7 +112,7 @@ export default function TransactionsIndex({
         if (next.dateFrom) params.date_from = next.dateFrom;
         if (next.dateTo) params.date_to = next.dateTo;
         if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
-        if (selectedAccountId !== ALL && !budgetLocksAccount) params['account_ids[]'] = selectedAccountId;
+        if (selectedAccountId !== ALL) params['account_ids[]'] = selectedAccountId;
         if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
         applyFilters(params);
     };
@@ -180,11 +176,10 @@ export default function TransactionsIndex({
                         </SelectContent>
                     </Select>
 
-                    {/* Account filter — disabled when budget locks an account */}
+                    {/* Account filter */}
                     <Select
-                        value={budgetLocksAccount ? String(filters.budget_account_id) : selectedAccountId}
+                        value={selectedAccountId}
                         onValueChange={handleAccountChange}
-                        disabled={budgetLocksAccount}
                     >
                         <SelectTrigger className="w-auto min-w-[160px] border-dashed">
                             <SelectValue placeholder="Cuenta" />

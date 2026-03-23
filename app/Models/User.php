@@ -48,11 +48,6 @@ class User extends Authenticatable
         return $this->hasMany(Account::class);
     }
 
-    public function instruments(): HasMany
-    {
-        return $this->hasMany(Instrument::class);
-    }
-
     public function categories(): HasMany
     {
         return $this->hasMany(Category::class);
@@ -61,6 +56,11 @@ class User extends Authenticatable
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function tags(): HasMany
+    {
+        return $this->hasMany(Tag::class);
     }
 
     public function budgets(): HasMany
@@ -76,11 +76,6 @@ class User extends Authenticatable
     public function activeAccounts(): HasMany
     {
         return $this->accounts()->where('is_active', true);
-    }
-
-    public function activeInstruments(): HasMany
-    {
-        return $this->instruments()->where('is_active', true);
     }
 
     public function getInitialsAttribute(): string

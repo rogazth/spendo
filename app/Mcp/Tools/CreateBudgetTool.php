@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Budgets\CreateBudgetAction;
 use App\Models\Category;
 use App\Models\Currency;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -19,7 +19,7 @@ class CreateBudgetTool extends Tool
         **Items**: Array of category_id + amount pairs defining spending caps per category
         **Amounts**: In major currency units (e.g., 572000 for 572,000 CLP)
         **Categories**: Must be expense-type categories. Cannot mix a parent and its children in the same budget.
-        **Account scope**: Optionally scope to a specific account (must match budget currency).
+        **Currency scope**: Budget spending is tracked across all transactions with the matching currency.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -37,7 +37,6 @@ class CreateBudgetTool extends Tool
             'frequency' => ['required', 'string', 'in:weekly,biweekly,monthly,bimonthly'],
             'anchor_date' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:anchor_date'],
-            'account_id' => ['nullable', 'integer'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.category_id' => ['required', 'integer'],
             'items.*.amount' => ['required', 'numeric', 'gt:0'],
@@ -56,17 +55,6 @@ class CreateBudgetTool extends Tool
 
         if (! in_array($validated['currency'], Currency::codes())) {
             return Response::error('Invalid currency code.');
-        }
-
-        // Validate account ownership and currency match
-        if (! empty($validated['account_id'])) {
-            $account = $user->accounts()->find($validated['account_id']);
-            if (! $account) {
-                return Response::error('Account not found.');
-            }
-            if ($account->currency !== $validated['currency']) {
-                return Response::error("Account currency ({$account->currency}) does not match budget currency ({$validated['currency']}).");
-            }
         }
 
         // Validate categories
@@ -96,27 +84,7 @@ class CreateBudgetTool extends Tool
             }
         }
 
-        $budget = DB::transaction(function () use ($user, $validated) {
-            $budget = $user->budgets()->create([
-                'account_id' => $validated['account_id'] ?? null,
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'currency' => $validated['currency'],
-                'frequency' => $validated['frequency'],
-                'anchor_date' => $validated['anchor_date'],
-                'ends_at' => $validated['ends_at'] ?? null,
-                'is_active' => true,
-            ]);
-
-            foreach ($validated['items'] as $item) {
-                $budget->items()->create([
-                    'category_id' => $item['category_id'],
-                    'amount' => $item['amount'],
-                ]);
-            }
-
-            return $budget;
-        });
+        $budget = app(CreateBudgetAction::class)->handle($user, $validated);
 
         $budget->load('items.category');
 
@@ -163,8 +131,6 @@ class CreateBudgetTool extends Tool
                 ->required(),
             'ends_at' => $schema->string()
                 ->description('Optional end date (YYYY-MM-DD)'),
-            'account_id' => $schema->integer()
-                ->description('Optional account to scope the budget to'),
             'items' => $schema->array()
                 ->description('Budget items: array of {category_id, amount} objects. Amount in major currency units.')
                 ->required(),

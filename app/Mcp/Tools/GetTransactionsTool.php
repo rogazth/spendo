@@ -13,7 +13,7 @@ class GetTransactionsTool extends Tool
 {
     protected string $description = <<<'MARKDOWN'
         Get transactions with optional filters.
-        Filter by date range, type, category, account, payment method, or budget.
+        Filter by date range, type, category, account, tag, or budget.
         Results are ordered by transaction date (most recent first).
         Includes a totals block with count, total debit, and total credit for the filtered dataset.
     MARKDOWN;
@@ -27,7 +27,7 @@ class GetTransactionsTool extends Tool
         }
 
         $query = $user->transactions()
-            ->with(['category', 'account', 'instrument', 'fromInstrument']);
+            ->with(['category', 'account', 'tags']);
 
         // Filter by type
         if ($type = $request->get('type')) {
@@ -52,13 +52,11 @@ class GetTransactionsTool extends Tool
             $query->where('account_id', $accountId);
         }
 
-        // Filter by instrument (single or multiple)
-        if ($instrumentIds = $request->get('instrument_ids')) {
-            if (is_array($instrumentIds)) {
-                $query->whereIn('instrument_id', $instrumentIds);
+        // Filter by tags
+        if ($tagIds = $request->get('tag_ids')) {
+            if (is_array($tagIds) && count($tagIds) > 0) {
+                $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tagIds));
             }
-        } elseif ($instrumentId = $request->get('instrument_id')) {
-            $query->where('instrument_id', $instrumentId);
         }
 
         // Filter by budget (resolve budget category IDs)
@@ -77,10 +75,6 @@ class GetTransactionsTool extends Tool
                 $query->where('type', 'expense')
                     ->where('exclude_from_budget', false)
                     ->whereIn('category_id', $categoryIds);
-
-                if ($budget->account_id !== null) {
-                    $query->where('account_id', $budget->account_id);
-                }
             }
         }
 
@@ -96,7 +90,7 @@ class GetTransactionsTool extends Tool
         // Calculate totals before pagination
         $totalsQuery = clone $query;
         $totalDebitCents = (clone $totalsQuery)
-            ->whereIn('type', ['expense', 'transfer_out', 'settlement'])
+            ->whereIn('type', ['expense', 'transfer_out'])
             ->sum('amount');
         $totalCreditCents = (clone $totalsQuery)
             ->whereIn('type', ['income', 'transfer_in'])
@@ -137,18 +131,10 @@ class GetTransactionsTool extends Tool
                 'uuid' => $t->account->uuid,
                 'name' => $t->account->name,
             ] : null,
-            'instrument' => $t->instrument ? [
-                'id' => $t->instrument->id,
-                'uuid' => $t->instrument->uuid,
-                'name' => $t->instrument->name,
-                'type' => $t->instrument->type->value,
-            ] : null,
-            'from_instrument' => $t->fromInstrument ? [
-                'id' => $t->fromInstrument->id,
-                'uuid' => $t->fromInstrument->uuid,
-                'name' => $t->fromInstrument->name,
-                'type' => $t->fromInstrument->type->value,
-            ] : null,
+            'tags' => $t->tags->map(fn ($tag) => [
+                'id' => $tag->id,
+                'name' => $tag->name,
+            ])->all(),
         ]);
 
         return Response::text(json_encode([
@@ -172,8 +158,8 @@ class GetTransactionsTool extends Tool
     {
         return [
             'type' => $schema->string()
-                ->description('Filter by transaction type: expense, income, transfer_out, transfer_in, settlement')
-                ->enum(['expense', 'income', 'transfer_out', 'transfer_in', 'settlement']),
+                ->description('Filter by transaction type: expense, income, transfer_out, transfer_in')
+                ->enum(['expense', 'income', 'transfer_out', 'transfer_in']),
             'category_id' => $schema->integer()
                 ->description('Filter by single category ID'),
             'category_ids' => $schema->array()
@@ -182,10 +168,8 @@ class GetTransactionsTool extends Tool
                 ->description('Filter by single account ID'),
             'account_ids' => $schema->array()
                 ->description('Filter by multiple account IDs'),
-            'instrument_id' => $schema->integer()
-                ->description('Filter by single instrument ID'),
-            'instrument_ids' => $schema->array()
-                ->description('Filter by multiple instrument IDs'),
+            'tag_ids' => $schema->array()
+                ->description('Filter by tag IDs — returns transactions that have any of the given tags'),
             'budget_id' => $schema->integer()
                 ->description('Filter transactions belonging to a specific budget (by its category scope)'),
             'start_date' => $schema->string()

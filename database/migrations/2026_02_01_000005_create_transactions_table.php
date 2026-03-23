@@ -12,15 +12,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('type', ['expense', 'income', 'transfer_out', 'transfer_in', 'settlement']);
+            $table->enum('type', ['expense', 'income', 'transfer_out', 'transfer_in']);
             $table->unsignedBigInteger('account_id')->nullable();
-            $table->unsignedBigInteger('instrument_id')->nullable();
-            $table->unsignedBigInteger('from_instrument_id')->nullable();
             $table->unsignedBigInteger('category_id')->nullable();
             $table->unsignedBigInteger('linked_transaction_id')->nullable();
             $table->bigInteger('amount');
-            $table->bigInteger('instrument_amount')->nullable();
-            $table->decimal('exchange_rate', 15, 6)->nullable();
             $table->string('currency', 3)->default('CLP');
             $table->string('description')->nullable();
             $table->text('notes')->nullable();
@@ -34,16 +30,6 @@ return new class extends Migration
                 ->on('accounts')
                 ->cascadeOnDelete();
 
-            $table->foreign('instrument_id')
-                ->references('id')
-                ->on('instruments')
-                ->cascadeOnDelete();
-
-            $table->foreign('from_instrument_id')
-                ->references('id')
-                ->on('instruments')
-                ->nullOnDelete();
-
             $table->foreign('category_id')
                 ->references('id')
                 ->on('categories')
@@ -54,8 +40,6 @@ return new class extends Migration
             $table->index(['user_id', 'type', 'exclude_from_budget', 'transaction_date']);
             $table->index(['account_id', 'transaction_date']);
             $table->index('account_id');
-            $table->index('instrument_id');
-            $table->index('from_instrument_id');
             $table->index('category_id');
             $table->index('linked_transaction_id');
         });

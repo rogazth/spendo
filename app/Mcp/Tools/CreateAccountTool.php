@@ -2,9 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TransactionType;
+use App\Actions\Accounts\CreateAccountAction;
 use App\Models\Currency;
-use App\Models\Transaction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -53,36 +52,7 @@ class CreateAccountTool extends Tool
             return Response::error("An account named \"{$validated['name']}\" already exists.");
         }
 
-        if (! empty($validated['is_default'])) {
-            $user->accounts()->update(['is_default' => false]);
-        }
-
-        $account = $user->accounts()->create([
-            'name' => $validated['name'],
-            'currency' => $validated['currency'],
-            'color' => $validated['color'] ?? '#6B7280',
-            'icon' => $validated['icon'] ?? null,
-            'is_active' => true,
-            'is_default' => $validated['is_default'] ?? false,
-            'sort_order' => 0,
-        ]);
-
-        if (! empty($validated['initial_balance']) && $validated['initial_balance'] > 0) {
-            $systemCategory = \App\Models\Category::where('is_system', true)
-                ->where('name', 'Balance Inicial')
-                ->first();
-
-            Transaction::create([
-                'user_id' => $user->id,
-                'type' => TransactionType::Income,
-                'account_id' => $account->id,
-                'category_id' => $systemCategory?->id,
-                'amount' => $validated['initial_balance'],
-                'currency' => $validated['currency'],
-                'description' => 'Balance inicial',
-                'transaction_date' => now(),
-            ]);
-        }
+        $account = app(CreateAccountAction::class)->handle($user, $validated);
 
         return Response::text(json_encode([
             'success' => true,

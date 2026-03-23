@@ -2,12 +2,12 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\CategoryType;
+use App\Actions\Transactions\CreateExpenseAction;
+use App\Actions\Transactions\CreateIncomeAction;
+use App\Actions\Transactions\CreateTransferAction;
 use App\Enums\TransactionType;
-use App\Models\Category;
 use App\Models\Transaction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -20,10 +20,9 @@ class BulkCreateTransactionsTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Create multiple transactions in a single request. Each item follows the same rules as CreateTransactionTool.
 
-        **For expenses:** Requires account_id, category_id, amount, description. Optionally instrument_id.
+        **For expenses:** Requires account_id, category_id, amount, description. Optionally tag_ids.
         **For income:** Requires account_id, category_id (income type), amount, description
         **For transfers:** Requires origin_account_id, destination_account_id, amount, description
-        **For settlements:** Requires instrument_id (CC), from_instrument_id (bank), amount, description
 
         **Amount**: Major currency units (e.g., 572000 for 572,000 CLP)
 
@@ -45,12 +44,12 @@ class BulkCreateTransactionsTool extends Tool
 
         $validated = $request->validate([
             'transactions' => ['required', 'array', 'min:1', 'max:100'],
-            'transactions.*.type' => ['required', 'string', 'in:expense,income,transfer,settlement'],
+            'transactions.*.type' => ['required', 'string', 'in:expense,income,transfer'],
             'transactions.*.amount' => ['required', 'numeric', 'gt:0'],
             'transactions.*.description' => ['required', 'string', 'max:255'],
             'transactions.*.category_id' => ['nullable', 'integer'],
-            'transactions.*.instrument_id' => ['nullable', 'integer'],
-            'transactions.*.from_instrument_id' => ['nullable', 'integer'],
+            'transactions.*.tag_ids' => ['nullable', 'array'],
+            'transactions.*.tag_ids.*' => ['integer'],
             'transactions.*.account_id' => ['nullable', 'integer'],
             'transactions.*.origin_account_id' => ['nullable', 'integer'],
             'transactions.*.destination_account_id' => ['nullable', 'integer'],
@@ -63,7 +62,7 @@ class BulkCreateTransactionsTool extends Tool
             'transactions.min' => 'At least one transaction is required.',
             'transactions.max' => 'Maximum 100 transactions per request.',
             'transactions.*.type.required' => 'Transaction type is required for each item.',
-            'transactions.*.type.in' => 'Transaction type must be expense, income, transfer, or settlement.',
+            'transactions.*.type.in' => 'Transaction type must be expense, income, or transfer.',
             'transactions.*.amount.required' => 'Amount is required for each transaction.',
             'transactions.*.amount.gt' => 'Amount must be greater than zero.',
             'transactions.*.description.required' => 'Description is required for each transaction.',
@@ -109,11 +108,11 @@ class BulkCreateTransactionsTool extends Tool
                 ->first();
 
             if ($existing) {
-                $existing->load(['category', 'account', 'instrument', 'fromInstrument']);
+                $existing->load(['category', 'account', 'tags']);
 
                 if (in_array($existing->type, [TransactionType::TransferOut, TransactionType::TransferIn])) {
                     $linked = $existing->linked_transaction_id
-                        ? $user->transactions()->with(['category', 'account', 'instrument', 'fromInstrument'])->find($existing->linked_transaction_id)
+                        ? $user->transactions()->with(['category', 'account', 'tags'])->find($existing->linked_transaction_id)
                         : null;
 
                     $out = $existing->type === TransactionType::TransferOut ? $existing : $linked;
@@ -139,12 +138,14 @@ class BulkCreateTransactionsTool extends Tool
             }
         }
 
+        $data = $item;
+        $data['notes'] = $this->buildNotes($item);
+
         try {
             return match ($item['type']) {
-                'expense' => ['index' => $index, ...$this->createExpense($user, $item)],
-                'income' => ['index' => $index, ...$this->createIncome($user, $item)],
-                'transfer' => ['index' => $index, ...$this->createTransfer($user, $item)],
-                'settlement' => ['index' => $index, ...$this->createSettlement($user, $item)],
+                'expense' => ['index' => $index, ...$this->createExpense($user, $data)],
+                'income' => ['index' => $index, ...$this->createIncome($user, $data)],
+                'transfer' => ['index' => $index, ...$this->createTransfer($user, $data)],
             };
         } catch (\Throwable $e) {
             return [
@@ -168,40 +169,15 @@ class BulkCreateTransactionsTool extends Tool
             return ['success' => false, 'message' => 'Account is required for expenses. Use GetAccountsTool to find available accounts.'];
         }
 
-        $category = $this->validateCategory($user, $item['category_id'], CategoryType::Expense);
-        if (is_string($category)) {
-            return ['success' => false, 'message' => $category];
+        try {
+            $transaction = app(CreateExpenseAction::class)->handle($user, $item);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        } catch (\InvalidArgumentException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
 
-        $account = $user->accounts()->find($item['account_id']);
-        if (! $account) {
-            return ['success' => false, 'message' => 'Account not found.'];
-        }
-
-        $instrumentId = null;
-        if (! empty($item['instrument_id'])) {
-            $instrument = $user->instruments()->find($item['instrument_id']);
-            if (! $instrument) {
-                return ['success' => false, 'message' => 'Instrument not found.'];
-            }
-            $instrumentId = $instrument->id;
-        }
-
-        $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'type' => TransactionType::Expense,
-            'account_id' => $account->id,
-            'instrument_id' => $instrumentId,
-            'category_id' => $category->id,
-            'amount' => $item['amount'],
-            'currency' => $account->currency ?? 'CLP',
-            'description' => $item['description'],
-            'notes' => $this->buildNotes($item),
-            'exclude_from_budget' => $item['exclude_from_budget'] ?? false,
-            'transaction_date' => $item['transaction_date'] ?? now(),
-        ]);
-
-        $transaction->load(['category', 'account', 'instrument']);
+        $transaction->load(['category', 'account', 'tags']);
 
         return [
             'success' => true,
@@ -223,29 +199,15 @@ class BulkCreateTransactionsTool extends Tool
             return ['success' => false, 'message' => 'Account is required for income. Use GetAccountsTool to find available accounts.'];
         }
 
-        $category = $this->validateCategory($user, $item['category_id'], CategoryType::Income);
-        if (is_string($category)) {
-            return ['success' => false, 'message' => $category];
+        try {
+            $transaction = app(CreateIncomeAction::class)->handle($user, $item);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        } catch (\InvalidArgumentException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
 
-        $account = $user->accounts()->find($item['account_id']);
-        if (! $account) {
-            return ['success' => false, 'message' => 'Account not found.'];
-        }
-
-        $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'type' => TransactionType::Income,
-            'account_id' => $account->id,
-            'category_id' => $category->id,
-            'amount' => $item['amount'],
-            'currency' => $account->currency ?? 'CLP',
-            'description' => $item['description'],
-            'notes' => $this->buildNotes($item),
-            'transaction_date' => $item['transaction_date'] ?? now(),
-        ]);
-
-        $transaction->load(['category', 'account']);
+        $transaction->load(['category', 'account', 'tags']);
 
         return [
             'success' => true,
@@ -267,122 +229,22 @@ class BulkCreateTransactionsTool extends Tool
             return ['success' => false, 'message' => 'Destination account is required for transfers.'];
         }
 
-        if ($item['origin_account_id'] === $item['destination_account_id']) {
-            return ['success' => false, 'message' => 'Origin and destination accounts must be different.'];
+        try {
+            [$transferOut, $transferIn] = app(CreateTransferAction::class)->handle($user, $item);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        } catch (\InvalidArgumentException $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
 
-        $originAccount = $user->accounts()->find($item['origin_account_id']);
-        if (! $originAccount) {
-            return ['success' => false, 'message' => 'Origin account not found.'];
-        }
-
-        $destinationAccount = $user->accounts()->find($item['destination_account_id']);
-        if (! $destinationAccount) {
-            return ['success' => false, 'message' => 'Destination account not found.'];
-        }
-
-        $transferCategory = Category::where('is_system', true)
-            ->where('type', CategoryType::System)
-            ->where('name', 'Transferencia')
-            ->first();
-
-        [$transferOut, $transferIn] = DB::transaction(function () use ($user, $item, $originAccount, $destinationAccount, $transferCategory) {
-            $transferOut = Transaction::create([
-                'user_id' => $user->id,
-                'type' => TransactionType::TransferOut,
-                'account_id' => $originAccount->id,
-                'category_id' => $transferCategory?->id,
-                'amount' => $item['amount'],
-                'currency' => $originAccount->currency ?? 'CLP',
-                'description' => $item['description'],
-                'notes' => $this->buildNotes($item),
-                'exclude_from_budget' => true,
-                'transaction_date' => $item['transaction_date'] ?? now(),
-            ]);
-
-            $transferIn = Transaction::create([
-                'user_id' => $user->id,
-                'type' => TransactionType::TransferIn,
-                'account_id' => $destinationAccount->id,
-                'category_id' => $transferCategory?->id,
-                'linked_transaction_id' => $transferOut->id,
-                'amount' => $item['amount'],
-                'currency' => $destinationAccount->currency ?? 'CLP',
-                'description' => $item['description'],
-                'notes' => $this->buildNotes($item),
-                'exclude_from_budget' => true,
-                'transaction_date' => $item['transaction_date'] ?? now(),
-            ]);
-
-            $transferOut->update(['linked_transaction_id' => $transferIn->id]);
-
-            return [$transferOut, $transferIn];
-        });
-
-        $transferOut->load(['account']);
-        $transferIn->load(['account']);
+        $transferOut->load(['account', 'tags']);
+        $transferIn->load(['account', 'tags']);
 
         return [
             'success' => true,
             'message' => 'Transfer created successfully.',
             'transfer_out' => $this->formatTransaction($transferOut),
             'transfer_in' => $this->formatTransaction($transferIn),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function createSettlement(mixed $user, array $item): array
-    {
-        if (empty($item['instrument_id'])) {
-            return ['success' => false, 'message' => 'instrument_id (credit card being paid) is required for settlements.'];
-        }
-
-        if (empty($item['from_instrument_id'])) {
-            return ['success' => false, 'message' => 'from_instrument_id (bank instrument making the payment) is required for settlements.'];
-        }
-
-        $creditCard = $user->instruments()->find($item['instrument_id']);
-        if (! $creditCard) {
-            return ['success' => false, 'message' => 'Credit card instrument not found.'];
-        }
-
-        if (! $creditCard->isCreditCard()) {
-            return ['success' => false, 'message' => 'Settlement is only for credit card payments. The instrument_id must be a credit card or prepaid card.'];
-        }
-
-        $fromInstrument = $user->instruments()->find($item['from_instrument_id']);
-        if (! $fromInstrument) {
-            return ['success' => false, 'message' => 'From instrument not found.'];
-        }
-
-        $settlementCategory = Category::where('is_system', true)
-            ->where('type', CategoryType::System)
-            ->where('name', 'Liquidación TDC')
-            ->first();
-
-        $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'type' => TransactionType::Settlement,
-            'account_id' => null,
-            'instrument_id' => $creditCard->id,
-            'from_instrument_id' => $fromInstrument->id,
-            'category_id' => $settlementCategory?->id,
-            'amount' => $item['amount'],
-            'currency' => $creditCard->currency ?? 'CLP',
-            'description' => $item['description'],
-            'notes' => $this->buildNotes($item),
-            'exclude_from_budget' => true,
-            'transaction_date' => $item['transaction_date'] ?? now(),
-        ]);
-
-        $transaction->load(['instrument', 'fromInstrument']);
-
-        return [
-            'success' => true,
-            'message' => 'Settlement created successfully. Credit card debt reduced.',
-            'transaction' => $this->formatTransaction($transaction),
         ];
     }
 
@@ -403,27 +265,10 @@ class BulkCreateTransactionsTool extends Tool
             'transaction_date' => $transaction->transaction_date->format('Y-m-d'),
             'category' => $transaction->category?->full_name,
             'account' => $transaction->account?->name,
-            'instrument' => $transaction->instrument?->name,
-            'from_instrument' => $transaction->fromInstrument?->name,
+            'tags' => $transaction->relationLoaded('tags')
+                ? $transaction->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->all()
+                : [],
         ];
-    }
-
-    private function validateCategory(mixed $user, int $categoryId, CategoryType $expectedType): Category|string
-    {
-        $category = Category::where(function ($q) use ($user) {
-            $q->whereNull('user_id')
-                ->orWhere('user_id', $user->id);
-        })->find($categoryId);
-
-        if (! $category) {
-            return 'Category not found or not accessible.';
-        }
-
-        if ($category->type !== $expectedType) {
-            return "For {$expectedType->value} transactions, use a {$expectedType->value} category.";
-        }
-
-        return $category;
     }
 
     private function buildNotes(array $item): ?string
@@ -447,8 +292,8 @@ class BulkCreateTransactionsTool extends Tool
     {
         $transactionItem = $schema->object([
             'type' => $schema->string()
-                ->description('Transaction type: expense, income, transfer, or settlement')
-                ->enum(['expense', 'income', 'transfer', 'settlement'])
+                ->description('Transaction type: expense, income, or transfer')
+                ->enum(['expense', 'income', 'transfer'])
                 ->required(),
             'amount' => $schema->number()
                 ->description('Amount in major currency units (e.g., 572000 for 572,000 CLP)')
@@ -458,10 +303,8 @@ class BulkCreateTransactionsTool extends Tool
                 ->required(),
             'category_id' => $schema->integer()
                 ->description('Category ID. Required for expense and income. Use GetCategoriesTool to find categories.'),
-            'instrument_id' => $schema->integer()
-                ->description('Instrument ID. Optional for expenses. Required for settlements (CC being paid). Use GetInstrumentsTool.'),
-            'from_instrument_id' => $schema->integer()
-                ->description('Instrument ID of bank paying the CC. Required for settlements. Use GetInstrumentsTool.'),
+            'tag_ids' => $schema->array()
+                ->description('Optional array of tag IDs to attach to the transaction.'),
             'account_id' => $schema->integer()
                 ->description('Account ID. Required for expense and income. Use GetAccountsTool to find accounts.'),
             'origin_account_id' => $schema->integer()

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Categories\CreateCategoryAction;
+use App\Actions\Categories\DeleteCategoryAction;
+use App\Actions\Categories\UpdateCategoryAction;
 use App\Enums\CategoryType;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
@@ -77,22 +80,9 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function store(StoreCategoryRequest $request): RedirectResponse
+    public function store(StoreCategoryRequest $request, CreateCategoryAction $action): RedirectResponse
     {
-        $user = Auth::user();
-
-        $data = $request->validated();
-
-        if (! empty($data['parent_id'])) {
-            $parent = Category::findOrFail($data['parent_id']);
-            $data['type'] = $parent->type->value;
-        }
-
-        Category::create([
-            ...$data,
-            'user_id' => $user->id,
-            'is_system' => false,
-        ]);
+        $action->handle(Auth::user(), $request->validated());
 
         return redirect()->route('categories.index')
             ->with('success', 'Categoría creada correctamente.');
@@ -107,38 +97,29 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function update(UpdateCategoryRequest $request, Category $category): RedirectResponse
+    public function update(UpdateCategoryRequest $request, Category $category, UpdateCategoryAction $action): RedirectResponse
     {
         $this->authorizeCategory($category);
 
-        if ($category->is_system) {
+        try {
+            $action->handle($category, $request->validated());
+        } catch (\InvalidArgumentException) {
             abort(403, 'No puedes editar categorías del sistema.');
         }
-
-        $data = $request->validated();
-
-        if (! empty($data['parent_id'])) {
-            $parent = Category::findOrFail($data['parent_id']);
-            $data['type'] = $parent->type->value;
-        }
-
-        $category->update($data);
 
         return redirect()->route('categories.index')
             ->with('success', 'Categoría actualizada correctamente.');
     }
 
-    public function destroy(Category $category): RedirectResponse
+    public function destroy(Category $category, DeleteCategoryAction $action): RedirectResponse
     {
         $this->authorizeCategory($category);
 
-        if ($category->is_system) {
+        try {
+            $action->handle($category);
+        } catch (\InvalidArgumentException) {
             abort(403, 'No puedes eliminar categorías del sistema.');
         }
-
-        $category->children()->update(['parent_id' => null]);
-
-        $category->delete();
 
         return redirect()->route('categories.index')
             ->with('success', 'Categoría eliminada correctamente.');
