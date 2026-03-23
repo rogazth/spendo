@@ -11,7 +11,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CurrencySeeder::class,
             CategorySeeder::class,
-            DummyDataSeeder::class,
         ]);
     }
 }
