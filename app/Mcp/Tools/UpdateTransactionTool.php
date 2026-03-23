@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Transactions\UpdateTransactionAction;
+use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -73,20 +74,7 @@ class UpdateTransactionTool extends Tool
         return Response::text(json_encode([
             'success' => true,
             'message' => 'Transaction updated successfully.',
-            'transaction' => [
-                'id' => $transaction->id,
-                'uuid' => $transaction->uuid,
-                'type' => $transaction->type->value,
-                'amount' => $transaction->amount,
-                'currency' => $transaction->currency,
-                'description' => $transaction->description,
-                'transaction_date' => $transaction->transaction_date->format('Y-m-d'),
-                'exclude_from_budget' => $transaction->exclude_from_budget,
-                'notes' => $transaction->notes,
-                'category' => $transaction->category?->full_name,
-                'account' => $transaction->account?->name,
-                'tags' => $transaction->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->all(),
-            ],
+            'transaction' => (new TransactionResource($transaction))->resolve(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

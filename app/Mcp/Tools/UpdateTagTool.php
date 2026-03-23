@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Tags\UpdateTagAction;
+use App\Http\Resources\TagResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -53,12 +54,7 @@ class UpdateTagTool extends Tool
         return Response::text(json_encode([
             'success' => true,
             'message' => "Tag \"{$tag->name}\" updated successfully.",
-            'tag' => [
-                'id' => $tag->id,
-                'uuid' => $tag->uuid,
-                'name' => $tag->name,
-                'color' => $tag->color,
-            ],
+            'tag' => (new TagResource($tag))->resolve(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Budgets\UpdateBudgetAction;
+use App\Http\Resources\BudgetResource;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -81,28 +82,15 @@ class UpdateBudgetTool extends Tool
             'items' => $validated['items'] ?? null,
         ], fn ($value) => $value !== null));
 
-        $budget->load('items.category');
+        $budget->refresh()->load('items.category');
 
-        $items = $budget->items->map(fn ($item) => [
-            'category_id' => $item->category_id,
-            'category_name' => $item->category?->name ?? 'Unknown',
-            'amount' => $item->amount,
-        ]);
+        $budgetData = (new BudgetResource($budget))->resolve();
+        $budgetData['items_count'] = $budget->items->count();
 
         return Response::text(json_encode([
             'success' => true,
             'message' => "Budget \"{$budget->name}\" updated successfully.",
-            'budget' => [
-                'id' => $budget->id,
-                'uuid' => $budget->uuid,
-                'name' => $budget->name,
-                'currency' => $budget->currency,
-                'frequency' => $budget->frequency,
-                'is_active' => $budget->is_active,
-                'total_budgeted' => $budget->total_budgeted,
-                'items_count' => $items->count(),
-                'items' => $items,
-            ],
+            'budget' => $budgetData,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

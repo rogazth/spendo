@@ -6,7 +6,7 @@ use App\Actions\Transactions\CreateExpenseAction;
 use App\Actions\Transactions\CreateIncomeAction;
 use App\Actions\Transactions\CreateTransferAction;
 use App\Enums\TransactionType;
-use App\Models\Transaction;
+use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -123,8 +123,8 @@ class BulkCreateTransactionsTool extends Tool
                         'success' => true,
                         'idempotent' => true,
                         'message' => 'Transfer already exists (idempotent).',
-                        'transfer_out' => $out ? $this->formatTransaction($out) : null,
-                        'transfer_in' => $in ? $this->formatTransaction($in) : null,
+                        'transfer_out' => $out ? (new TransactionResource($out))->resolve() : null,
+                        'transfer_in' => $in ? (new TransactionResource($in))->resolve() : null,
                     ];
                 }
 
@@ -133,7 +133,7 @@ class BulkCreateTransactionsTool extends Tool
                     'success' => true,
                     'idempotent' => true,
                     'message' => 'Transaction already exists (idempotent).',
-                    'transaction' => $this->formatTransaction($existing),
+                    'transaction' => (new TransactionResource($existing))->resolve(),
                 ];
             }
         }
@@ -182,7 +182,7 @@ class BulkCreateTransactionsTool extends Tool
         return [
             'success' => true,
             'message' => 'Expense created successfully.',
-            'transaction' => $this->formatTransaction($transaction),
+            'transaction' => (new TransactionResource($transaction))->resolve(),
         ];
     }
 
@@ -212,7 +212,7 @@ class BulkCreateTransactionsTool extends Tool
         return [
             'success' => true,
             'message' => 'Income created successfully.',
-            'transaction' => $this->formatTransaction($transaction),
+            'transaction' => (new TransactionResource($transaction))->resolve(),
         ];
     }
 
@@ -243,31 +243,8 @@ class BulkCreateTransactionsTool extends Tool
         return [
             'success' => true,
             'message' => 'Transfer created successfully.',
-            'transfer_out' => $this->formatTransaction($transferOut),
-            'transfer_in' => $this->formatTransaction($transferIn),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function formatTransaction(Transaction $transaction): array
-    {
-        return [
-            'id' => $transaction->id,
-            'uuid' => $transaction->uuid,
-            'type' => $transaction->type->value,
-            'type_label' => $transaction->type->label(),
-            'amount' => $transaction->amount,
-            'amount_formatted' => $transaction->formatted_amount,
-            'currency' => $transaction->currency,
-            'description' => $transaction->description,
-            'transaction_date' => $transaction->transaction_date->format('Y-m-d'),
-            'category' => $transaction->category?->full_name,
-            'account' => $transaction->account?->name,
-            'tags' => $transaction->relationLoaded('tags')
-                ? $transaction->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->all()
-                : [],
+            'transfer_out' => (new TransactionResource($transferOut))->resolve(),
+            'transfer_in' => (new TransactionResource($transferIn))->resolve(),
         ];
     }
 

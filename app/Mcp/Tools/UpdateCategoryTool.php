@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Categories\UpdateCategoryAction;
+use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -65,19 +66,12 @@ class UpdateCategoryTool extends Tool
             return Response::error($e->getMessage());
         }
 
+        $category->refresh();
+
         return Response::text(json_encode([
             'success' => true,
             'message' => "Category \"{$category->name}\" updated successfully.",
-            'category' => [
-                'id' => $category->id,
-                'uuid' => $category->uuid,
-                'name' => $category->name,
-                'full_name' => $category->full_name,
-                'type' => $category->type->value,
-                'parent_id' => $category->parent_id,
-                'icon' => $category->icon,
-                'color' => $category->color,
-            ],
+            'category' => (new CategoryResource($category))->resolve(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

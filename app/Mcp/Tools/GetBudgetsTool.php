@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -46,27 +47,19 @@ class GetBudgetsTool extends Tool
                 ? min(100, round(($spent / $totalBudgeted) * 100, 2))
                 : 0;
 
-            return [
-                'id' => $budget->id,
-                'uuid' => $budget->uuid,
-                'name' => $budget->name,
-                'description' => $budget->description,
-                'currency' => $budget->currency,
-                'frequency' => $budget->frequency,
-                'anchor_date' => $budget->anchor_date->format('Y-m-d'),
-                'ends_at' => $budget->ends_at?->format('Y-m-d'),
-                'is_active' => $budget->is_active,
-                'total_budgeted' => $totalBudgeted,
-                'current_cycle' => [
-                    'start' => $cycleStart->toDateString(),
-                    'end' => $cycleEnd->toDateString(),
-                    'spent' => $spent,
-                    'remaining' => $remaining,
-                    'spent_percentage' => $percentage,
-                    'remaining_percentage' => round(100 - $percentage, 2),
-                ],
-                'items_count' => $budget->items->count(),
+            $budgetData = (new BudgetResource($budget))->resolve();
+            unset($budgetData['items']);
+            $budgetData['items_count'] = $budget->items->count();
+            $budgetData['current_cycle'] = [
+                'start' => $cycleStart->toDateString(),
+                'end' => $cycleEnd->toDateString(),
+                'spent' => $spent,
+                'remaining' => $remaining,
+                'spent_percentage' => $percentage,
+                'remaining_percentage' => round(100 - $percentage, 2),
             ];
+
+            return $budgetData;
         });
 
         return Response::text(json_encode([

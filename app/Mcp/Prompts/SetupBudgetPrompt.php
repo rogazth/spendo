@@ -38,14 +38,13 @@ class SetupBudgetPrompt extends Prompt
 
                 Follow these steps in order:
 
-                1. **Check existing setup**: Call GetAccountsTool, GetInstrumentsTool, and GetCategoriesTool to see what already exists.
+                1. **Check existing setup**: Call GetAccountsTool and GetCategoriesTool to see what already exists.
 
                 2. **Verify prerequisites**: The user needs at least:
                    - One active account
-                   - One active instrument (bank account or card)
                    - Expense categories for each budget line item
 
-                3. **Create missing entities**: If any accounts, instruments, or categories are missing, ask the user what to create and use the appropriate Create tools.
+                3. **Create missing entities**: If any accounts or categories are missing, ask the user what to create and use the appropriate Create tools.
 
                 4. **Collect budget items**: Ask the user which expense categories to include and the monthly cap for each. Amounts should be in major currency units (e.g., 572000 for 572,000 CLP).
 

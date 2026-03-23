@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -108,34 +109,7 @@ class GetTransactionsTool extends Tool
             ->take($perPage)
             ->get();
 
-        $result = $transactions->map(fn ($t) => [
-            'id' => $t->id,
-            'uuid' => $t->uuid,
-            'type' => $t->type->value,
-            'type_label' => $t->type->label(),
-            'amount' => $t->amount,
-            'amount_formatted' => $t->formatted_amount,
-            'currency' => $t->currency,
-            'description' => $t->description,
-            'notes' => $t->notes,
-            'exclude_from_budget' => $t->exclude_from_budget,
-            'transaction_date' => $t->transaction_date->format('Y-m-d'),
-            'category' => $t->category ? [
-                'id' => $t->category->id,
-                'uuid' => $t->category->uuid,
-                'name' => $t->category->full_name,
-                'type' => $t->category->type->value,
-            ] : null,
-            'account' => $t->account ? [
-                'id' => $t->account->id,
-                'uuid' => $t->account->uuid,
-                'name' => $t->account->name,
-            ] : null,
-            'tags' => $t->tags->map(fn ($tag) => [
-                'id' => $tag->id,
-                'name' => $tag->name,
-            ])->all(),
-        ]);
+        $result = TransactionResource::collection($transactions)->resolve();
 
         return Response::text(json_encode([
             'totals' => [
@@ -149,7 +123,7 @@ class GetTransactionsTool extends Tool
                 'per_page' => $perPage,
                 'total_pages' => (int) ceil($totalCount / $perPage),
             ],
-            'count' => $result->count(),
+            'count' => count($result),
             'transactions' => $result,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }

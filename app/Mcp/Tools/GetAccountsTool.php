@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Http\Resources\AccountResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -41,20 +42,10 @@ class GetAccountsTool extends Tool
 
         $accounts = $query->orderBy('sort_order')->orderBy('name')->get();
 
-        $result = $accounts->map(fn ($account) => [
-            'id' => $account->id,
-            'uuid' => $account->uuid,
-            'name' => $account->name,
-            'currency' => $account->currency,
-            'current_balance' => $account->current_balance,
-            'current_balance_formatted' => '$'.number_format($account->current_balance, 0, ',', '.'),
-            'color' => $account->color,
-            'icon' => $account->icon,
-            'is_active' => $account->is_active,
-        ]);
+        $result = AccountResource::collection($accounts)->resolve();
 
         return Response::text(json_encode([
-            'count' => $result->count(),
+            'count' => count($result),
             'accounts' => $result,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }

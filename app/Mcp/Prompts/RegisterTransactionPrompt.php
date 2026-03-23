@@ -40,11 +40,10 @@ class RegisterTransactionPrompt extends Prompt
 
                 Follow these steps:
 
-                1. **Parse the request**: Extract transaction type, amount, category, payment method, account, and date from the description.
+                1. **Parse the request**: Extract transaction type, amount, category, account, and date from the description.
 
                 2. **Resolve IDs**: Call the appropriate Get tools to find matching IDs:
                    - GetCategoriesTool for the category
-                   - GetInstrumentsTool for the instrument (card or bank account used)
                    - GetAccountsTool for the account
                    If ambiguous, ask the user to clarify.
 

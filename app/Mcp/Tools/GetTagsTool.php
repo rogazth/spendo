@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Http\Resources\TagResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -26,14 +27,11 @@ class GetTagsTool extends Tool
 
         $tags = $user->tags()->orderBy('name')->get();
 
+        $result = TagResource::collection($tags)->resolve();
+
         return Response::text(json_encode([
-            'total_count' => $tags->count(),
-            'tags' => $tags->map(fn ($tag) => [
-                'id' => $tag->id,
-                'uuid' => $tag->uuid,
-                'name' => $tag->name,
-                'color' => $tag->color,
-            ])->values(),
+            'total_count' => count($result),
+            'tags' => $result,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

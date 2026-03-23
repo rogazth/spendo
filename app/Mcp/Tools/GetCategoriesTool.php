@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\CategoryType;
+use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -57,7 +58,7 @@ class GetCategoriesTool extends Tool
             ->orderBy('name')
             ->get();
 
-        $result = $categories->map(fn ($category) => $this->formatCategory($category));
+        $result = collect(CategoryResource::collection($categories)->resolve());
 
         // Group by type for easier reading
         $grouped = [
@@ -70,27 +71,6 @@ class GetCategoriesTool extends Tool
             'total_count' => $result->count(),
             'categories_by_type' => $grouped,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function formatCategory(Category $category): array
-    {
-        return [
-            'id' => $category->id,
-            'uuid' => $category->uuid,
-            'name' => $category->name,
-            'full_name' => $category->full_name,
-            'type' => $category->type->value,
-            'type_label' => $category->type->label(),
-            'icon' => $category->icon,
-            'color' => $category->color,
-            'is_system' => $category->is_system,
-            'children' => $category->relationLoaded('children')
-                ? $category->children->map(fn ($c) => $this->formatCategory($c))->values()
-                : [],
-        ];
     }
 
     /**

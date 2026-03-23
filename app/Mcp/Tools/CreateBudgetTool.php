@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Budgets\CreateBudgetAction;
+use App\Http\Resources\BudgetResource;
 use App\Models\Category;
 use App\Models\Currency;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -88,26 +89,13 @@ class CreateBudgetTool extends Tool
 
         $budget->load('items.category');
 
-        $items = $budget->items->map(fn ($item) => [
-            'category_id' => $item->category_id,
-            'category_name' => $item->category?->name ?? 'Unknown',
-            'amount' => $item->amount,
-        ]);
+        $budgetData = (new BudgetResource($budget))->resolve();
+        $budgetData['items_count'] = $budget->items->count();
 
         return Response::text(json_encode([
             'success' => true,
             'message' => "Budget \"{$budget->name}\" created successfully.",
-            'budget' => [
-                'id' => $budget->id,
-                'uuid' => $budget->uuid,
-                'name' => $budget->name,
-                'currency' => $budget->currency,
-                'frequency' => $budget->frequency,
-                'anchor_date' => $budget->anchor_date->format('Y-m-d'),
-                'total_budgeted' => $budget->total_budgeted,
-                'items_count' => $items->count(),
-                'items' => $items,
-            ],
+            'budget' => $budgetData,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

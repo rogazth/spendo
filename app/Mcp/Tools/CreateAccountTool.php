@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Accounts\CreateAccountAction;
+use App\Http\Resources\AccountResource;
 use App\Models\Currency;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -57,15 +58,7 @@ class CreateAccountTool extends Tool
         return Response::text(json_encode([
             'success' => true,
             'message' => "Account \"{$account->name}\" created successfully.",
-            'account' => [
-                'id' => $account->id,
-                'uuid' => $account->uuid,
-                'name' => $account->name,
-                'currency' => $account->currency,
-                'current_balance' => $account->current_balance,
-                'is_active' => $account->is_active,
-                'is_default' => $account->is_default,
-            ],
+            'account' => (new AccountResource($account))->resolve(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
