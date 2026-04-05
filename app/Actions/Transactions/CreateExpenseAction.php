@@ -2,13 +2,11 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\CategoryType;
 use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use InvalidArgumentException;
 
 class CreateExpenseAction
 {
@@ -31,9 +29,6 @@ class CreateExpenseAction
                 throw new ModelNotFoundException('Category not found or not accessible.');
             }
 
-            if ($category->type !== CategoryType::Expense) {
-                throw new InvalidArgumentException('Category must be of type expense.');
-            }
         }
 
         $transaction = Transaction::create([

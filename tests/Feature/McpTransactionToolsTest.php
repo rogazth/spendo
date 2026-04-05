@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\CategoryType;
 use App\Mcp\Servers\SpendoServer;
 use App\Mcp\Tools\BulkCreateTransactionsTool;
 use App\Mcp\Tools\CreateTransactionTool;
@@ -24,7 +23,6 @@ describe('CreateTransactionTool - Transfer', function () {
         Category::factory()->create([
             'user_id' => null,
             'name' => 'Transferencia',
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
 
@@ -64,7 +62,6 @@ describe('CreateTransactionTool - Transfer', function () {
         Category::factory()->create([
             'user_id' => null,
             'name' => 'Transferencia',
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
 
@@ -329,7 +326,6 @@ describe('BulkCreateTransactionsTool', function () {
         Category::factory()->create([
             'user_id' => null,
             'name' => 'Transferencia',
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
 

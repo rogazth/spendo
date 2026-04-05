@@ -34,6 +34,7 @@ class CreateAccountTool extends Tool
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'emoji' => ['nullable', 'string', 'max:50'],
             'is_default' => ['nullable', 'boolean'],
+            'include_in_budget' => ['nullable', 'boolean'],
         ], [
             'name.required' => 'Account name is required.',
             'name.max' => 'Account name cannot exceed 255 characters.',
@@ -79,6 +80,8 @@ class CreateAccountTool extends Tool
                 ->description('Emoji (e.g., 🏦, 💳, 💵)'),
             'is_default' => $schema->boolean()
                 ->description('Set as default account'),
+            'include_in_budget' => $schema->boolean()
+                ->description('Include this account balance in budget calculations. Set to false for savings or investment accounts (default: true)'),
         ];
     }
 }

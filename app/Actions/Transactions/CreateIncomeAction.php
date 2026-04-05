@@ -2,13 +2,11 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\CategoryType;
 use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use InvalidArgumentException;
 
 class CreateIncomeAction
 {
@@ -31,9 +29,6 @@ class CreateIncomeAction
                 throw new ModelNotFoundException('Category not found or not accessible.');
             }
 
-            if ($category->type !== CategoryType::Income) {
-                throw new InvalidArgumentException('Category must be of type income.');
-            }
         }
 
         $transaction = Transaction::create([

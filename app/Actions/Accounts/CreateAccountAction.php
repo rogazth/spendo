@@ -27,6 +27,7 @@ class CreateAccountAction
                 'emoji' => $data['emoji'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
                 'is_default' => $isDefault,
+                'include_in_budget' => $data['include_in_budget'] ?? true,
             ]);
 
             $initialBalance = $data['initial_balance'] ?? 0;

@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\CategoryType;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -19,8 +18,8 @@ class GetCategoriesTool extends Tool
      */
     protected string $description = <<<'MARKDOWN'
         Get all categories organized hierarchically.
-        Categories are used to classify transactions as expenses, income, or system categories.
-        System categories (Balance Inicial, Transferencia, etc.) cannot be modified.
+        Any category can be used for any transaction type (expense, income, transfer).
+        System categories (Balance Inicial, Transferencia, etc.) are shown separately and cannot be modified.
     MARKDOWN;
 
     /**
@@ -34,7 +33,7 @@ class GetCategoriesTool extends Tool
             return Response::error('User not authenticated.');
         }
 
-        $query = Category::query()
+        $categories = Category::query()
             ->where(function ($q) use ($user) {
                 $q->whereNull('user_id')
                     ->orWhere('user_id', $user->id);
@@ -45,31 +44,21 @@ class GetCategoriesTool extends Tool
                         ->orWhere('user_id', $user->id);
                 });
             }])
-            ->whereNull('parent_id');
-
-        // Filter by type if provided
-        if ($type = $request->get('type')) {
-            $query->where('type', $type);
-        }
-
-        $categories = $query
-            ->orderBy('type')
+            ->whereNull('parent_id')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
         $result = collect(CategoryResource::collection($categories)->resolve());
 
-        // Group by type for easier reading
         $grouped = [
-            'expense' => $result->where('type', CategoryType::Expense->value)->values(),
-            'income' => $result->where('type', CategoryType::Income->value)->values(),
-            'system' => $result->where('type', CategoryType::System->value)->values(),
+            'categories' => $result->where('is_system', false)->values(),
+            'system' => $result->where('is_system', true)->values(),
         ];
 
         return Response::text(json_encode([
             'total_count' => $result->count(),
-            'categories_by_type' => $grouped,
+            'categories_by_group' => $grouped,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
@@ -80,10 +69,6 @@ class GetCategoriesTool extends Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return [
-            'type' => $schema->string()
-                ->description('Filter by category type: expense, income, system')
-                ->enum(['expense', 'income', 'system']),
-        ];
+        return [];
     }
 }

@@ -10,8 +10,7 @@ class CreateCategoryAction
     public function handle(User $user, array $data): Category
     {
         if (! empty($data['parent_id'])) {
-            $parent = Category::findOrFail($data['parent_id']);
-            $data['type'] = $parent->type->value;
+            Category::findOrFail($data['parent_id']);
         }
 
         return Category::create([

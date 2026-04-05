@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\CategoryType;
 use App\Mcp\Servers\SpendoServer;
 use App\Mcp\Tools\CreateAccountTool;
 use App\Mcp\Tools\CreateBudgetTool;
@@ -51,7 +50,6 @@ describe('CreateAccountTool', function () {
         Category::factory()->create([
             'user_id' => null,
             'name' => 'Balance Inicial',
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
 
@@ -142,12 +140,11 @@ describe('UpdateAccountTool', function () {
 // ─── CreateCategoryTool ─────────────────────────────────────────────────────
 
 describe('CreateCategoryTool', function () {
-    it('creates an expense category', function () {
+    it('creates a category', function () {
         $user = User::factory()->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateCategoryTool::class, [
             'name' => 'Groceries',
-            'type' => 'expense',
         ]);
 
         $response->assertOk()->assertSee('Groceries');
@@ -155,13 +152,12 @@ describe('CreateCategoryTool', function () {
         $this->assertDatabaseHas('categories', [
             'user_id' => $user->id,
             'name' => 'Groceries',
-            'type' => 'expense',
         ]);
     });
 
     it('creates a subcategory', function () {
         $user = User::factory()->create();
-        $parent = Category::factory()->expense()->for($user)->create(['name' => 'Food']);
+        $parent = Category::factory()->for($user)->create(['name' => 'Food']);
 
         $response = SpendoServer::actingAs($user)->tool(CreateCategoryTool::class, [
             'name' => 'Restaurants',
@@ -173,30 +169,18 @@ describe('CreateCategoryTool', function () {
         $this->assertDatabaseHas('categories', [
             'name' => 'Restaurants',
             'parent_id' => $parent->id,
-            'type' => 'expense', // inherited from parent
         ]);
     });
 
     it('rejects duplicate category names', function () {
         $user = User::factory()->create();
-        Category::factory()->expense()->for($user)->create(['name' => 'Food']);
+        Category::factory()->for($user)->create(['name' => 'Food']);
 
         $response = SpendoServer::actingAs($user)->tool(CreateCategoryTool::class, [
             'name' => 'Food',
-            'type' => 'expense',
         ]);
 
         $response->assertHasErrors(['already exists']);
-    });
-
-    it('requires type when no parent provided', function () {
-        $user = User::factory()->create();
-
-        $response = SpendoServer::actingAs($user)->tool(CreateCategoryTool::class, [
-            'name' => 'Orphan',
-        ]);
-
-        $response->assertHasErrors(['type']);
     });
 });
 
@@ -220,7 +204,6 @@ describe('UpdateCategoryTool', function () {
         $system = Category::factory()->create([
             'user_id' => null,
             'name' => 'System Cat',
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
 
@@ -237,7 +220,6 @@ describe('UpdateCategoryTool', function () {
         $global = Category::factory()->create([
             'user_id' => null,
             'name' => 'Shared Category',
-            'type' => CategoryType::Expense,
             'is_system' => false,
         ]);
 
@@ -508,20 +490,16 @@ describe('GetCategoriesTool - Cross-user isolation', function () {
         $globalParent = Category::factory()->create([
             'user_id' => null,
             'parent_id' => null,
-            'type' => CategoryType::Expense,
             'is_system' => false,
             'name' => 'SharedParent',
         ]);
 
-        $childA = Category::factory()->for($userA)->create([
+        Category::factory()->for($userA)->create([
             'parent_id' => $globalParent->id,
-            'type' => CategoryType::Expense,
             'name' => 'UserA Private',
         ]);
 
-        $response = SpendoServer::actingAs($userB)->tool(GetCategoriesTool::class, [
-            'type' => 'expense',
-        ]);
+        $response = SpendoServer::actingAs($userB)->tool(GetCategoriesTool::class);
 
         $response->assertOk()
             ->assertSee('SharedParent')

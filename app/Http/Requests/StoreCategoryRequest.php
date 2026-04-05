@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\CategoryType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -34,13 +33,6 @@ class StoreCategoryRequest extends FormRequest
                         ->whereNull('deleted_at');
                 }),
             ],
-            'type' => [
-                'required_without:parent_id',
-                'nullable',
-                'string',
-                Rule::enum(CategoryType::class),
-                Rule::notIn([CategoryType::System->value]),
-            ],
             'parent_id' => [
                 'nullable',
                 'integer',
@@ -68,9 +60,6 @@ class StoreCategoryRequest extends FormRequest
             'name.required' => 'El nombre es requerido.',
             'name.max' => 'El nombre no puede exceder 255 caracteres.',
             'name.unique' => 'Ya existe una categoría con este nombre.',
-            'type.required_without' => 'El tipo es requerido cuando no se selecciona una categoría padre.',
-            'type.enum' => 'El tipo de categoría no es válido.',
-            'type.not_in' => 'No puedes crear categorías de sistema.',
             'parent_id.exists' => 'La categoría padre seleccionada no es válida.',
             'color.regex' => 'El color debe ser un código hexadecimal válido (ej: #FF5733).',
             'sort_order.integer' => 'El orden debe ser un número entero.',

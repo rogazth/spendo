@@ -13,8 +13,7 @@ class UpdateCategoryAction
         }
 
         if (! empty($data['parent_id'])) {
-            $parent = Category::findOrFail($data['parent_id']);
-            $data['type'] = $parent->type->value;
+            Category::findOrFail($data['parent_id']);
         }
 
         $category->update($data);

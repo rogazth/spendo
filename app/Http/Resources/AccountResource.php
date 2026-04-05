@@ -25,6 +25,7 @@ class AccountResource extends JsonResource
             'emoji' => $this->emoji,
             'is_active' => $this->is_active,
             'is_default' => $this->is_default,
+            'include_in_budget' => $this->include_in_budget,
             'sort_order' => $this->sort_order,
             'transactions' => TransactionResource::collection($this->whenLoaded('transactions')),
             'created_at' => $this->created_at,

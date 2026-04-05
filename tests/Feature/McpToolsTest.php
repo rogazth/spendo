@@ -112,20 +112,6 @@ describe('GetCategoriesTool', function () {
             ->assertSee('Salary');
     });
 
-    it('filters categories by type', function () {
-        $user = User::factory()->create();
-        Category::factory()->expense()->for($user)->create(['name' => 'Food']);
-        Category::factory()->income()->for($user)->create(['name' => 'Salary']);
-
-        $response = SpendoServer::actingAs($user)->tool(GetCategoriesTool::class, [
-            'type' => 'expense',
-        ]);
-
-        $response->assertOk()
-            ->assertSee('Food')
-            ->assertDontSee('Salary');
-    });
-
     it('returns error when user is not authenticated', function () {
         $response = SpendoServer::tool(GetCategoriesTool::class);
 

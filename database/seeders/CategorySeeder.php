@@ -2,18 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Enums\CategoryType;
 use App\Models\Category;
 use Illuminate\Database\Seeder;
 
 class CategorySeeder extends Seeder
 {
     /**
-     * Expense categories with their children.
+     * Categories with their children.
      *
      * @var array<int, array{name: string, emoji: string, color: string, children?: array<int, array{name: string, emoji: string, color: string}>}>
      */
-    private array $expenseCategories = [
+    private array $categories = [
         [
             'name' => 'Servicios',
             'emoji' => '🏠',
@@ -177,22 +176,6 @@ class CategorySeeder extends Seeder
             ],
         ],
         [
-            'name' => 'Otros Gastos',
-            'emoji' => '🏷️',
-            'color' => '#6B7280',
-            'children' => [
-                ['name' => 'Desconocido', 'emoji' => '❓', 'color' => '#6B7280'],
-            ],
-        ],
-    ];
-
-    /**
-     * Income categories.
-     *
-     * @var array<int, array{name: string, emoji: string, color: string, children?: array<int, array{name: string, emoji: string, color: string}>}>
-     */
-    private array $incomeCategories = [
-        [
             'name' => 'Ingresos',
             'emoji' => '💵',
             'color' => '#22C55E',
@@ -216,11 +199,6 @@ class CategorySeeder extends Seeder
                 ['name' => 'Intereses', 'emoji' => '💱', 'color' => '#10B981'],
                 ['name' => 'Ganancias', 'emoji' => '💹', 'color' => '#22C55E'],
             ],
-        ],
-        [
-            'name' => 'Arriendo',
-            'emoji' => '🏠',
-            'color' => '#F59E0B',
         ],
         [
             'name' => 'Reembolsos',
@@ -258,6 +236,14 @@ class CategorySeeder extends Seeder
             ],
         ],
         [
+            'name' => 'Otros Gastos',
+            'emoji' => '🏷️',
+            'color' => '#6B7280',
+            'children' => [
+                ['name' => 'Desconocido', 'emoji' => '❓', 'color' => '#6B7280'],
+            ],
+        ],
+        [
             'name' => 'Otros Ingresos',
             'emoji' => '🏷️',
             'color' => '#6B7280',
@@ -278,8 +264,7 @@ class CategorySeeder extends Seeder
 
     public function run(): void
     {
-        $this->createCategories($this->expenseCategories, CategoryType::Expense);
-        $this->createCategories($this->incomeCategories, CategoryType::Income);
+        $this->createCategories($this->categories);
 
         foreach ($this->systemCategories as $categoryData) {
             Category::updateOrCreate(
@@ -288,7 +273,6 @@ class CategorySeeder extends Seeder
                     ...$categoryData,
                     'user_id' => null,
                     'parent_id' => null,
-                    'type' => CategoryType::System,
                     'is_system' => true,
                 ]
             );
@@ -298,7 +282,7 @@ class CategorySeeder extends Seeder
     /**
      * @param  array<int, array{name: string, emoji: string, color: string, children?: array<int, array{name: string, emoji: string, color: string}>}>  $categories
      */
-    private function createCategories(array $categories, CategoryType $type): void
+    private function createCategories(array $categories): void
     {
         foreach ($categories as $categoryData) {
             $children = $categoryData['children'] ?? [];
@@ -310,7 +294,6 @@ class CategorySeeder extends Seeder
                     ...$categoryData,
                     'user_id' => null,
                     'parent_id' => null,
-                    'type' => $type,
                     'is_system' => false,
                 ]
             );
@@ -322,7 +305,6 @@ class CategorySeeder extends Seeder
                         ...$childData,
                         'user_id' => null,
                         'parent_id' => $parent->id,
-                        'type' => $type,
                         'is_system' => false,
                     ]
                 );

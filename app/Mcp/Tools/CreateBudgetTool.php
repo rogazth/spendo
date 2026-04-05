@@ -70,11 +70,11 @@ class CreateBudgetTool extends Tool
                 $q->whereNull('user_id')
                     ->orWhere('user_id', $user->id);
             })
-            ->where('type', 'expense')
+            ->where('is_system', false)
             ->get(['id', 'parent_id', 'name']);
 
         if ($categories->count() !== $categoryIds->count()) {
-            return Response::error('Some categories were not found or are not expense categories. Use GetCategoriesTool to find valid expense categories.');
+            return Response::error('Some categories were not found or are system categories. Use GetCategoriesTool to find valid categories.');
         }
 
         // Check parent+child overlap

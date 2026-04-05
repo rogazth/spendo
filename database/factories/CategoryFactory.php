@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\CategoryType;
 use App\Models\Category;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -36,7 +35,6 @@ class CategoryFactory extends Factory
             'user_id' => null,
             'parent_id' => null,
             'name' => $category['name'],
-            'type' => CategoryType::Expense,
             'emoji' => $category['emoji'],
             'color' => $category['color'],
             'is_system' => false,
@@ -44,17 +42,16 @@ class CategoryFactory extends Factory
         ];
     }
 
+    /** @deprecated type is no longer used; kept for test backward compatibility */
     public function expense(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'type' => CategoryType::Expense,
-        ]);
+        return $this->state(fn (array $attributes) => []);
     }
 
+    /** @deprecated type is no longer used; kept for test backward compatibility */
     public function income(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => CategoryType::Income,
             'name' => fake()->randomElement(['Sueldo', 'Freelance', 'Inversiones', 'Arriendo', 'Reembolsos', 'Otros Ingresos']),
             'emoji' => '💼',
             'color' => '#10B981',
@@ -65,7 +62,6 @@ class CategoryFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'user_id' => null,
-            'type' => CategoryType::System,
             'is_system' => true,
         ]);
     }
@@ -90,7 +86,6 @@ class CategoryFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'name' => 'Alimentación',
-            'type' => CategoryType::Expense,
             'emoji' => '🛒',
             'color' => '#EF4444',
         ]);
@@ -100,7 +95,6 @@ class CategoryFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'name' => 'Transporte',
-            'type' => CategoryType::Expense,
             'emoji' => '🚗',
             'color' => '#3B82F6',
         ]);
@@ -110,7 +104,6 @@ class CategoryFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'name' => 'Restaurantes',
-            'type' => CategoryType::Expense,
             'emoji' => '🍽️',
             'color' => '#F97316',
         ]);

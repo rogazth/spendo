@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Categories\CreateCategoryAction;
-use App\Enums\CategoryType;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -14,11 +13,11 @@ use Laravel\Mcp\Server\Tool;
 class CreateCategoryTool extends Tool
 {
     protected string $description = <<<'MARKDOWN'
-        Create a new expense or income category.
+        Create a new category for classifying transactions.
 
-        **Types**: expense, income (cannot create system categories)
+        **Any category can be used for any transaction type** (expense, income, transfer).
         **Subcategories**: Provide parent_id to create a subcategory. The parent must be a top-level, non-system category.
-        **Subcategory type**: Automatically inherited from the parent category.
+        **Note**: System categories cannot be created via this tool.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -31,13 +30,11 @@ class CreateCategoryTool extends Tool
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'type' => ['nullable', 'string', 'in:expense,income'],
             'parent_id' => ['nullable', 'integer'],
             'emoji' => ['nullable', 'string', 'max:100'],
             'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ], [
             'name.required' => 'Category name is required.',
-            'type.in' => 'Category type must be expense or income.',
         ]);
 
         // Check for duplicate name
@@ -52,8 +49,6 @@ class CreateCategoryTool extends Tool
             return Response::error("A category named \"{$validated['name']}\" already exists.");
         }
 
-        $categoryType = isset($validated['type']) ? CategoryType::from($validated['type']) : null;
-
         if (! empty($validated['parent_id'])) {
             $parentCategory = Category::where(function ($q) use ($user) {
                 $q->whereNull('user_id')
@@ -66,13 +61,10 @@ class CreateCategoryTool extends Tool
             if (! $parentCategory) {
                 return Response::error('Parent category not found or not valid (must be a top-level, non-system category).');
             }
-        } elseif ($categoryType === null) {
-            return Response::error('Category type (expense or income) is required when not creating a subcategory.');
         }
 
         $category = app(CreateCategoryAction::class)->handle($user, [
             'name' => $validated['name'],
-            'type' => $categoryType?->value,
             'parent_id' => $validated['parent_id'] ?? null,
             'emoji' => $validated['emoji'] ?? '🏷️',
             'color' => $validated['color'] ?? '#6B7280',
@@ -90,11 +82,8 @@ class CreateCategoryTool extends Tool
     {
         return [
             'name' => $schema->string()
-                ->description('Category name (e.g., "Alimentación", "Sueldo")')
+                ->description('Category name (e.g., "Alimentación", "Sueldo", "Reembolsos")')
                 ->required(),
-            'type' => $schema->string()
-                ->description('Category type. Required for top-level categories. Inherited from parent for subcategories.')
-                ->enum(['expense', 'income']),
             'parent_id' => $schema->integer()
                 ->description('Parent category ID for subcategories. Use GetCategoriesTool to find parent categories.'),
             'emoji' => $schema->string()

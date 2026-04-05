@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Actions\Categories\CreateCategoryAction;
 use App\Actions\Categories\DeleteCategoryAction;
 use App\Actions\Categories\UpdateCategoryAction;
-use App\Enums\CategoryType;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
@@ -32,50 +31,34 @@ class CategoryController extends Controller
             ->orderBy('name')
             ->get();
 
-        $expenseCategories = $categories->filter(fn ($c) => $c->type === CategoryType::Expense)->values();
-        $incomeCategories = $categories->filter(fn ($c) => $c->type === CategoryType::Income)->values();
+        $userCategories = $categories->filter(fn ($c) => ! $c->is_system)->values();
+        $systemCategories = $categories->filter(fn ($c) => $c->is_system)->values();
 
-        $parentCategories = $categories->filter(fn ($c) => ! $c->is_system)->map(fn ($c) => [
+        $parentCategories = $userCategories->map(fn ($c) => [
             'id' => $c->id,
             'uuid' => $c->uuid,
             'name' => $c->name,
-            'type' => $c->type->value,
             'color' => $c->color,
         ])->values();
 
+        $mapCategory = fn ($c) => [
+            'id' => $c->id,
+            'uuid' => $c->uuid,
+            'name' => $c->name,
+            'color' => $c->color,
+            'is_system' => $c->is_system,
+            'children' => $c->children->map(fn ($child) => [
+                'id' => $child->id,
+                'uuid' => $child->uuid,
+                'name' => $child->name,
+                'color' => $child->color,
+                'is_system' => $child->is_system,
+            ])->toArray(),
+        ];
+
         return Inertia::render('categories/index', [
-            'expenseCategories' => $expenseCategories->map(fn ($c) => [
-                'id' => $c->id,
-                'uuid' => $c->uuid,
-                'name' => $c->name,
-                'type' => $c->type->value,
-                'color' => $c->color,
-                'is_system' => $c->is_system,
-                'children' => $c->children->map(fn ($child) => [
-                    'id' => $child->id,
-                    'uuid' => $child->uuid,
-                    'name' => $child->name,
-                    'type' => $child->type->value,
-                    'color' => $child->color,
-                    'is_system' => $child->is_system,
-                ])->toArray(),
-            ])->toArray(),
-            'incomeCategories' => $incomeCategories->map(fn ($c) => [
-                'id' => $c->id,
-                'uuid' => $c->uuid,
-                'name' => $c->name,
-                'type' => $c->type->value,
-                'color' => $c->color,
-                'is_system' => $c->is_system,
-                'children' => $c->children->map(fn ($child) => [
-                    'id' => $child->id,
-                    'uuid' => $child->uuid,
-                    'name' => $child->name,
-                    'type' => $child->type->value,
-                    'color' => $child->color,
-                    'is_system' => $child->is_system,
-                ])->toArray(),
-            ])->toArray(),
+            'categories' => $userCategories->map($mapCategory)->toArray(),
+            'systemCategories' => $systemCategories->map($mapCategory)->toArray(),
             'parentCategories' => $parentCategories->toArray(),
         ]);
     }

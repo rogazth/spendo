@@ -2,7 +2,6 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\CategoryType;
 use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
@@ -35,7 +34,6 @@ class CreateTransferAction
         }
 
         $transferCategory = Category::where('is_system', true)
-            ->where('type', CategoryType::System)
             ->where('name', 'Transferencia')
             ->first();
 

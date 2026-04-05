@@ -4,7 +4,6 @@ export type * from './ui';
 export type * from './models';
 export {
     TRANSACTION_TYPES,
-    CATEGORY_TYPES,
     INSTRUMENT_TYPES,
     BUDGET_FREQUENCIES,
 } from './models';

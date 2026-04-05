@@ -85,7 +85,7 @@ class StoreBudgetRequest extends FormRequest
                     $query->whereNull('user_id')
                         ->orWhere('user_id', $user->id);
                 })
-                ->where('type', 'expense')
+                ->where('is_system', false)
                 ->get(['id', 'parent_id']);
 
             if ($categories->count() !== $selectedCategoryIds->count()) {

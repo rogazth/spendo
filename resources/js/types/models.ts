@@ -9,14 +9,6 @@ export const TRANSACTION_TYPES = [
 ] as const;
 export type TransactionType = typeof TRANSACTION_TYPES[number]['id'];
 
-// Category types
-export const CATEGORY_TYPES = [
-    { id: 'expense', label: 'Gasto' },
-    { id: 'income', label: 'Ingreso' },
-    { id: 'system', label: 'Sistema' },
-] as const;
-export type CategoryType = typeof CATEGORY_TYPES[number]['id'];
-
 // Instrument types
 export const INSTRUMENT_TYPES = [
     { id: 'checking', label: 'Cuenta Corriente' },

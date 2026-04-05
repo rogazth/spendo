@@ -53,11 +53,11 @@ class BudgetController extends Controller
                 $query->whereNull('user_id')
                     ->orWhere('user_id', Auth::id());
             })
-            ->where('type', 'expense')
+            ->where('is_system', false)
             ->whereNull('parent_id')
             ->with([
                 'children' => fn ($query) => $query
-                    ->where('type', 'expense')
+                    ->where('is_system', false)
                     ->orderBy('sort_order')
                     ->orderBy('name'),
             ])

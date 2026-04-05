@@ -21,6 +21,7 @@ class Account extends Model
         'emoji',
         'is_active',
         'is_default',
+        'include_in_budget',
         'sort_order',
     ];
 
@@ -29,6 +30,7 @@ class Account extends Model
         return [
             'is_active' => 'boolean',
             'is_default' => 'boolean',
+            'include_in_budget' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

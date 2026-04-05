@@ -2,7 +2,6 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\CategoryType;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
@@ -40,20 +39,12 @@ class UpdateTransactionAction
         }
 
         if (! empty($data['category_id'])) {
-            $expectedType = $transaction->type === \App\Enums\TransactionType::Income
-                ? CategoryType::Income
-                : CategoryType::Expense;
-
             $category = Category::where(function ($q) use ($user) {
                 $q->whereNull('user_id')->orWhere('user_id', $user->id);
             })->find($data['category_id']);
 
             if (! $category) {
                 throw new ModelNotFoundException('Category not found or not accessible.');
-            }
-
-            if ($category->type !== $expectedType) {
-                throw new InvalidArgumentException("Use a {$expectedType->value} category for this transaction type.");
             }
 
             $updates['category_id'] = $category->id;
