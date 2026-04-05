@@ -7,6 +7,8 @@ use App\Mcp\Tools\GetCategoriesTool;
 use App\Mcp\Tools\GetFinancialSummaryTool;
 use App\Mcp\Tools\GetTransactionsTool;
 use App\Models\Account;
+use App\Models\Budget;
+use App\Models\BudgetItem;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
@@ -96,6 +98,111 @@ describe('GetAccountsTool', function () {
         $response = SpendoServer::tool(GetAccountsTool::class);
 
         $response->assertHasErrors(['User not authenticated.']);
+    });
+
+    it('currency_summaries returns total_reserved and ready_to_assign keys', function () {
+        $user = User::factory()->create();
+        Account::factory()->for($user)->create();
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()
+            ->assertSee('total_reserved')
+            ->assertSee('ready_to_assign');
+    });
+
+    it('currency_summaries total_reserved reflects unspent budget amounts', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $category = Category::factory()->for($user)->create();
+        $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
+        BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
+
+        // Spend 40,000 — 60,000 remains reserved
+        Transaction::factory()->for($user)->create([
+            'type' => 'expense',
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'amount' => 40000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+            'exclude_from_budget' => false,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()->assertSee('"total_reserved": 60000');
+    });
+
+    it('currency_summaries total_reserved is zero when budget item is fully spent', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $category = Category::factory()->for($user)->create();
+        $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
+        BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
+
+        Transaction::factory()->for($user)->create([
+            'type' => 'expense',
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'amount' => 100000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+            'exclude_from_budget' => false,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()->assertSee('"total_reserved": 0');
+    });
+
+    it('currency_summaries total_reserved is zero when budget item is overspent', function () {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $category = Category::factory()->for($user)->create();
+        $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
+        BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
+
+        // Spend 150,000 — 50,000 over budget; reserved = max(0, 100k - 150k) = 0
+        Transaction::factory()->for($user)->create([
+            'type' => 'expense',
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'amount' => 150000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+            'exclude_from_budget' => false,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()->assertSee('"total_reserved": 0');
+    });
+
+    it('currency_summaries excludes include_in_budget=false accounts from budget_balance', function () {
+        $user = User::factory()->create();
+        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
+        Account::factory()->for($user)->excludedFromBudget()->create();
+        $category = Category::factory()->for($user)->create();
+        $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
+        BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 50000]);
+
+        // Income only on the included account → budget_balance = 200000
+        Transaction::factory()->for($user)->create([
+            'type' => 'income',
+            'account_id' => $includedAccount->id,
+            'category_id' => $category->id,
+            'amount' => 200000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()
+            ->assertSee('"budget_balance": 200000')
+            ->assertSee('"total_reserved": 50000')
+            ->assertSee('"ready_to_assign": 150000');
     });
 });
 

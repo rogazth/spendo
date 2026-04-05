@@ -20,7 +20,8 @@ class GetAccountsTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Get all user accounts with their current balances.
         Account balances reflect income and expenses only — settlements do not affect account balance.
-        Includes currency_summaries showing budget_balance, total_budgeted, and ready_to_assign per currency.
+        Includes currency_summaries showing budget_balance, total_reserved, and ready_to_assign per currency.
+        total_reserved = sum of unspent budget item amounts in the current cycle (max(0, budgeted - spent) per item).
         Accounts with include_in_budget=false (e.g. savings) are excluded from the budget summary.
         Optionally filter by active status.
     MARKDOWN;
@@ -58,7 +59,7 @@ class GetAccountsTool extends Tool
 
     /**
      * @param  \Illuminate\Database\Eloquent\Collection<int, \App\Models\Account>  $accounts
-     * @return array<string, array{budget_balance: float, total_budgeted: float, ready_to_assign: float}>
+     * @return array<string, array{budget_balance: float, total_reserved: float, ready_to_assign: float}>
      */
     private function buildCurrencySummaries(\App\Models\User $user, \Illuminate\Database\Eloquent\Collection $accounts): array
     {
@@ -134,7 +135,7 @@ class GetAccountsTool extends Tool
 
             $summaries[$currency] = [
                 'budget_balance' => $budgetBalance,
-                'total_budgeted' => $totalReserved,
+                'total_reserved' => $totalReserved,
                 'ready_to_assign' => $budgetBalance - $totalReserved,
             ];
         }
