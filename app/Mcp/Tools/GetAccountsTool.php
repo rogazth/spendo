@@ -62,24 +62,48 @@ class GetAccountsTool extends Tool
      */
     private function buildCurrencySummaries(\App\Models\User $user, \Illuminate\Database\Eloquent\Collection $accounts): array
     {
-        $today = CarbonImmutable::now()->toDateString();
+        $today = CarbonImmutable::now()->startOfDay();
 
-        // Sum of active budget item amounts per currency (raw per-cycle allocation)
         $activeBudgets = Budget::query()
             ->where('user_id', $user->id)
             ->where('is_active', true)
-            ->where('anchor_date', '<=', $today)
+            ->where('anchor_date', '<=', $today->toDateString())
             ->where(function ($q) use ($today) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>=', $today);
+                $q->whereNull('ends_at')->orWhere('ends_at', '>=', $today->toDateString());
             })
-            ->with('items')
+            ->with(['items.category.children'])
             ->get();
 
+        // For each active budget, use max(planned, actual_spent) so overspending is reflected.
         $budgetedPerCurrency = [];
         foreach ($activeBudgets as $budget) {
             $currency = $budget->currency;
-            $budgetedPerCurrency[$currency] = ($budgetedPerCurrency[$currency] ?? 0)
-                + $budget->total_budgeted;
+
+            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($today);
+
+            $categoryIds = $budget->items->flatMap(function ($item) {
+                $ids = [$item->category_id];
+                if ($item->category && $item->category->relationLoaded('children')) {
+                    $ids = array_merge($ids, $item->category->children->pluck('id')->all());
+                }
+
+                return $ids;
+            })->filter()->unique()->values()->all();
+
+            $actualSpent = 0;
+            if ($categoryIds !== []) {
+                $actualSpent = $user->transactions()
+                    ->where('type', 'expense')
+                    ->where('exclude_from_budget', false)
+                    ->whereDate('transaction_date', '>=', $cycleStart->toDateString())
+                    ->whereDate('transaction_date', '<=', $cycleEnd->toDateString())
+                    ->whereIn('category_id', $categoryIds)
+                    ->where('currency', $currency)
+                    ->sum('amount') / 100;
+            }
+
+            $effectiveBudgeted = max($budget->total_budgeted, $actualSpent);
+            $budgetedPerCurrency[$currency] = ($budgetedPerCurrency[$currency] ?? 0) + $effectiveBudgeted;
         }
 
         // Build per-currency summary using only include_in_budget accounts

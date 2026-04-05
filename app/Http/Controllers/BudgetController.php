@@ -32,7 +32,7 @@ class BudgetController extends Controller
             ->withQueryString();
 
         $budgets->getCollection()->transform(function (Budget $budget) use ($referenceDate) {
-            [$cycleStart, $cycleEnd] = $this->resolveCycleRange($budget, $referenceDate);
+            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
             $categoryIds = $this->collectBudgetCategoryIds($budget);
             $spent = $this->calculateBudgetSpent($budget, $cycleStart, $cycleEnd, $categoryIds);
             $totalBudgeted = $budget->total_budgeted;
@@ -177,51 +177,6 @@ class BudgetController extends Controller
         if ($budget->user_id !== Auth::id()) {
             abort(403);
         }
-    }
-
-    /**
-     * @return array{CarbonImmutable, CarbonImmutable}
-     */
-    private function resolveCycleRange(Budget $budget, CarbonImmutable $referenceDate): array
-    {
-        $anchorDate = CarbonImmutable::parse($budget->anchor_date)->startOfDay();
-        $effectiveReference = $referenceDate->startOfDay();
-        $budgetEndDate = $budget->ends_at
-            ? CarbonImmutable::parse($budget->ends_at)->startOfDay()
-            : null;
-
-        if ($budgetEndDate !== null && $effectiveReference->greaterThan($budgetEndDate)) {
-            $effectiveReference = $budgetEndDate;
-        }
-
-        if ($effectiveReference->lessThan($anchorDate)) {
-            $effectiveReference = $anchorDate;
-        }
-
-        $cycleStart = $anchorDate;
-        $cycleEnd = $anchorDate;
-
-        if (in_array($budget->frequency, ['weekly', 'biweekly'], true)) {
-            $stepInDays = $budget->frequency === 'weekly' ? 7 : 14;
-            $daysSinceAnchor = max(0, $anchorDate->diffInDays($effectiveReference, false));
-            $cycleIndex = intdiv($daysSinceAnchor, $stepInDays);
-            $cycleStart = $anchorDate->addDays($cycleIndex * $stepInDays);
-            $cycleEnd = $cycleStart->addDays($stepInDays - 1);
-        } else {
-            $stepInMonths = $budget->frequency === 'bimonthly' ? 2 : 1;
-            $monthsSinceAnchor = max(0, $anchorDate->diffInMonths($effectiveReference, false));
-            $cycleIndex = intdiv($monthsSinceAnchor, $stepInMonths);
-            $cycleStart = $anchorDate->addMonthsNoOverflow($cycleIndex * $stepInMonths);
-            $cycleEnd = $cycleStart
-                ->addMonthsNoOverflow($stepInMonths)
-                ->subDay();
-        }
-
-        if ($budgetEndDate !== null && $cycleEnd->greaterThan($budgetEndDate)) {
-            $cycleEnd = $budgetEndDate;
-        }
-
-        return [$cycleStart, $cycleEnd];
     }
 
     /**
