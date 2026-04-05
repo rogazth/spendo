@@ -79,7 +79,7 @@ class GetAccountsTool extends Tool
         foreach ($activeBudgets as $budget) {
             $currency = $budget->currency;
             $budgetedPerCurrency[$currency] = ($budgetedPerCurrency[$currency] ?? 0)
-                + $budget->items->sum('amount') / 100;
+                + $budget->total_budgeted;
         }
 
         // Build per-currency summary using only include_in_budget accounts
