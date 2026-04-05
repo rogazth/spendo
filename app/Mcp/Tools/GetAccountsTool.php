@@ -74,14 +74,15 @@ class GetAccountsTool extends Tool
             ->with(['items.category.children'])
             ->get();
 
-        // For each active budget, use max(planned, actual_spent) so overspending is reflected.
-        $budgetedPerCurrency = [];
+        // For each active budget item, compute how much is still unspent (reserved).
+        // Money already spent has already left the account balance, so only the unspent
+        // portion of each item should be counted: max(0, budgeted - spent).
+        $reservedPerCurrency = [];
         foreach ($activeBudgets as $budget) {
             $currency = $budget->currency;
-
             [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($today);
 
-            $categoryIds = $budget->items->flatMap(function ($item) {
+            $allCategoryIds = $budget->items->flatMap(function ($item) {
                 $ids = [$item->category_id];
                 if ($item->category && $item->category->relationLoaded('children')) {
                     $ids = array_merge($ids, $item->category->children->pluck('id')->all());
@@ -90,20 +91,36 @@ class GetAccountsTool extends Tool
                 return $ids;
             })->filter()->unique()->values()->all();
 
-            $actualSpent = 0;
-            if ($categoryIds !== []) {
-                $actualSpent = $user->transactions()
+            // Spending per category in this cycle (accessor returns major units)
+            $spentByCategory = [];
+            if ($allCategoryIds !== []) {
+                $transactions = $user->transactions()
                     ->where('type', 'expense')
                     ->where('exclude_from_budget', false)
                     ->whereDate('transaction_date', '>=', $cycleStart->toDateString())
                     ->whereDate('transaction_date', '<=', $cycleEnd->toDateString())
-                    ->whereIn('category_id', $categoryIds)
+                    ->whereIn('category_id', $allCategoryIds)
                     ->where('currency', $currency)
-                    ->sum('amount') / 100;
+                    ->get(['category_id', 'amount']);
+
+                foreach ($transactions as $t) {
+                    $spentByCategory[$t->category_id] = ($spentByCategory[$t->category_id] ?? 0) + $t->amount;
+                }
             }
 
-            $effectiveBudgeted = max($budget->total_budgeted, $actualSpent);
-            $budgetedPerCurrency[$currency] = ($budgetedPerCurrency[$currency] ?? 0) + $effectiveBudgeted;
+            // Sum remaining per item: max(0, budgeted - spent_across_item_categories)
+            $reserved = 0;
+            foreach ($budget->items as $item) {
+                $itemCategoryIds = [$item->category_id];
+                if ($item->category && $item->category->relationLoaded('children')) {
+                    $itemCategoryIds = array_merge($itemCategoryIds, $item->category->children->pluck('id')->all());
+                }
+
+                $itemSpent = collect($itemCategoryIds)->sum(fn ($catId) => $spentByCategory[$catId] ?? 0);
+                $reserved += max(0, $item->amount - $itemSpent);
+            }
+
+            $reservedPerCurrency[$currency] = ($reservedPerCurrency[$currency] ?? 0) + $reserved;
         }
 
         // Build per-currency summary using only include_in_budget accounts
@@ -113,12 +130,12 @@ class GetAccountsTool extends Tool
                 ->where('include_in_budget', true)
                 ->sum('current_balance');
 
-            $totalBudgeted = $budgetedPerCurrency[$currency] ?? 0;
+            $totalReserved = $reservedPerCurrency[$currency] ?? 0;
 
             $summaries[$currency] = [
                 'budget_balance' => $budgetBalance,
-                'total_budgeted' => $totalBudgeted,
-                'ready_to_assign' => $budgetBalance - $totalBudgeted,
+                'total_budgeted' => $totalReserved,
+                'ready_to_assign' => $budgetBalance - $totalReserved,
             ];
         }
 
