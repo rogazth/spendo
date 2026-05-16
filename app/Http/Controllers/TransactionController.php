@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Transactions\CreateExpenseAction;
-use App\Actions\Transactions\CreateIncomeAction;
+use App\Actions\Transactions\CreateTransactionAction;
 use App\Actions\Transactions\CreateTransferAction;
 use App\Actions\Transactions\DeleteTransactionAction;
 use App\Actions\Transactions\UpdateTransactionAction;
 use App\Http\Requests\StoreTransactionRequest;
+use App\Http\Requests\StoreTransferRequest;
 use App\Http\Requests\UpdateTransactionRequest;
 use App\Http\Resources\TransactionResource;
-use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -30,17 +30,31 @@ class TransactionController extends Controller
         $tagIds = $this->extractIdFilter($request, 'tag_ids');
         $budgetId = $request->input('budget_id') ? (int) $request->input('budget_id') : null;
 
-        // Budget filter: scope by the budget's categories
+        if (empty($accountIds)) {
+            $defaultAccount = Auth::user()
+                ->accounts()
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($defaultAccount) {
+                $accountIds = [$defaultAccount->id];
+            }
+        }
+
         $activeBudget = null;
+        $budgetDateRangeApplied = false;
 
         if ($budgetId) {
             $activeBudget = Auth::user()
                 ->budgets()
-                ->with('items')
+                ->with('items.category.children')
                 ->find($budgetId);
 
             if ($activeBudget) {
-                $categoryIds = $activeBudget->items->pluck('category_id')->toArray();
+                $categoryIds = $activeBudget->budgetCategoryIds();
             }
         }
 
@@ -48,25 +62,38 @@ class TransactionController extends Controller
             ->transactions()
             ->with(['category', 'account', 'tags', 'linkedTransaction.account']);
 
+        if ($activeBudget) {
+            if ($request->filled('date_from') || $request->filled('date_to')) {
+                $query->forBudgetSpending($activeBudget);
+            } else {
+                [$cycleStart, $cycleEnd] = $activeBudget->resolveCycleRange(CarbonImmutable::now()->startOfDay());
+                $query->forBudgetSpending($activeBudget, $cycleStart, $cycleEnd);
+                $budgetDateRangeApplied = true;
+            }
+        }
+
         if ($accountIds) {
             $query->whereIn('account_id', $accountIds);
         }
 
-        if ($categoryIds) {
-            $query->whereIn('category_id', $categoryIds);
+        if ($categoryIds && ! $activeBudget) {
+            $expandedCategoryIds = $this->expandCategoryIdsWithChildren($categoryIds);
+            $query->whereIn('category_id', $expandedCategoryIds);
         }
 
         if ($tagIds) {
             $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tagIds));
         }
 
-        if ($request->filled('date_from')) {
+        if (! $budgetDateRangeApplied && $request->filled('date_from')) {
             $query->whereDate('transaction_date', '>=', $request->input('date_from'));
         }
 
-        if ($request->filled('date_to')) {
+        if (! $budgetDateRangeApplied && $request->filled('date_to')) {
             $query->whereDate('transaction_date', '<=', $request->input('date_to'));
         }
+
+        $summary = $this->buildCurrencySummary($query);
 
         $transactions = $query
             ->latest('transaction_date')
@@ -93,7 +120,8 @@ class TransactionController extends Controller
             ->get();
 
         return Inertia::render('transactions/index', [
-            'transactions' => TransactionResource::collection($transactions),
+            'transactions' => Inertia::scroll(TransactionResource::collection($transactions)),
+            'summary' => $summary,
             'accounts' => $accounts->map(fn ($account) => [
                 'id' => $account->id,
                 'uuid' => $account->uuid,
@@ -102,6 +130,9 @@ class TransactionController extends Controller
                 'currency_locale' => Currency::localeFor($account->currency),
                 'is_active' => $account->is_active,
                 'is_default' => $account->is_default,
+                'emoji' => $account->emoji,
+                'color' => $account->color,
+                'current_balance' => $account->current_balance,
             ])->toArray(),
             'budgets' => $budgets->map(fn ($budget) => [
                 'id' => $budget->id,
@@ -113,17 +144,19 @@ class TransactionController extends Controller
                 'uuid' => $cat->uuid,
                 'name' => $cat->name,
                 'color' => $cat->color,
+                'emoji' => $cat->emoji,
                 'is_system' => $cat->is_system,
                 'children' => $cat->children->map(fn ($child) => [
                     'id' => $child->id,
                     'uuid' => $child->uuid,
                     'name' => $child->name,
                     'color' => $child->color,
+                    'emoji' => $child->emoji,
                 ])->toArray(),
             ])->toArray(),
             'filters' => [
                 'budget_id' => $budgetId,
-                'account_ids' => $request->input('budget_id') ? [] : $this->extractIdFilter($request, 'account_ids'),
+                'account_ids' => $accountIds,
                 'category_ids' => $categoryIds,
                 'tag_ids' => $tagIds,
                 'date_from' => $request->input('date_from'),
@@ -136,21 +169,26 @@ class TransactionController extends Controller
     {
         $validated = $request->validated();
 
-        if ($validated['type'] === 'transfer') {
-            $transaction = app(CreateTransferAction::class)->handle(Auth::user(), $validated);
-            [$outgoing] = $transaction;
-            $this->storeAttachments($outgoing, $validated['attachments'] ?? []);
-        } elseif ($validated['type'] === 'income') {
-            $transaction = app(CreateIncomeAction::class)->handle(Auth::user(), $validated);
-            $this->storeAttachments($transaction, $validated['attachments'] ?? []);
-        } else {
-            $transaction = app(CreateExpenseAction::class)->handle(Auth::user(), $validated);
-            $this->storeAttachments($transaction, $validated['attachments'] ?? []);
-        }
+        $transaction = app(CreateTransactionAction::class)->handle(Auth::user(), $validated);
+
+        $this->storeAttachments($transaction, $validated['attachments'] ?? []);
 
         return redirect()
             ->route('transactions.index')
             ->with('success', 'Transaccion creada exitosamente.');
+    }
+
+    public function storeTransfer(StoreTransferRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        [$outgoing] = app(CreateTransferAction::class)->handle(Auth::user(), $validated);
+
+        $this->storeAttachments($outgoing, $validated['attachments'] ?? []);
+
+        return redirect()
+            ->route('transactions.index')
+            ->with('success', 'Transferencia creada exitosamente.');
     }
 
     public function update(UpdateTransactionRequest $request, Transaction $transaction): RedirectResponse
@@ -184,6 +222,59 @@ class TransactionController extends Controller
         if ($transaction->user_id !== Auth::id()) {
             abort(403);
         }
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Transaction>|\Illuminate\Database\Eloquent\Relations\HasMany<Transaction, \App\Models\User>  $query
+     * @return array<string, array{income: float, expenses: float, net: float, currency_locale: string}>
+     */
+    private function buildCurrencySummary($query): array
+    {
+        $rows = (clone $query)
+            ->whereNull('linked_transaction_id')
+            ->select('currency')
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as income_cents')
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) as expense_cents')
+            ->groupBy('currency')
+            ->get();
+
+        $summary = [];
+
+        foreach ($rows as $row) {
+            $income = ((int) $row->income_cents) / 100;
+            $expenses = ((int) $row->expense_cents) / 100;
+
+            $summary[$row->currency] = [
+                'income' => $income,
+                'expenses' => $expenses,
+                'net' => $income - $expenses,
+                'currency_locale' => Currency::localeFor($row->currency),
+            ];
+        }
+
+        ksort($summary);
+
+        return $summary;
+    }
+
+    /**
+     * Expand a list of category IDs to include the children of any parent categories.
+     *
+     * @param  array<int, int>  $categoryIds
+     * @return array<int, int>
+     */
+    private function expandCategoryIdsWithChildren(array $categoryIds): array
+    {
+        $childIds = Category::query()
+            ->whereIn('parent_id', $categoryIds)
+            ->where(function ($query) {
+                $query->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            })
+            ->pluck('id')
+            ->all();
+
+        return array_values(array_unique(array_merge($categoryIds, $childIds)));
     }
 
     /**

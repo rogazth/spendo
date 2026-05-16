@@ -15,7 +15,7 @@ class CreateCategoryTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Create a new category for classifying transactions.
 
-        **Any category can be used for any transaction type** (expense, income, transfer).
+        Categories do not determine transaction direction. Income/expense direction comes from the signed transaction amount.
         **Subcategories**: Provide parent_id to create a subcategory. The parent must be a top-level, non-system category.
         **Note**: System categories cannot be created via this tool.
     MARKDOWN;

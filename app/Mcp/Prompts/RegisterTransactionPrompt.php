@@ -40,7 +40,8 @@ class RegisterTransactionPrompt extends Prompt
 
                 Follow these steps:
 
-                1. **Parse the request**: Extract transaction type, amount, category, account, and date from the description.
+                1. **Parse the request**: Extract direction (expense/outflow or income/inflow), amount, category, account, and date from the description.
+                   If the user describes moving money between two accounts, use CreateTransferTool instead of CreateTransactionTool.
 
                 2. **Resolve IDs**: Call the appropriate Get tools to find matching IDs:
                    - GetCategoriesTool for the category
@@ -49,6 +50,9 @@ class RegisterTransactionPrompt extends Prompt
 
                 3. **Create the transaction**: Use CreateTransactionTool with the resolved parameters.
                    - Amounts are in major currency units (e.g., 58900 for 58,900 CLP)
+                   - Expenses/outflows MUST use a negative amount (e.g., -58900)
+                   - Income/inflows MUST use a positive amount (e.g., 58900)
+                   - Do not send a transaction type field; direction is derived from the amount sign
                    - Default date is today if not specified
 
                 4. **Show budget impact**: After creating the transaction, call GetBudgetsTool to find active budgets, then call GetBudgetMetricsTool for each relevant budget to show:
@@ -56,12 +60,13 @@ class RegisterTransactionPrompt extends Prompt
                    - Category-level remaining amount and percentage
 
                 5. **Summarize**: Present a concise summary showing:
-                   - Transaction created (type, amount, category, date)
+                   - Transaction created (direction inferred from amount sign, amount, category, date)
                    - Budget impact (remaining in budget and category)
 
                 **Important rules:**
                 - Never guess IDs. Always fetch and confirm.
                 - All amounts are in major currency units.
+                - Negative amount = expense/outflow; positive amount = income/inflow.
                 - If a transaction doesn't match any budget category, still create it but note it won't affect budgets.
                 PROMPT)->asAssistant(),
         ];

@@ -416,6 +416,38 @@ describe('GetBudgetsTool', function () {
         $response->assertOk()->assertSee('Inactive Budget');
     });
 
+    it('excludes off-budget account spending from current cycle progress', function () {
+        $user = User::factory()->create();
+        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
+        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create();
+        $cat = Category::factory()->expense()->for($user)->create(['name' => 'Groceries']);
+
+        $budget = Budget::factory()->for($user)->create([
+            'name' => 'House',
+            'anchor_date' => now()->startOfMonth(),
+        ]);
+        $budget->items()->create(['category_id' => $cat->id, 'amount' => 100000]);
+
+        Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $includedAccount->id,
+            'category_id' => $cat->id,
+            'amount' => 10000,
+            'transaction_date' => now(),
+        ]);
+        Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $excludedAccount->id,
+            'category_id' => $cat->id,
+            'amount' => 90000,
+            'transaction_date' => now(),
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetBudgetsTool::class);
+
+        $response->assertOk()
+            ->assertSee('"spent": 10000')
+            ->assertDontSee('"spent": 100000');
+    });
+
     it('returns error when not authenticated', function () {
         $response = SpendoServer::tool(GetBudgetsTool::class);
 
@@ -477,6 +509,40 @@ describe('GetBudgetMetricsTool', function () {
         ]);
 
         $response->assertHasErrors(['start_date and end_date are required']);
+    });
+
+    it('excludes off-budget account spending from metrics', function () {
+        $user = User::factory()->create();
+        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
+        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create();
+        $cat = Category::factory()->expense()->for($user)->create(['name' => 'Groceries']);
+
+        $budget = Budget::factory()->for($user)->create([
+            'name' => 'House',
+            'anchor_date' => now()->startOfMonth(),
+        ]);
+        $budget->items()->create(['category_id' => $cat->id, 'amount' => 100000]);
+
+        Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $includedAccount->id,
+            'category_id' => $cat->id,
+            'amount' => 10000,
+            'transaction_date' => now(),
+        ]);
+        Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $excludedAccount->id,
+            'category_id' => $cat->id,
+            'amount' => 90000,
+            'transaction_date' => now(),
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetBudgetMetricsTool::class, [
+            'budget_id' => $budget->id,
+        ]);
+
+        $response->assertOk()
+            ->assertSee('"spent_amount": 10000')
+            ->assertDontSee('"spent_amount": 100000');
     });
 });
 

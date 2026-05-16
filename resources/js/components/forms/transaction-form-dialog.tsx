@@ -3,26 +3,29 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
     CalendarIcon,
-    PaperclipIcon,
-    UploadCloudIcon,
-    XIcon,
+    FolderIcon,
+    StickyNoteIcon,
+    WalletIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { AmountDisplay } from '@/components/forms/transaction-form/amount-display';
+import { Numpad } from '@/components/forms/transaction-form/numpad';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { MoneyInput } from '@/components/ui/money-input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -33,15 +36,15 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { getCurrencyLocale } from '@/lib/currency';
+import { getCurrencyFractionDigits, getCurrencyLocale } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import type {
     Account,
     Category,
     Currency,
-    Instrument,
     Transaction,
-    TransactionType,
+    TransactionDirection,
+    TransactionMode,
 } from '@/types';
 
 interface TransactionFormDialogProps {
@@ -49,18 +52,20 @@ interface TransactionFormDialogProps {
     onOpenChange: (open: boolean) => void;
     transaction?: Transaction;
     accounts: Account[];
-    instruments: Instrument[];
     categories: Category[];
 }
 
-function formatFileSize(bytes: number): string {
-    if (bytes >= 1024 * 1024) {
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-    if (bytes >= 1024) {
-        return `${(bytes / 1024).toFixed(1)} KB`;
-    }
-    return `${bytes} B`;
+interface FlatCategory extends Category {
+    depth: 0 | 1;
+}
+
+function flattenCategories(categories: Category[]): FlatCategory[] {
+    return categories.flatMap((category) => {
+        const children: FlatCategory[] = (category.children ?? []).map(
+            (child) => ({ ...child, depth: 1 }),
+        );
+        return [{ ...category, depth: 0 } as FlatCategory, ...children];
+    });
 }
 
 export function TransactionFormDialog({
@@ -68,723 +73,814 @@ export function TransactionFormDialog({
     onOpenChange,
     transaction,
     accounts,
-    instruments,
     categories,
 }: TransactionFormDialogProps) {
     const isEditing = !!transaction;
     const { currencies = [] } = usePage<{ currencies?: Currency[] }>().props;
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [isDropzoneActive, setIsDropzoneActive] = useState(false);
 
-    const defaultAccount = accounts.find((account) => account.is_default) ?? accounts[0];
-    const defaultInstrument = instruments.find((instrument) => instrument.is_default) ?? instruments[0];
+    const defaultAccount =
+        accounts.find((account) => account.is_default) ?? accounts[0];
     const fallbackDestinationAccount = accounts.find(
         (account) => account.id !== defaultAccount?.id,
     );
 
-    const { data, setData, post, put, processing, errors, reset, transform } = useForm<{
+    const [mode, setMode] = useState<TransactionMode>('movement');
+    const [direction, setDirection] = useState<TransactionDirection>('expense');
+    const [cents, setCents] = useState<number>(0);
+    const [descriptionOpen, setDescriptionOpen] = useState(false);
+    const [dateOpen, setDateOpen] = useState(false);
+
+    type MovementForm = {
         account_id: number | null;
-        origin_account_id: number | null;
-        destination_account_id: number | null;
-        instrument_id: number | null;
         category_id: number | null;
-        type: TransactionType;
-        amount: number | null;
-        currency: string;
+        amount: number;
         description: string;
         exclude_from_budget: boolean;
-        transaction_date: Date;
-        attachments: File[];
-    }>({
+        transaction_date: string;
+    };
+    type TransferForm = {
+        origin_account_id: number | null;
+        destination_account_id: number | null;
+        amount: number;
+        description: string;
+        transaction_date: string;
+    };
+
+    const movement = useForm<MovementForm>({
         account_id: null,
-        origin_account_id: null,
-        destination_account_id: null,
-        instrument_id: null,
         category_id: null,
-        type: 'expense',
-        amount: null,
-        currency: 'CLP',
+        amount: 0,
         description: '',
         exclude_from_budget: false,
-        transaction_date: new Date(),
-        attachments: [],
+        transaction_date: format(new Date(), 'yyyy-MM-dd'),
+    });
+    const transfer = useForm<TransferForm>({
+        origin_account_id: null,
+        destination_account_id: null,
+        amount: 0,
+        description: '',
+        transaction_date: format(new Date(), 'yyyy-MM-dd'),
     });
 
     useEffect(() => {
-        if (!open) {
-            return;
-        }
+        if (!open) return;
 
-        const transferOrigin =
-            transaction?.type === 'transfer_out'
-                ? transaction.account_id
-                : transaction?.linked_transaction?.account_id ?? defaultAccount?.id ?? null;
-        const transferDestination =
-            transaction?.type === 'transfer_in'
-                ? transaction.account_id
-                : transaction?.linked_transaction?.account_id ??
-                  fallbackDestinationAccount?.id ??
-                  null;
+        const incomingIsTransfer = !!transaction?.linked_transaction_id;
+        const incomingMode: TransactionMode = incomingIsTransfer
+            ? 'transfer'
+            : 'movement';
+        const initialDirection: TransactionDirection = transaction
+            ? transaction.amount < 0
+                ? 'expense'
+                : 'income'
+            : 'expense';
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const txDate = transaction?.transaction_date
+            ? format(new Date(transaction.transaction_date), 'yyyy-MM-dd')
+            : today;
+        const txAccountCurrency =
+            (transaction?.account as Account | undefined)?.currency ??
+            transaction?.currency ??
+            defaultAccount?.currency ??
+            'CLP';
+        const locale = getCurrencyLocale(txAccountCurrency, currencies);
+        const fractionDigits = getCurrencyFractionDigits(
+            locale,
+            txAccountCurrency,
+        );
+        const magnitude = Math.abs(transaction?.amount ?? 0);
+        const initialCents = Math.round(
+            magnitude * Math.pow(10, fractionDigits),
+        );
 
-        setData({
+        setMode(incomingMode);
+        setDirection(initialDirection);
+        setCents(initialCents);
+        setDescriptionOpen(false);
+        setDateOpen(false);
+
+        movement.setData({
             account_id: transaction?.account_id ?? defaultAccount?.id ?? null,
-            origin_account_id: transferOrigin ?? defaultAccount?.id ?? null,
-            destination_account_id:
-                transferDestination ??
-                fallbackDestinationAccount?.id ??
-                null,
-            instrument_id:
-                transaction?.instrument_id ?? defaultInstrument?.id ?? null,
-            category_id: transaction?.category_id ?? null,
-            type:
-                transaction?.type === 'expense' ||
-                transaction?.type === 'income'
-                    ? transaction.type
-                    : transaction?.type === 'transfer_out' ||
-                        transaction?.type === 'transfer_in'
-                        ? 'transfer'
-                        : 'expense',
-            amount: transaction?.amount ?? null,
-            currency: transaction?.currency ?? 'CLP',
+            category_id: incomingIsTransfer
+                ? null
+                : (transaction?.category_id ?? null),
+            amount: 0,
             description: transaction?.description ?? '',
             exclude_from_budget: transaction?.exclude_from_budget ?? false,
-            transaction_date: transaction?.transaction_date
-                ? new Date(transaction.transaction_date)
-                : new Date(),
-            attachments: [],
+            transaction_date: txDate,
         });
-    }, [open, transaction]);
+        movement.clearErrors();
 
-    const isExpense = data.type === 'expense';
-    const isTransfer = data.type === 'transfer';
+        const origin = incomingIsTransfer
+            ? transaction.amount < 0
+                ? transaction.account_id
+                : transaction.linked_transaction?.account_id
+            : (defaultAccount?.id ?? null);
+        const destination = incomingIsTransfer
+            ? transaction.amount > 0
+                ? transaction.account_id
+                : transaction.linked_transaction?.account_id
+            : (fallbackDestinationAccount?.id ?? null);
 
-    const originAccount = accounts.find(
-        (account) => account.id === data.origin_account_id,
+        transfer.setData({
+            origin_account_id: origin ?? defaultAccount?.id ?? null,
+            destination_account_id:
+                destination ?? fallbackDestinationAccount?.id ?? null,
+            amount: 0,
+            description: transaction?.description ?? '',
+            transaction_date: txDate,
+        });
+        transfer.clearErrors();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, transaction?.id]);
+
+    const activeAccount =
+        mode === 'transfer'
+            ? accounts.find(
+                  (account) => account.id === transfer.data.origin_account_id,
+              )
+            : accounts.find(
+                  (account) => account.id === movement.data.account_id,
+              );
+    const currency = activeAccount?.currency ?? 'CLP';
+    const locale = useMemo(
+        () => getCurrencyLocale(currency, currencies),
+        [currency, currencies],
     );
-    const selectedAccount = accounts.find(
-        (account) => account.id === data.account_id,
+    const fractionDigits = useMemo(
+        () => getCurrencyFractionDigits(locale, currency),
+        [currency, locale],
     );
-    const destinationAccounts = useMemo(
-        () => accounts.filter((account) => account.id !== data.origin_account_id),
-        [accounts, data.origin_account_id],
+    const magnitude = cents / Math.pow(10, fractionDigits);
+    const maxCents = 99_999_999_999;
+
+    const filteredCategories = useMemo(
+        () => flattenCategories(categories),
+        [categories],
     );
 
-    const filteredCategories = categories.flatMap((category) => {
-        const matchesType =
-            (data.type === 'expense' && category.type === 'expense') ||
-            (data.type === 'income' && category.type === 'income');
-
-        if (!matchesType) return [];
-
-        const children = (
-            category.children?.filter((child) => child.type === category.type) ?? []
-        ).map((child) => ({ ...child, depth: 1 as const }));
-
-        return [{ ...category, depth: 0 as const }, ...children];
-    });
-
-    useEffect(() => {
-        if (isTransfer) {
-            setData('currency', originAccount?.currency ?? 'CLP');
-            return;
-        }
-
-        if (selectedAccount?.currency) {
-            setData('currency', selectedAccount.currency);
-        }
-    }, [isTransfer, originAccount?.currency, selectedAccount?.currency]);
-
-    useEffect(() => {
-        if (!isTransfer) return;
-
-        if (
-            data.origin_account_id &&
-            data.destination_account_id === data.origin_account_id
-        ) {
-            const nextDestination = accounts.find(
-                (account) => account.id !== data.origin_account_id,
-            );
-            setData('destination_account_id', nextDestination?.id ?? null);
-        }
-    }, [
-        accounts,
-        data.destination_account_id,
-        data.origin_account_id,
-        isTransfer,
-    ]);
-
-    const currencyLocale = isTransfer
-        ? originAccount?.currency_locale ??
-          getCurrencyLocale(originAccount?.currency ?? data.currency, currencies)
-        : selectedAccount?.currency_locale ??
-          getCurrencyLocale(data.currency, currencies);
-
-    const handleOpenChange = (nextOpen: boolean) => {
-        onOpenChange(nextOpen);
+    const handleDigit = (digit: number) => {
+        setCents((current) => {
+            const next = current * 10 + digit;
+            return Math.min(next, maxCents);
+        });
     };
 
-    const handleTypeChange = (type: TransactionType) => {
-        setData('type', type);
-        setData('category_id', null);
-
-        if (type === 'income') {
-            setData('instrument_id', null);
-            setData('exclude_from_budget', false);
-            return;
-        }
-
-        if (type === 'transfer') {
-            setData('instrument_id', null);
-            setData('exclude_from_budget', false);
-            if (!data.origin_account_id) {
-                setData('origin_account_id', defaultAccount?.id ?? null);
-            }
-            if (!data.destination_account_id) {
-                setData(
-                    'destination_account_id',
-                    fallbackDestinationAccount?.id ??
-                        defaultAccount?.id ??
-                        null,
-                );
-            }
-            return;
-        }
-
-        if (!data.instrument_id && instruments.length > 0) {
-            setData('instrument_id', instruments[0].id);
-        }
+    const handleBackspace = () => {
+        setCents((current) => Math.floor(current / 10));
     };
 
-    const appendAttachments = (files: File[]) => {
-        if (files.length === 0) return;
-
-        const nextAttachments = [...data.attachments, ...files].slice(0, 5);
-        setData('attachments', nextAttachments);
-    };
-
-    const removeAttachment = (index: number) => {
-        setData(
-            'attachments',
-            data.attachments.filter((_, currentIndex) => currentIndex !== index),
-        );
-    };
-
-    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setIsDropzoneActive(false);
-        appendAttachments(Array.from(event.dataTransfer.files ?? []));
-    };
-
-    const handleSubmit = (event: React.FormEvent) => {
-        event.preventDefault();
+    const submitMovement = () => {
+        const signedAmount = direction === 'expense' ? -magnitude : magnitude;
+        movement.transform((data) => ({
+            ...data,
+            amount: signedAmount,
+            description: data.description || null,
+            exclude_from_budget:
+                direction === 'expense' ? data.exclude_from_budget : false,
+        }));
 
         const options = {
             preserveScroll: true,
-            forceFormData: true,
             onSuccess: () => {
                 onOpenChange(false);
-                reset();
-                toast.success(isEditing ? 'Transacción actualizada' : 'Transacción creada');
+                movement.reset();
+                setCents(0);
+                toast.success(
+                    isEditing
+                        ? 'Transacción actualizada'
+                        : 'Transacción creada',
+                );
             },
             onError: () => {
                 toast.error('Error al guardar la transacción');
             },
         };
 
-        transform((formData) => ({
-            ...formData,
-            transaction_date: format(formData.transaction_date, 'yyyy-MM-dd'),
-            instrument_id:
-                formData.type === 'income' || formData.type === 'transfer'
-                    ? null
-                    : formData.instrument_id,
-            category_id: formData.type === 'transfer' ? null : formData.category_id,
-            account_id: formData.type === 'transfer' ? null : formData.account_id,
-            exclude_from_budget:
-                formData.type === 'expense' ? formData.exclude_from_budget : false,
-            description: formData.description || null,
-            attachments: formData.attachments,
-        }));
-
-        if (isEditing) {
-            put(`/transactions/${transaction.uuid}`, options);
+        if (isEditing && transaction) {
+            movement.put(`/transactions/${transaction.uuid}`, options);
             return;
         }
 
-        post('/transactions', options);
+        movement.post('/transactions', options);
     };
 
+    const submitTransfer = () => {
+        if (isEditing) {
+            toast.error(
+                'Las transferencias no se pueden editar. Elimínala y créala nuevamente.',
+            );
+            return;
+        }
+
+        transfer.transform((data) => ({
+            ...data,
+            amount: magnitude,
+            description: data.description || null,
+        }));
+
+        transfer.post('/transfers', {
+            preserveScroll: true,
+            onSuccess: () => {
+                onOpenChange(false);
+                transfer.reset();
+                setCents(0);
+                toast.success('Transferencia creada');
+            },
+            onError: () => {
+                toast.error('Error al guardar la transferencia');
+            },
+        });
+    };
+
+    const transferEditBlocked = isEditing && mode === 'transfer';
+    const canSubmit =
+        magnitude > 0 &&
+        !transferEditBlocked &&
+        !movement.processing &&
+        !transfer.processing;
+
+    const handleSubmit = () => {
+        if (transferEditBlocked) {
+            toast.error(
+                'Las transferencias no se pueden editar. Elimínala y créala nuevamente.',
+            );
+            return;
+        }
+
+        if (!canSubmit) {
+            if (magnitude === 0) toast.error('Ingresa un monto');
+            return;
+        }
+        if (mode === 'movement') submitMovement();
+        else submitTransfer();
+    };
+
+    const processing = movement.processing || transfer.processing;
+    const movementSign = direction === 'expense' ? 'negative' : 'positive';
+
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-[560px]">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {isEditing ? 'Editar Transacción' : 'Nueva Transacción'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {isEditing
-                                ? 'Actualiza los datos de la transacción.'
-                                : 'Registra un nuevo gasto o ingreso.'}
-                        </DialogDescription>
-                    </DialogHeader>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[95vh] gap-4 overflow-y-auto sm:max-w-[440px]">
+                <DialogHeader className="space-y-0">
+                    <DialogTitle>
+                        {isEditing ? 'Editar transacción' : 'Nueva transacción'}
+                    </DialogTitle>
+                </DialogHeader>
 
-                    <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="amount" className="text-center text-base">
-                                Monto
-                            </Label>
-                            <MoneyInput
-                                id="amount"
-                                currency={data.currency}
-                                locale={currencyLocale}
-                                value={data.amount}
-                                onValueChange={(value) => setData('amount', value)}
-                                placeholder="0"
-                                groupClassName="h-16"
-                                addonClassName="text-sm"
-                                className="text-center text-4xl font-semibold tracking-tight"
-                            />
-                            <InputError message={errors.amount} />
-                        </div>
+                {!isEditing && (
+                    <Tabs
+                        value={mode}
+                        onValueChange={(value) => {
+                            if (value === 'movement' || value === 'transfer') {
+                                setMode(value);
+                            }
+                        }}
+                    >
+                        <TabsList className="w-full">
+                            <TabsTrigger value="movement" className="flex-1">
+                                Movimiento
+                            </TabsTrigger>
+                            <TabsTrigger value="transfer" className="flex-1">
+                                Transferencia
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                )}
 
-                        <div className="space-y-2">
-                            <Label>Tipo</Label>
-                            <Tabs
-                                value={data.type}
-                                onValueChange={(value) => {
-                                    if (
-                                        value === 'expense' ||
-                                        value === 'income' ||
-                                        value === 'transfer'
-                                    ) {
-                                        handleTypeChange(value);
-                                    }
-                                }}
+                <AmountDisplay
+                    magnitude={magnitude}
+                    currency={currency}
+                    locale={locale}
+                    sign={mode === 'transfer' ? 'neutral' : movementSign}
+                    fractionDigits={fractionDigits}
+                />
+
+                {mode === 'movement' ? (
+                    <MovementChips
+                        accounts={accounts}
+                        categories={filteredCategories}
+                        accountId={movement.data.account_id}
+                        categoryId={movement.data.category_id}
+                        description={movement.data.description}
+                        descriptionOpen={descriptionOpen}
+                        setDescriptionOpen={setDescriptionOpen}
+                        date={movement.data.transaction_date}
+                        dateOpen={dateOpen}
+                        setDateOpen={setDateOpen}
+                        excludeFromBudget={movement.data.exclude_from_budget}
+                        direction={direction}
+                        errors={
+                            movement.errors as Record<
+                                string,
+                                string | undefined
                             >
-                                <TabsList className="w-full">
-                                    <TabsTrigger value="expense" className="flex-1">
-                                        Gasto
-                                    </TabsTrigger>
-                                    <TabsTrigger value="income" className="flex-1">
-                                        Ingreso
-                                    </TabsTrigger>
-                                    <TabsTrigger value="transfer" className="flex-1">
-                                        Transferencia
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                            <InputError message={errors.type} />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Fecha</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        className={cn(
-                                            'w-full justify-start text-left font-normal',
-                                            !data.transaction_date &&
-                                                'text-muted-foreground',
-                                        )}
-                                    >
-                                        <CalendarIcon className="h-4 w-4" />
-                                        {data.transaction_date ? (
-                                            format(data.transaction_date, 'PPP', {
-                                                locale: es,
-                                            })
-                                        ) : (
-                                            <span>Selecciona una fecha</span>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                        mode="single"
-                                        selected={data.transaction_date}
-                                        onSelect={(date) =>
-                                            date && setData('transaction_date', date)
-                                        }
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <InputError message={errors.transaction_date} />
-                        </div>
-
-                        {!isTransfer && (
-                            <div className="space-y-2">
-                                <Label htmlFor="account_id">Cuenta</Label>
-                                <Select
-                                    value={data.account_id?.toString() || ''}
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'account_id',
-                                            value ? parseInt(value, 10) : null,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona una cuenta" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {accounts.map((account) => (
-                                            <SelectItem
-                                                key={account.id}
-                                                value={account.id.toString()}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span>{account.name}</span>
-                                                    {account.is_default && (
-                                                        <span className="text-muted-foreground text-xs">
-                                                            (Por defecto)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.account_id} />
-                            </div>
-                        )}
-
-                        {isTransfer && (
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="origin_account_id">
-                                        Cuenta origen
-                                    </Label>
-                                    <Select
-                                        value={data.origin_account_id?.toString() || ''}
-                                        onValueChange={(value) => {
-                                            const nextOrigin = value
-                                                ? parseInt(value, 10)
-                                                : null;
-                                            setData('origin_account_id', nextOrigin);
-
-                                            if (
-                                                nextOrigin &&
-                                                nextOrigin === data.destination_account_id
-                                            ) {
-                                                const nextDestination = accounts.find(
-                                                    (account) =>
-                                                        account.id !== nextOrigin,
-                                                );
-                                                setData(
-                                                    'destination_account_id',
-                                                    nextDestination?.id ?? null,
-                                                );
-                                            }
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona una cuenta" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {accounts.map((account) => (
-                                                <SelectItem
-                                                    key={account.id}
-                                                    value={account.id.toString()}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <span>{account.name}</span>
-                                                        {account.is_default && (
-                                                            <span className="text-muted-foreground text-xs">
-                                                                (Por defecto)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.origin_account_id} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="destination_account_id">
-                                        Cuenta destino
-                                    </Label>
-                                    <Select
-                                        value={
-                                            data.destination_account_id?.toString() || ''
-                                        }
-                                        onValueChange={(value) =>
-                                            setData(
-                                                'destination_account_id',
-                                                value ? parseInt(value, 10) : null,
-                                            )
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona una cuenta" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {destinationAccounts.map((account) => (
-                                                <SelectItem
-                                                    key={account.id}
-                                                    value={account.id.toString()}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <span>{account.name}</span>
-                                                        {account.is_default && (
-                                                            <span className="text-muted-foreground text-xs">
-                                                                (Por defecto)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        message={errors.destination_account_id}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {isExpense && (
-                            <div className="space-y-2">
-                                <Label htmlFor="instrument_id">
-                                    Instrumento
-                                </Label>
-                                <Select
-                                    value={data.instrument_id?.toString() || ''}
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'instrument_id',
-                                            value ? parseInt(value, 10) : null,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona un instrumento" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {instruments.map((instrument) => (
-                                            <SelectItem
-                                                key={instrument.id}
-                                                value={instrument.id.toString()}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span>{instrument.name}</span>
-                                                    {instrument.is_default && (
-                                                        <span className="text-muted-foreground text-xs">
-                                                            (Por defecto)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.instrument_id} />
-                            </div>
-                        )}
-
-                        {!isTransfer && (
-                            <div className="space-y-2">
-                                <Label htmlFor="category_id">Categoría</Label>
-                                <Select
-                                    value={data.category_id?.toString() || ''}
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'category_id',
-                                            value ? parseInt(value, 10) : null,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona una categoría" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {filteredCategories.map((category) => (
-                                            <SelectItem
-                                                key={category.id}
-                                                value={category.id.toString()}
-                                            >
-                                                <div
-                                                    className={cn(
-                                                        'flex items-center gap-2',
-                                                        category.depth === 1 && 'pl-4',
-                                                    )}
-                                                >
-                                                    <span
-                                                        className="h-3 w-3 rounded-full"
-                                                        style={{
-                                                            backgroundColor:
-                                                                category.color,
-                                                        }}
-                                                    />
-                                                    {category.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.category_id} />
-                            </div>
-                        )}
-
-                        {isExpense && (
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                                    <Label
-                                        htmlFor="exclude_from_budget"
-                                        className="text-sm font-medium"
-                                    >
-                                        Excluir transacción del budget
-                                    </Label>
-                                    <Switch
-                                        id="exclude_from_budget"
-                                        checked={data.exclude_from_budget}
-                                        onCheckedChange={(checked) =>
-                                            setData(
-                                                'exclude_from_budget',
-                                                checked === true,
-                                            )
-                                        }
-                                    />
-                                </div>
-                                <InputError message={errors.exclude_from_budget} />
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Descripción (opcional)</Label>
-                            <Textarea
-                                id="description"
-                                value={data.description}
-                                onChange={(event) =>
-                                    setData('description', event.target.value)
-                                }
-                                placeholder="Ej: Compra supermercado"
-                                rows={2}
-                            />
-                            <InputError message={errors.description} />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="attachments">Adjuntos (opcional)</Label>
-                            <input
-                                ref={fileInputRef}
-                                id="attachments"
-                                type="file"
-                                multiple
-                                className="hidden"
-                                onChange={(event) => {
-                                    appendAttachments(
-                                        Array.from(event.target.files ?? []),
-                                    );
-                                    event.currentTarget.value = '';
-                                }}
-                            />
-                            <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => fileInputRef.current?.click()}
-                                onKeyDown={(event) => {
-                                    if (
-                                        event.key === 'Enter' ||
-                                        event.key === ' '
-                                    ) {
-                                        event.preventDefault();
-                                        fileInputRef.current?.click();
-                                    }
-                                }}
-                                onDragEnter={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setIsDropzoneActive(true);
-                                }}
-                                onDragOver={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setIsDropzoneActive(true);
-                                }}
-                                onDragLeave={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setIsDropzoneActive(false);
-                                }}
-                                onDrop={handleDrop}
-                                className={cn(
-                                    'cursor-pointer rounded-lg border border-dashed p-4 transition-colors',
-                                    isDropzoneActive
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-muted-foreground/30 hover:border-primary/40',
-                                )}
+                        }
+                        onAccountChange={(id) =>
+                            movement.setData('account_id', id)
+                        }
+                        onCategoryChange={(id) =>
+                            movement.setData('category_id', id)
+                        }
+                        onDescriptionChange={(value) =>
+                            movement.setData('description', value)
+                        }
+                        onDateChange={(value) =>
+                            movement.setData('transaction_date', value)
+                        }
+                        onExcludeFromBudgetChange={(value) =>
+                            movement.setData('exclude_from_budget', value)
+                        }
+                    />
+                ) : (
+                    <TransferChips
+                        accounts={accounts}
+                        originId={transfer.data.origin_account_id}
+                        destinationId={transfer.data.destination_account_id}
+                        description={transfer.data.description}
+                        descriptionOpen={descriptionOpen}
+                        setDescriptionOpen={setDescriptionOpen}
+                        date={transfer.data.transaction_date}
+                        dateOpen={dateOpen}
+                        setDateOpen={setDateOpen}
+                        errors={
+                            transfer.errors as Record<
+                                string,
+                                string | undefined
                             >
-                                <div className="flex flex-col items-center gap-2 text-center">
-                                    <UploadCloudIcon className="h-5 w-5 text-muted-foreground" />
-                                    <p className="text-sm font-medium">
-                                        Arrastra archivos aquí o haz click para seleccionar
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        Máximo 5 archivos, 5 MB cada uno
-                                    </p>
-                                </div>
-                            </div>
-                            <InputError message={errors.attachments} />
-                            {data.attachments.length > 0 && (
-                                <div className="space-y-2">
-                                    {data.attachments.map((file, index) => (
-                                        <div
-                                            key={`${file.name}-${index}`}
-                                            className="flex items-center justify-between rounded-md border px-3 py-2"
-                                        >
-                                            <div className="flex min-w-0 items-center gap-2">
-                                                <PaperclipIcon className="h-4 w-4 text-muted-foreground" />
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-sm font-medium">
-                                                        {file.name}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {formatFileSize(file.size)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    removeAttachment(index);
-                                                }}
-                                            >
-                                                <XIcon className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                        }
+                        onOriginChange={(id) => {
+                            transfer.setData('origin_account_id', id);
+                            if (
+                                id !== null &&
+                                transfer.data.destination_account_id === id
+                            ) {
+                                const next = accounts.find(
+                                    (account) => account.id !== id,
+                                );
+                                transfer.setData(
+                                    'destination_account_id',
+                                    next?.id ?? null,
+                                );
+                            }
+                        }}
+                        onDestinationChange={(id) =>
+                            transfer.setData('destination_account_id', id)
+                        }
+                        onDescriptionChange={(value) =>
+                            transfer.setData('description', value)
+                        }
+                        onDateChange={(value) =>
+                            transfer.setData('transaction_date', value)
+                        }
+                    />
+                )}
 
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => handleOpenChange(false)}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button type="submit" disabled={processing}>
-                            {processing
-                                ? 'Guardando...'
-                                : isEditing
-                                    ? 'Guardar'
-                                    : 'Crear'}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                {mode === 'movement' && (
+                    <Tabs
+                        value={direction}
+                        onValueChange={(value) => {
+                            if (value === 'expense' || value === 'income') {
+                                setDirection(value);
+                            }
+                        }}
+                    >
+                        <TabsList className="w-full">
+                            <TabsTrigger
+                                value="expense"
+                                className="flex-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-red-950/60 dark:data-[state=active]:text-red-400"
+                            >
+                                − Gasto
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="income"
+                                className="flex-1 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-950/60 dark:data-[state=active]:text-emerald-400"
+                            >
+                                + Ingreso
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                )}
+
+                <Numpad
+                    onDigit={handleDigit}
+                    onBackspace={handleBackspace}
+                    onSubmit={handleSubmit}
+                    disabled={transferEditBlocked}
+                    submitting={processing}
+                />
+
+                {transferEditBlocked && (
+                    <p className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+                        Las transferencias no se editan directamente. Elimínala
+                        y créala nuevamente si necesitas cambiar monto, cuentas
+                        o fecha.
+                    </p>
+                )}
+
+                {Object.values(movement.errors).map(
+                    (error) =>
+                        error && (
+                            <InputError
+                                key={error as string}
+                                message={error as string}
+                            />
+                        ),
+                )}
+                {Object.values(transfer.errors).map(
+                    (error) =>
+                        error && (
+                            <InputError
+                                key={error as string}
+                                message={error as string}
+                            />
+                        ),
+                )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+interface MovementChipsProps {
+    accounts: Account[];
+    categories: FlatCategory[];
+    accountId: number | null;
+    categoryId: number | null;
+    description: string;
+    descriptionOpen: boolean;
+    setDescriptionOpen: (open: boolean) => void;
+    date: string;
+    dateOpen: boolean;
+    setDateOpen: (open: boolean) => void;
+    excludeFromBudget: boolean;
+    direction: TransactionDirection;
+    errors: Record<string, string | undefined>;
+    onAccountChange: (id: number | null) => void;
+    onCategoryChange: (id: number | null) => void;
+    onDescriptionChange: (value: string) => void;
+    onDateChange: (value: string) => void;
+    onExcludeFromBudgetChange: (value: boolean) => void;
+}
+
+function MovementChips({
+    accounts,
+    categories,
+    accountId,
+    categoryId,
+    description,
+    descriptionOpen,
+    setDescriptionOpen,
+    date,
+    dateOpen,
+    setDateOpen,
+    excludeFromBudget,
+    direction,
+    onAccountChange,
+    onCategoryChange,
+    onDescriptionChange,
+    onDateChange,
+    onExcludeFromBudgetChange,
+}: MovementChipsProps) {
+    const account = accounts.find((a) => a.id === accountId);
+    const category = categories.find((c) => c.id === categoryId);
+
+    return (
+        <div className="grid grid-cols-2 gap-2">
+            <AccountChip
+                account={account}
+                onChange={onAccountChange}
+                accounts={accounts}
+            />
+            <CategoryChip
+                category={category}
+                onChange={onCategoryChange}
+                categories={categories}
+            />
+            <DateChip
+                date={date}
+                onChange={onDateChange}
+                open={dateOpen}
+                onOpenChange={setDateOpen}
+            />
+            <DescriptionChip
+                value={description}
+                onChange={onDescriptionChange}
+                open={descriptionOpen}
+                onOpenChange={setDescriptionOpen}
+            />
+            {direction === 'expense' && (
+                <div className="col-span-2 flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <Label
+                        htmlFor="exclude_from_budget"
+                        className="cursor-pointer text-sm font-medium"
+                    >
+                        Excluir del budget
+                    </Label>
+                    <Switch
+                        id="exclude_from_budget"
+                        checked={excludeFromBudget}
+                        onCheckedChange={(checked) =>
+                            onExcludeFromBudgetChange(checked === true)
+                        }
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface TransferChipsProps {
+    accounts: Account[];
+    originId: number | null;
+    destinationId: number | null;
+    description: string;
+    descriptionOpen: boolean;
+    setDescriptionOpen: (open: boolean) => void;
+    date: string;
+    dateOpen: boolean;
+    setDateOpen: (open: boolean) => void;
+    errors: Record<string, string | undefined>;
+    onOriginChange: (id: number | null) => void;
+    onDestinationChange: (id: number | null) => void;
+    onDescriptionChange: (value: string) => void;
+    onDateChange: (value: string) => void;
+}
+
+function TransferChips({
+    accounts,
+    originId,
+    destinationId,
+    description,
+    descriptionOpen,
+    setDescriptionOpen,
+    date,
+    dateOpen,
+    setDateOpen,
+    onOriginChange,
+    onDestinationChange,
+    onDescriptionChange,
+    onDateChange,
+}: TransferChipsProps) {
+    const origin = accounts.find((a) => a.id === originId);
+    const destination = accounts.find((a) => a.id === destinationId);
+    const destinationOptions = accounts.filter((a) => a.id !== originId);
+
+    return (
+        <div className="space-y-2">
+            <div className="rounded-lg border p-3">
+                <div className="mb-1 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    De
+                </div>
+                <Select
+                    value={originId?.toString() ?? ''}
+                    onValueChange={(value) =>
+                        onOriginChange(value ? parseInt(value, 10) : null)
+                    }
+                >
+                    <SelectTrigger className="h-8 border-none p-0 text-sm font-medium shadow-none focus:ring-0">
+                        <SelectValue>
+                            {origin ? (
+                                <AccountSummary account={origin} />
+                            ) : (
+                                'Seleccionar cuenta'
+                            )}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {accounts.map((account) => (
+                            <SelectItem
+                                key={account.id}
+                                value={account.id.toString()}
+                            >
+                                <AccountSummary account={account} />
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <div className="my-2 border-t" />
+                <div className="mb-1 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    A
+                </div>
+                <Select
+                    value={destinationId?.toString() ?? ''}
+                    onValueChange={(value) =>
+                        onDestinationChange(value ? parseInt(value, 10) : null)
+                    }
+                >
+                    <SelectTrigger className="h-8 border-none p-0 text-sm font-medium shadow-none focus:ring-0">
+                        <SelectValue>
+                            {destination ? (
+                                <AccountSummary account={destination} />
+                            ) : (
+                                'Seleccionar cuenta'
+                            )}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {destinationOptions.map((account) => (
+                            <SelectItem
+                                key={account.id}
+                                value={account.id.toString()}
+                            >
+                                <AccountSummary account={account} />
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <DateChip
+                    date={date}
+                    onChange={onDateChange}
+                    open={dateOpen}
+                    onOpenChange={setDateOpen}
+                />
+                <DescriptionChip
+                    value={description}
+                    onChange={onDescriptionChange}
+                    open={descriptionOpen}
+                    onOpenChange={setDescriptionOpen}
+                />
+            </div>
+        </div>
+    );
+}
+
+function AccountSummary({ account }: { account: Account }) {
+    return (
+        <span className="flex items-center gap-2">
+            <span aria-hidden>{account.emoji ?? '💼'}</span>
+            <span className="truncate">{account.name}</span>
+        </span>
+    );
+}
+
+interface AccountChipProps {
+    account: Account | undefined;
+    onChange: (id: number | null) => void;
+    accounts: Account[];
+}
+
+function AccountChip({ account, onChange, accounts }: AccountChipProps) {
+    return (
+        <Select
+            value={account?.id?.toString() ?? ''}
+            onValueChange={(value) =>
+                onChange(value ? parseInt(value, 10) : null)
+            }
+        >
+            <SelectTrigger className="h-10 justify-start gap-2 text-left">
+                <WalletIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">
+                    {account?.name ?? 'Cuenta'}
+                </span>
+            </SelectTrigger>
+            <SelectContent>
+                {accounts.map((option) => (
+                    <SelectItem key={option.id} value={option.id.toString()}>
+                        <AccountSummary account={option} />
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+interface CategoryChipProps {
+    category: FlatCategory | undefined;
+    onChange: (id: number | null) => void;
+    categories: FlatCategory[];
+}
+
+function CategoryChip({ category, onChange, categories }: CategoryChipProps) {
+    return (
+        <Select
+            value={category?.id?.toString() ?? ''}
+            onValueChange={(value) =>
+                onChange(value ? parseInt(value, 10) : null)
+            }
+        >
+            <SelectTrigger className="h-10 justify-start gap-2 text-left">
+                <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">
+                    {category?.name ?? 'Categoría'}
+                </span>
+            </SelectTrigger>
+            <SelectContent>
+                {categories.map((option) => (
+                    <SelectItem key={option.id} value={option.id.toString()}>
+                        <span
+                            className={cn(
+                                'flex items-center gap-2',
+                                option.depth === 1 && 'pl-4',
+                            )}
+                        >
+                            <span
+                                className="size-2 rounded-full"
+                                style={{ backgroundColor: option.color }}
+                            />
+                            {option.name}
+                        </span>
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+interface DateChipProps {
+    date: string;
+    onChange: (value: string) => void;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
+
+function DateChip({ date, onChange, open, onOpenChange }: DateChipProps) {
+    const parsedDate = useMemo(() => new Date(`${date}T12:00:00`), [date]);
+
+    return (
+        <Popover open={open} onOpenChange={onOpenChange}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    className="h-10 justify-start gap-2 px-3 font-normal"
+                >
+                    <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-medium">
+                        {format(parsedDate, 'PPP', { locale: es })}
+                    </span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+                <Calendar
+                    mode="single"
+                    selected={parsedDate}
+                    onSelect={(picked) => {
+                        if (picked) {
+                            onChange(format(picked, 'yyyy-MM-dd'));
+                            onOpenChange(false);
+                        }
+                    }}
+                    initialFocus
+                />
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+interface DescriptionChipProps {
+    value: string;
+    onChange: (value: string) => void;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
+
+function DescriptionChip({
+    value,
+    onChange,
+    open,
+    onOpenChange,
+}: DescriptionChipProps) {
+    const trimmed = value.trim();
+    const display = trimmed.length > 0 ? trimmed : 'Notas / descripción';
+
+    return (
+        <Popover open={open} onOpenChange={onOpenChange}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    className={cn(
+                        'h-10 justify-start gap-2 px-3 font-normal',
+                        trimmed.length === 0 && 'text-muted-foreground',
+                    )}
+                >
+                    <StickyNoteIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-medium">
+                        {display}
+                    </span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 space-y-2">
+                <Label className="text-xs font-semibold tracking-wider uppercase">
+                    Notas
+                </Label>
+                <Textarea
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder="Ej: Supermercado Líder"
+                    rows={3}
+                    autoFocus
+                />
+                <div className="flex justify-end">
+                    <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        Listo
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
     );
 }

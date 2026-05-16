@@ -3,8 +3,8 @@ export type * from './navigation';
 export type * from './ui';
 export type * from './models';
 export {
-    TRANSACTION_TYPES,
-    INSTRUMENT_TYPES,
+    TRANSACTION_DIRECTIONS,
+    TRANSACTION_MODES,
     BUDGET_FREQUENCIES,
 } from './models';
 

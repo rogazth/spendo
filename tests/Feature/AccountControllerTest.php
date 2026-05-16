@@ -30,7 +30,88 @@ test('index renders accounts page for authenticated user', function () {
     $this->actingAs($user)->get('/accounts')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('accounts/index')
-            ->has('accounts')
+            ->has('currencySummaries')
+            ->has('totals')
+        );
+});
+
+test('index groups accounts by currency with summary aggregates', function () {
+    $user = User::factory()->create();
+
+    $clpDefault = Account::factory()->for($user)->create([
+        'name' => 'Banco CLP',
+        'currency' => 'CLP',
+        'is_default' => true,
+        'include_in_budget' => true,
+    ]);
+    $clpExcluded = Account::factory()->for($user)->create([
+        'name' => 'Ahorro CLP',
+        'currency' => 'CLP',
+        'is_default' => false,
+        'include_in_budget' => false,
+    ]);
+    $usd = Account::factory()->for($user)->create([
+        'name' => 'Cuenta USD',
+        'currency' => 'USD',
+        'is_default' => false,
+        'include_in_budget' => true,
+    ]);
+
+    \App\Models\Transaction::factory()->for($user)->for($clpDefault)->create([
+        'amount' => 500000,
+        'currency' => 'CLP',
+    ]);
+    \App\Models\Transaction::factory()->for($user)->for($clpExcluded)->create([
+        'amount' => 200000,
+        'currency' => 'CLP',
+    ]);
+    \App\Models\Transaction::factory()->for($user)->for($usd)->create([
+        'amount' => -15000,
+        'currency' => 'USD',
+    ]);
+
+    $this->actingAs($user)->get('/accounts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('accounts/index')
+            ->has('currencySummaries', 2)
+            ->where('currencySummaries.0.currency', 'CLP')
+            ->where('currencySummaries.0.accounts_count', 2)
+            ->where('currencySummaries.0.total', 700000)
+            ->where('currencySummaries.0.budgeted_total', 500000)
+            ->where('currencySummaries.0.excluded_total', 200000)
+            ->where('currencySummaries.0.included_count', 1)
+            ->where('currencySummaries.0.excluded_count', 1)
+            ->where('currencySummaries.0.negative_count', 0)
+            ->where('currencySummaries.1.currency', 'USD')
+            ->where('currencySummaries.1.total', -15000)
+            ->where('currencySummaries.1.negative_count', 1)
+            ->where('totals.accounts', 3)
+            ->where('totals.currencies', 2)
+            ->where('totals.included', 2)
+            ->where('totals.default_name', 'Banco CLP')
+        );
+});
+
+test('index puts the default account first within its currency group', function () {
+    $user = User::factory()->create();
+
+    Account::factory()->for($user)->create([
+        'name' => 'Otra',
+        'currency' => 'CLP',
+        'is_default' => false,
+        'sort_order' => 0,
+    ]);
+    $default = Account::factory()->for($user)->create([
+        'name' => 'Principal',
+        'currency' => 'CLP',
+        'is_default' => true,
+        'sort_order' => 5,
+    ]);
+
+    $this->actingAs($user)->get('/accounts')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currencySummaries.0.accounts.0.uuid', $default->uuid)
+            ->where('currencySummaries.0.accounts.0.is_default', true)
         );
 });
 
@@ -67,7 +148,7 @@ test('store creates an income transaction for initial balance', function () {
     $this->assertDatabaseHas('transactions', [
         'user_id' => $user->id,
         'account_id' => $account->id,
-        'type' => 'income',
+        'amount' => 10000000,
         'description' => 'Balance inicial',
     ]);
 });

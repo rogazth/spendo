@@ -46,22 +46,14 @@ class Account extends Model
     }
 
     /**
-     * Account balance = income + transfer_in - expense - transfer_out.
-     * Settlements do NOT affect account balance (recognized at purchase time).
+     * Account balance is the signed sum of all transactions on this account.
+     * Positive amounts = inflows; negative amounts = outflows.
      */
     public function getCurrentBalanceAttribute(): float
     {
-        $balanceInCents = $this->transactions()
-            ->selectRaw("
-                COALESCE(SUM(
-                    CASE
-                        WHEN type IN ('income', 'transfer_in') THEN amount
-                        WHEN type IN ('expense', 'transfer_out') THEN -amount
-                        ELSE 0
-                    END
-                ), 0) as balance
-            ")
-            ->value('balance') ?? 0;
+        $balanceInCents = (int) ($this->transactions()
+            ->selectRaw('COALESCE(SUM(amount), 0) as balance')
+            ->value('balance') ?? 0);
 
         return $balanceInCents / 100;
     }

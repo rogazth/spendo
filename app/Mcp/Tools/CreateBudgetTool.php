@@ -19,7 +19,7 @@ class CreateBudgetTool extends Tool
         **Frequency**: weekly, biweekly, monthly, bimonthly
         **Items**: Array of category_id + amount pairs defining spending caps per category
         **Amounts**: In major currency units (e.g., 572000 for 572,000 CLP)
-        **Categories**: Must be expense-type categories. Cannot mix a parent and its children in the same budget.
+        **Categories**: Must be non-system spending categories. Cannot mix a parent and its children in the same budget.
         **Currency scope**: Budget spending is tracked across all transactions with the matching currency.
     MARKDOWN;
 
@@ -49,7 +49,7 @@ class CreateBudgetTool extends Tool
             'anchor_date.required' => 'Anchor date is required (YYYY-MM-DD). This is the start date of the first budget cycle.',
             'items.required' => 'At least one budget item (category + amount) is required.',
             'items.min' => 'At least one budget item is required.',
-            'items.*.category_id.required' => 'Each item needs a category_id. Use GetCategoriesTool to find expense categories.',
+            'items.*.category_id.required' => 'Each item needs a category_id. Use GetCategoriesTool to find spending categories.',
             'items.*.amount.required' => 'Each item needs an amount in major currency units.',
             'items.*.amount.gt' => 'Each item amount must be greater than zero.',
         ]);

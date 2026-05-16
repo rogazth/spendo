@@ -11,6 +11,7 @@ use App\Mcp\Tools\CreateBudgetTool;
 use App\Mcp\Tools\CreateCategoryTool;
 use App\Mcp\Tools\CreateTagTool;
 use App\Mcp\Tools\CreateTransactionTool;
+use App\Mcp\Tools\CreateTransferTool;
 use App\Mcp\Tools\DeleteAccountTool;
 use App\Mcp\Tools\DeleteTagTool;
 use App\Mcp\Tools\DeleteTransactionTool;
@@ -43,7 +44,7 @@ class SpendoServer extends Server
     /**
      * The MCP server's version.
      */
-    protected string $version = '3.0.0';
+    protected string $version = '4.0.0';
 
     /**
      * The MCP server's instructions for the LLM.
@@ -52,20 +53,21 @@ class SpendoServer extends Server
         Spendo is a personal finance management application. Use this server to:
 
         - **Accounts**: Create, update, and list bank accounts (simple containers with balance)
-        - **Categories**: Create, update, and list expense/income categories (hierarchical)
-        - **Budgets**: Create, update, and list budgets (named groups with category-level caps). Budget spending is scoped by currency — only transactions matching the budget's currency count.
+        - **Categories**: Create, update, and list hierarchical categories. Transaction direction is determined by signed amounts, not category type.
+        - **Budgets**: Create, update, and list budgets (named groups with category-level caps). Budget spending is scoped by currency and only includes budget-eligible expenses: transactions with `exclude_from_budget=false` from accounts with `include_in_budget=true`.
         - **Transactions**: Record expenses, income, and transfers. Tag transactions with user-defined labels.
         - **Tags**: Create, update, delete, and list tags. Attach tags to transactions for filtering.
         - **Metrics**: View budget progress, category-level spending, and financial summaries
 
         **Currency**: All amounts use **major currency units** (e.g., 572000 means 572,000 CLP). Do NOT use centavos.
 
-        **Transaction Types**:
-        - `expense`: Money spent — requires account_id and category_id
-        - `income`: Money received — requires account_id and category_id
-        - `transfer`: Money moved between two accounts (creates linked transfer_out + transfer_in)
+        **Transactions**:
+        Amounts are signed. **Negative amount = expense (outflow); positive amount = income (inflow)**.
+        - Use `CreateTransactionTool` for income/expense: requires account_id, category_id, signed amount, description.
+        - Use `CreateTransferTool` for transfers between two accounts: requires origin_account_id, destination_account_id, positive amount. Creates two linked transactions with opposite signs.
+        - Transfers are identified by a non-null `linked_transaction_id`. They are excluded from budget spending and from income/expense totals.
 
-        **Budget Model**: Budgets have a name, currency, frequency (weekly/biweekly/monthly/bimonthly), an anchor date, and category items with caps. Spending is measured as expenses where transaction.currency = budget.currency.
+        **Budget Model**: Budgets have a name, currency, frequency (weekly/biweekly/monthly/bimonthly), an anchor date, and category items with caps. Spending is measured as budget-eligible expenses where transaction.currency = budget.currency.
 
         **Tags**: User-defined labels (name + optional hex color). A transaction can have multiple tags. Use tag_ids when creating/updating transactions.
 
@@ -101,6 +103,7 @@ class SpendoServer extends Server
         // Transactions
         GetTransactionsTool::class,
         CreateTransactionTool::class,
+        CreateTransferTool::class,
         BulkCreateTransactionsTool::class,
         UpdateTransactionTool::class,
         DeleteTransactionTool::class,

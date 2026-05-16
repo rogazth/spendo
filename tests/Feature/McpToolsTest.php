@@ -35,7 +35,6 @@ describe('GetFinancialSummaryTool', function () {
         $category = Category::factory()->income()->for($user)->create();
 
         SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
-            'type' => 'income',
             'amount' => 1000,
             'description' => 'Test income',
             'category_id' => $category->id,
@@ -119,11 +118,10 @@ describe('GetAccountsTool', function () {
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
 
         // Spend 40,000 — 60,000 remains reserved
-        Transaction::factory()->for($user)->create([
-            'type' => 'expense',
+        Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
-            'amount' => 40000,
+            'amount' => -40000,
             'currency' => 'CLP',
             'transaction_date' => now(),
             'exclude_from_budget' => false,
@@ -141,11 +139,10 @@ describe('GetAccountsTool', function () {
         $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
 
-        Transaction::factory()->for($user)->create([
-            'type' => 'expense',
+        Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
-            'amount' => 100000,
+            'amount' => -100000,
             'currency' => 'CLP',
             'transaction_date' => now(),
             'exclude_from_budget' => false,
@@ -164,11 +161,10 @@ describe('GetAccountsTool', function () {
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
 
         // Spend 150,000 — 50,000 over budget; reserved = max(0, 100k - 150k) = 0
-        Transaction::factory()->for($user)->create([
-            'type' => 'expense',
+        Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
             'category_id' => $category->id,
-            'amount' => 150000,
+            'amount' => -150000,
             'currency' => 'CLP',
             'transaction_date' => now(),
             'exclude_from_budget' => false,
@@ -177,6 +173,27 @@ describe('GetAccountsTool', function () {
         $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
 
         $response->assertOk()->assertSee('"total_reserved": 0');
+    });
+
+    it('currency_summaries does not reduce reserved amounts with off-budget account spending', function () {
+        $user = User::factory()->create();
+        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create(['currency' => 'CLP']);
+        $category = Category::factory()->for($user)->create();
+        $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
+        BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
+
+        Transaction::factory()->expense()->for($user)->create([
+            'account_id' => $excludedAccount->id,
+            'category_id' => $category->id,
+            'amount' => -100000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+            'exclude_from_budget' => false,
+        ]);
+
+        $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
+
+        $response->assertOk()->assertSee('"total_reserved": 100000');
     });
 
     it('currency_summaries excludes include_in_budget=false accounts from budget_balance', function () {
@@ -188,8 +205,7 @@ describe('GetAccountsTool', function () {
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 50000]);
 
         // Income only on the included account → budget_balance = 200000
-        Transaction::factory()->for($user)->create([
-            'type' => 'income',
+        Transaction::factory()->income()->for($user)->create([
             'account_id' => $includedAccount->id,
             'category_id' => $category->id,
             'amount' => 200000,
@@ -281,8 +297,7 @@ describe('CreateTransactionTool - Authorization', function () {
         $category = Category::factory()->expense()->for($userB)->create();
 
         $response = SpendoServer::actingAs($userB)->tool(CreateTransactionTool::class, [
-            'type' => 'expense',
-            'amount' => 500,
+            'amount' => -500,
             'description' => 'Cross-user attempt',
             'category_id' => $category->id,
             'account_id' => $accountA->id, // belongs to User A
@@ -301,8 +316,7 @@ describe('CreateTransactionTool', function () {
         $category = Category::factory()->expense()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
-            'type' => 'expense',
-            'amount' => 15000,
+            'amount' => -15000,
             'description' => 'Lunch at restaurant',
             'category_id' => $category->id,
             'account_id' => $account->id,
@@ -313,7 +327,7 @@ describe('CreateTransactionTool', function () {
 
         $this->assertDatabaseHas('transactions', [
             'user_id' => $user->id,
-            'amount' => 1500000, // 15000 * 100 (stored as cents)
+            'amount' => -1500000, // -15000 * 100 (stored as cents)
             'description' => 'Lunch at restaurant',
         ]);
     });
@@ -324,7 +338,6 @@ describe('CreateTransactionTool', function () {
         $category = Category::factory()->income()->for($user)->create();
 
         $response = SpendoServer::actingAs($user)->tool(CreateTransactionTool::class, [
-            'type' => 'income',
             'amount' => 500000,
             'description' => 'Monthly salary',
             'category_id' => $category->id,
@@ -343,8 +356,7 @@ describe('CreateTransactionTool', function () {
 
     it('returns error when user is not authenticated', function () {
         $response = SpendoServer::tool(CreateTransactionTool::class, [
-            'type' => 'expense',
-            'amount' => 15000,
+            'amount' => -15000,
             'description' => 'Test',
             'category_id' => 1,
             'account_id' => 1,

@@ -20,8 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { Category, CategoryType } from '@/types';
-import { CATEGORY_TYPES } from '@/types';
+import type { Category } from '@/types';
 import { DEFAULT_COLORS } from '@/constants/colors';
 
 interface CategoryFormDialogProps {
@@ -30,8 +29,6 @@ interface CategoryFormDialogProps {
     category?: Category;
     parentCategories: Category[];
 }
-
-const categoryTypes = CATEGORY_TYPES.filter((t) => t.id !== 'system');
 
 export function CategoryFormDialog({
     open,
@@ -44,13 +41,11 @@ export function CategoryFormDialog({
     const { data, setData, post, put, processing, errors, reset } = useForm<{
         parent_id: number | null;
         name: string;
-        type: CategoryType;
         emoji: string | null;
         color: string;
     }>({
         parent_id: null,
         name: '',
-        type: 'expense',
         emoji: null,
         color: '#3B82F6',
     });
@@ -60,7 +55,6 @@ export function CategoryFormDialog({
             setData({
                 parent_id: category?.parent_id ?? null,
                 name: category?.name ?? '',
-                type: category?.type ?? 'expense',
                 emoji: category?.emoji ?? null,
                 color: category?.color ?? '#3B82F6',
             });
@@ -96,7 +90,7 @@ export function CategoryFormDialog({
     };
 
     const filteredParents = parentCategories.filter(
-        (cat) => cat.type === data.type && cat.id !== category?.id,
+        (cat) => cat.id !== category?.id,
     );
 
     return (
@@ -115,32 +109,6 @@ export function CategoryFormDialog({
                     </DialogHeader>
 
                     <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="type">Tipo</Label>
-                            <Select
-                                value={data.type}
-                                onValueChange={(value: CategoryType) => {
-                                    setData('type', value);
-                                    setData('parent_id', null);
-                                }}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona un tipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {categoryTypes.map((type) => (
-                                        <SelectItem
-                                            key={type.id}
-                                            value={type.id}
-                                        >
-                                            {type.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.type} />
-                        </div>
-
                         <div className="space-y-2">
                             <Label htmlFor="name">Nombre</Label>
                             <Input

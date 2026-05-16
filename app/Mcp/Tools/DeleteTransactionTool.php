@@ -13,8 +13,8 @@ class DeleteTransactionTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Delete a single transaction permanently.
 
-        If the transaction is a transfer (transfer_out or transfer_in), the linked
-        counterpart leg will also be deleted automatically.
+        If the transaction is part of a transfer (has a `linked_transaction_id`),
+        the linked counterpart leg will also be deleted automatically.
 
         Use GetTransactionsTool first to find the transaction ID.
         This action cannot be undone.
@@ -39,8 +39,8 @@ class DeleteTransactionTool extends Tool
         }
 
         $description = $transaction->description ?? 'no description';
-        $type = $transaction->type->value;
         $hasLinked = $transaction->linked_transaction_id !== null;
+        $amount = $transaction->amount;
 
         app(DeleteTransactionAction::class)->handle($transaction);
 
@@ -54,7 +54,8 @@ class DeleteTransactionTool extends Tool
             'message' => $message,
             'deleted' => [
                 'description' => $description,
-                'type' => $type,
+                'amount' => $amount,
+                'is_transfer' => $hasLinked,
                 'linked_leg_deleted' => $hasLinked,
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));

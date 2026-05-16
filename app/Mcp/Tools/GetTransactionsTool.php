@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Http\Resources\TransactionResource;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -14,9 +15,13 @@ class GetTransactionsTool extends Tool
 {
     protected string $description = <<<'MARKDOWN'
         Get transactions with optional filters.
-        Filter by date range, type, category, account, tag, or budget.
+
+        Filter by date range, signed direction, category, account, tag, transfer flag, or budget.
+        Budget filters use budget-eligible expenses and default to the current budget cycle when no date range is provided.
         Results are ordered by transaction date (most recent first).
-        Includes a totals block with count, total debit, and total credit for the filtered dataset.
+
+        Includes a totals block with count, total debit (sum of outflows), and total credit (sum of inflows) for the filtered dataset.
+        Transfers are excluded from totals by default. Direction filters use the signed amount and include transfer legs unless include_transfers=false.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -30,12 +35,24 @@ class GetTransactionsTool extends Tool
         $query = $user->transactions()
             ->with(['category', 'account', 'tags']);
 
-        // Filter by type
-        if ($type = $request->get('type')) {
-            $query->where('type', $type);
+        if ($direction = $request->get('direction')) {
+            if ($direction === 'in') {
+                $query->where('amount', '>', 0);
+            } elseif ($direction === 'out') {
+                $query->where('amount', '<', 0);
+            }
         }
 
-        // Filter by category (single or multiple)
+        if (! $request->get('include_transfers', true)) {
+            $query->whereNull('linked_transaction_id');
+        }
+
+        if ($transfersOnly = $request->get('transfers_only')) {
+            if ($transfersOnly) {
+                $query->whereNotNull('linked_transaction_id');
+            }
+        }
+
         if ($categoryIds = $request->get('category_ids')) {
             if (is_array($categoryIds)) {
                 $query->whereIn('category_id', $categoryIds);
@@ -44,7 +61,6 @@ class GetTransactionsTool extends Tool
             $query->where('category_id', $categoryId);
         }
 
-        // Filter by account (single or multiple)
         if ($accountIds = $request->get('account_ids')) {
             if (is_array($accountIds)) {
                 $query->whereIn('account_id', $accountIds);
@@ -53,52 +69,53 @@ class GetTransactionsTool extends Tool
             $query->where('account_id', $accountId);
         }
 
-        // Filter by tags
         if ($tagIds = $request->get('tag_ids')) {
             if (is_array($tagIds) && count($tagIds) > 0) {
                 $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tagIds));
             }
         }
 
-        // Filter by budget (resolve budget category IDs)
+        $budgetDateRangeApplied = false;
+
         if ($budgetId = $request->get('budget_id')) {
             $budget = $user->budgets()->with('items.category.children')->find($budgetId);
             if ($budget) {
-                $categoryIds = $budget->items->flatMap(function ($item) {
-                    $ids = [$item->category_id];
-                    if ($item->category && $item->category->relationLoaded('children')) {
-                        $ids = array_merge($ids, $item->category->children->pluck('id')->all());
-                    }
+                $startDate = $request->get('start_date');
+                $endDate = $request->get('end_date');
 
-                    return $ids;
-                })->unique()->values()->all();
+                if (! $startDate && ! $endDate) {
+                    [$cycleStart, $cycleEnd] = $budget->resolveCycleRange(CarbonImmutable::now()->startOfDay());
+                    $startDate = $cycleStart;
+                    $endDate = $cycleEnd;
+                    $budgetDateRangeApplied = true;
+                }
 
-                $query->where('type', 'expense')
-                    ->where('exclude_from_budget', false)
-                    ->whereIn('category_id', $categoryIds);
+                $query->forBudgetSpending($budget, $startDate, $endDate);
             }
         }
 
-        // Filter by date range
-        if ($startDate = $request->get('start_date')) {
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+
+        if (! $budgetDateRangeApplied && $startDate) {
             $query->whereDate('transaction_date', '>=', $startDate);
         }
 
-        if ($endDate = $request->get('end_date')) {
+        if (! $budgetDateRangeApplied && $endDate) {
             $query->whereDate('transaction_date', '<=', $endDate);
         }
 
-        // Calculate totals before pagination
         $totalsQuery = clone $query;
-        $totalDebitCents = (clone $totalsQuery)
-            ->whereIn('type', ['expense', 'transfer_out'])
-            ->sum('amount');
-        $totalCreditCents = (clone $totalsQuery)
-            ->whereIn('type', ['income', 'transfer_in'])
-            ->sum('amount');
+        $nonTransferTotals = (clone $totalsQuery)
+            ->whereNull('linked_transaction_id')
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) as total_debit')
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_credit')
+            ->first();
+
+        $totalDebitCents = (int) ($nonTransferTotals->total_debit ?? 0);
+        $totalCreditCents = (int) ($nonTransferTotals->total_credit ?? 0);
         $totalCount = $totalsQuery->count();
 
-        // Pagination
         $page = max(1, (int) $request->get('page', 1));
         $perPage = max(1, min((int) $request->get('per_page', 50), 100));
 
@@ -131,9 +148,13 @@ class GetTransactionsTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'type' => $schema->string()
-                ->description('Filter by transaction type: expense, income, transfer_out, transfer_in')
-                ->enum(['expense', 'income', 'transfer_out', 'transfer_in']),
+            'direction' => $schema->string()
+                ->description('Filter by signed direction: "in" (positive amounts, inflows) or "out" (negative amounts, outflows). Transfer legs are included unless include_transfers=false.')
+                ->enum(['in', 'out']),
+            'include_transfers' => $schema->boolean()
+                ->description('Include transfer transactions in results (default: true).'),
+            'transfers_only' => $schema->boolean()
+                ->description('Return only transfer transactions (default: false).'),
             'category_id' => $schema->integer()
                 ->description('Filter by single category ID'),
             'category_ids' => $schema->array()

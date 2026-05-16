@@ -3,7 +3,8 @@
 namespace App\Models;
 
 use App\Concerns\HasUuid;
-use App\Enums\TransactionType;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,6 @@ class Transaction extends Model
 
     protected $fillable = [
         'user_id',
-        'type',
         'account_id',
         'category_id',
         'linked_transaction_id',
@@ -34,7 +34,6 @@ class Transaction extends Model
     protected function casts(): array
     {
         return [
-            'type' => TransactionType::class,
             'amount' => 'integer',
             'exclude_from_budget' => 'boolean',
             'transaction_date' => 'datetime',
@@ -76,8 +75,59 @@ class Transaction extends Model
         return $this->belongsToMany(Tag::class, 'transaction_tag');
     }
 
+    public function scopeBudgetEligible(Builder $query): Builder
+    {
+        return $query
+            ->where('amount', '<', 0)
+            ->whereNull('linked_transaction_id')
+            ->where('exclude_from_budget', false)
+            ->whereHas('account', fn (Builder $query) => $query->where('include_in_budget', true));
+    }
+
+    public function scopeForBudget(Builder $query, Budget $budget): Builder
+    {
+        $categoryIds = $budget->budgetCategoryIds();
+
+        $query->where('currency', $budget->currency);
+
+        if ($categoryIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn('category_id', $categoryIds);
+    }
+
+    public function scopeWithinDateRange(
+        Builder $query,
+        CarbonInterface|string|null $startDate,
+        CarbonInterface|string|null $endDate,
+    ): Builder {
+        if ($startDate !== null) {
+            $query->whereDate('transaction_date', '>=', $startDate instanceof CarbonInterface ? $startDate->toDateString() : $startDate);
+        }
+
+        if ($endDate !== null) {
+            $query->whereDate('transaction_date', '<=', $endDate instanceof CarbonInterface ? $endDate->toDateString() : $endDate);
+        }
+
+        return $query;
+    }
+
+    public function scopeForBudgetSpending(
+        Builder $query,
+        Budget $budget,
+        CarbonInterface|string|null $startDate = null,
+        CarbonInterface|string|null $endDate = null,
+    ): Builder {
+        return $query
+            ->budgetEligible()
+            ->forBudget($budget)
+            ->withinDateRange($startDate, $endDate);
+    }
+
     /**
-     * Get and set the amount (stored as cents in DB).
+     * Get and set the amount (stored as signed cents in DB).
+     * Positive = inflow to account; negative = outflow.
      */
     protected function amount(): Attribute
     {
@@ -89,13 +139,23 @@ class Transaction extends Model
 
     public function getFormattedAmountAttribute(): string
     {
-        $prefix = $this->type->isDebit() ? '-' : '+';
+        $prefix = $this->amount < 0 ? '-' : '+';
 
-        return $prefix.'$'.number_format($this->amount, 0, ',', '.');
+        return $prefix.'$'.number_format(abs($this->amount), 0, ',', '.');
     }
 
     public function isTransfer(): bool
     {
-        return in_array($this->type, [TransactionType::TransferOut, TransactionType::TransferIn]);
+        return $this->linked_transaction_id !== null;
+    }
+
+    public function isIncome(): bool
+    {
+        return ! $this->isTransfer() && $this->amount > 0;
+    }
+
+    public function isExpense(): bool
+    {
+        return ! $this->isTransfer() && $this->amount < 0;
     }
 }

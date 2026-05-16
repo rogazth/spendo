@@ -17,12 +17,12 @@ class UpdateTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['required', 'string', 'in:expense,income'],
+            'type' => ['prohibited'],
             'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer'],
-            'amount' => ['required', 'numeric'],
+            'amount' => ['required', 'numeric', 'not_in:0'],
             'description' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
             'exclude_from_budget' => ['nullable', 'boolean'],
@@ -38,10 +38,12 @@ class UpdateTransactionRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'type.prohibited' => 'El tipo ya no se usa. Usa un monto negativo para gastos y positivo para ingresos.',
             'account_id.exists' => 'La cuenta seleccionada no existe.',
             'category_id.exists' => 'La categoria seleccionada no existe.',
             'amount.required' => 'El monto es requerido.',
             'amount.numeric' => 'El monto debe ser un numero.',
+            'amount.not_in' => 'El monto no puede ser cero.',
             'description.max' => 'La descripcion no puede exceder 255 caracteres.',
             'exclude_from_budget.boolean' => 'El indicador de exclusión del budget no es válido.',
             'transaction_date.required' => 'La fecha es requerida.',

@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -17,6 +18,7 @@ class GetBudgetsTool extends Tool
     protected string $description = <<<'MARKDOWN'
         List all budgets with their current cycle progress.
         Returns budget details including total budgeted, spent amount, and remaining percentage.
+        Spending excludes transactions with exclude_from_budget=true and accounts with include_in_budget=false.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -37,10 +39,9 @@ class GetBudgetsTool extends Tool
         $budgets = $query->latest()->get();
         $referenceDate = CarbonImmutable::now()->startOfDay();
 
-        $result = $budgets->map(function (Budget $budget) use ($referenceDate) {
+        $result = $budgets->map(function (Budget $budget) use ($referenceDate, $user) {
             [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
-            $categoryIds = $this->collectBudgetCategoryIds($budget);
-            $spent = $this->calculateBudgetSpent($budget, $cycleStart, $cycleEnd, $categoryIds);
+            $spent = $this->calculateBudgetSpent($user, $budget, $cycleStart, $cycleEnd);
             $totalBudgeted = $budget->total_budgeted;
             $remaining = $totalBudgeted - $spent;
             $percentage = $totalBudgeted > 0
@@ -68,41 +69,18 @@ class GetBudgetsTool extends Tool
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
-    /**
-     * @return array<int, int>
-     */
-    private function collectBudgetCategoryIds(Budget $budget): array
-    {
-        return $budget->items->flatMap(function ($item) {
-            $ids = [$item->category_id];
-            if ($item->category && $item->category->relationLoaded('children')) {
-                $ids = array_merge($ids, $item->category->children->pluck('id')->all());
-            }
-
-            return $ids;
-        })->unique()->values()->all();
-    }
-
     private function calculateBudgetSpent(
+        User $user,
         Budget $budget,
         CarbonImmutable $startDate,
         CarbonImmutable $endDate,
-        array $categoryIds,
     ): float {
-        if ($categoryIds === []) {
-            return 0;
-        }
+        $totalInCents = (int) ($user->transactions()
+            ->forBudgetSpending($budget, $startDate, $endDate)
+            ->selectRaw('COALESCE(SUM(-amount), 0) as total')
+            ->value('total') ?? 0);
 
-        $query = $budget->user->transactions()
-            ->where('type', 'expense')
-            ->where('exclude_from_budget', false)
-            ->whereDate('transaction_date', '>=', $startDate->toDateString())
-            ->whereDate('transaction_date', '<=', $endDate->toDateString())
-            ->whereIn('category_id', $categoryIds);
-
-        $query->where('currency', $budget->currency);
-
-        return $query->sum('amount') / 100;
+        return $totalInCents / 100;
     }
 
     public function schema(JsonSchema $schema): array

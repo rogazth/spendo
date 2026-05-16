@@ -52,10 +52,9 @@ test('stores and updates exclude_from_budget in transactions', function () {
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/transactions', [
-        'type' => 'expense',
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'amount' => 12345,
+        'amount' => -12345,
         'currency' => 'CLP',
         'description' => 'Tx exclusion test',
         'exclude_from_budget' => true,
@@ -68,12 +67,12 @@ test('stores and updates exclude_from_budget in transactions', function () {
         ->firstOrFail();
 
     expect($transaction->exclude_from_budget)->toBeTrue();
+    expect($transaction->amount)->toEqual(-12345);
 
     $this->actingAs($user)->put("/transactions/{$transaction->uuid}", [
-        'type' => 'expense',
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'amount' => 12345,
+        'amount' => -12345,
         'currency' => 'CLP',
         'description' => 'Tx exclusion test',
         'exclude_from_budget' => false,

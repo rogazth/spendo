@@ -57,6 +57,7 @@ class BudgetResource extends JsonResource
                             'id' => $item->category->id,
                             'uuid' => $item->category->uuid,
                             'name' => $item->category->name,
+                            'emoji' => $item->category->emoji,
                             'color' => $item->category->color,
                             'parent_id' => $item->category->parent_id,
                         ] : null,

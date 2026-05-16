@@ -43,10 +43,10 @@ describe('Transaction amount accessor', function () {
 
         $transaction = Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
-            'amount' => 500,
+            'amount' => -500,
         ]);
 
-        expect($transaction->fresh()->amount)->toEqual(500);
+        expect($transaction->fresh()->amount)->toEqual(-500);
     });
 
     it('multiplies by 100 on set', function () {
@@ -55,10 +55,10 @@ describe('Transaction amount accessor', function () {
 
         $transaction = Transaction::factory()->expense()->for($user)->create([
             'account_id' => $account->id,
-            'amount' => 50,
+            'amount' => -50,
         ]);
 
-        expect($transaction->getRawOriginal('amount'))->toBe(5000);
+        expect($transaction->getRawOriginal('amount'))->toBe(-5000);
     });
 
     it('formatted_amount prefixes expenses with minus', function () {

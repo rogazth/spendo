@@ -13,8 +13,17 @@ class DummyDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $expenseCategories = Category::where('type', 'expense')->whereNull('parent_id')->get();
-        $incomeCategories = Category::where('type', 'income')->whereNull('parent_id')->get();
+        $incomeCategoryNames = ['Ingresos', 'Sueldo', 'Freelance', 'Pensión', 'Bono / Aguinaldo', 'Otros Ingresos'];
+
+        $incomeCategories = Category::whereNull('parent_id')
+            ->where('is_system', false)
+            ->whereIn('name', $incomeCategoryNames)
+            ->get();
+
+        $expenseCategories = Category::whereNull('parent_id')
+            ->where('is_system', false)
+            ->whereNotIn('name', $incomeCategoryNames)
+            ->get();
 
         // User 1: Main user (no dummy data — real user)
         User::factory()->create([
@@ -86,7 +95,7 @@ class DummyDataSeeder extends Seeder
                 'user_id' => $user->id,
                 'account_id' => $personalAccount->id,
                 'category_id' => $category->id,
-                'amount' => $this->getRealisticAmount($category->name),
+                'amount' => -$this->getRealisticAmount($category->name),
                 'description' => $this->getDescriptionForCategory($category->name, $merchants),
                 'transaction_date' => now()->subDays($daysAgo),
             ]);
@@ -100,7 +109,7 @@ class DummyDataSeeder extends Seeder
                 'user_id' => $user->id,
                 'account_id' => $casaAccount->id,
                 'category_id' => $category->id,
-                'amount' => $this->getRealisticAmount($category->name),
+                'amount' => -$this->getRealisticAmount($category->name),
                 'description' => $this->getDescriptionForCategory($category->name, $merchants),
                 'transaction_date' => now()->subDays($daysAgo),
             ]);

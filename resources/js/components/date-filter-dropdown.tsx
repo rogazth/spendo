@@ -9,13 +9,11 @@ import {
     subMonths,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+import { FilterPill } from '@/components/filter-pill';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
 interface DateFilterDropdownProps {
     dateFrom: string;
@@ -40,7 +38,10 @@ export function DateFilterDropdown({
     );
 
     const singleDate = useMemo(
-        () => (dateFrom && dateFrom === dateTo ? parseLocalDate(dateFrom) : undefined),
+        () =>
+            dateFrom && dateFrom === dateTo
+                ? parseLocalDate(dateFrom)
+                : undefined,
         [dateFrom, dateTo],
     );
 
@@ -52,27 +53,20 @@ export function DateFilterDropdown({
         return { from, to };
     }, [dateFrom, dateTo]);
 
-    const dateLabel = useMemo(() => {
-        if (dateFrom && dateTo) {
-            const fromDate = parseLocalDate(dateFrom);
-            const toDate = parseLocalDate(dateTo);
-            if (!fromDate || !toDate) return 'Fecha';
-            if (dateFrom === dateTo) {
-                return format(fromDate, 'PPP', { locale: es });
-            }
-            return `${format(fromDate, 'PPP', { locale: es })} — ${format(toDate, 'PPP', { locale: es })}`;
+    const dateValue = useMemo(() => {
+        if (!dateFrom || !dateTo) return undefined;
+        const fromDate = parseLocalDate(dateFrom);
+        const toDate = parseLocalDate(dateTo);
+        if (!fromDate || !toDate) return undefined;
+        if (dateFrom === dateTo) {
+            return format(fromDate, 'PPP', { locale: es });
         }
-        return 'Fecha';
+        return `${format(fromDate, 'd MMM', { locale: es })} — ${format(toDate, 'd MMM yyyy', { locale: es })}`;
     }, [dateFrom, dateTo]);
 
     const today = startOfToday();
     const quickOptions = [
-        {
-            key: 'today',
-            label: 'Hoy',
-            from: today,
-            to: today,
-        },
+        { key: 'today', label: 'Hoy', from: today, to: today },
         {
             key: 'this-week',
             label: 'Esta semana',
@@ -115,112 +109,145 @@ export function DateFilterDropdown({
         );
     }, [dateFrom, dateTo, quickOptions]);
 
-    const setQuickRange = (from: Date, to: Date) => {
-        const fromValue = format(from, 'yyyy-MM-dd');
-        const toValue = format(to, 'yyyy-MM-dd');
-
-        onChange({ dateFrom: fromValue, dateTo: toValue });
-        if (fromValue === toValue) {
-            setDateMode('single');
-            return;
-        }
-        setDateMode('range');
-    };
-
     return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    className={cn('justify-start border-dashed')}
-                >
-                    <CalendarIcon className="h-4 w-4" />
-                    {dateLabel}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="start"
-                className="w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden p-0 sm:w-[520px]"
-            >
-                <div className="flex flex-col gap-3 p-3 sm:flex-row">
-                    <div>
-                        <div className="mb-2 inline-flex rounded-md border p-1">
-                            <Button
-                                type="button"
-                                variant={dateMode === 'single' ? 'secondary' : 'ghost'}
-                                size="sm"
-                                onClick={() => setDateMode('single')}
-                            >
-                                Día
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={dateMode === 'range' ? 'secondary' : 'ghost'}
-                                size="sm"
-                                onClick={() => setDateMode('range')}
-                            >
-                                Rango
-                            </Button>
+        <FilterPill
+            label="Fecha"
+            value={dateValue}
+            onClear={() => onChange({ dateFrom: '', dateTo: '' })}
+            contentClassName="w-[340px] max-w-[calc(100vw-2rem)] p-0 sm:w-[520px]"
+        >
+            {({ close }) => {
+                const applyQuickRange = (from: Date, to: Date) => {
+                    const fromValue = format(from, 'yyyy-MM-dd');
+                    const toValue = format(to, 'yyyy-MM-dd');
+                    onChange({ dateFrom: fromValue, dateTo: toValue });
+                    setDateMode(fromValue === toValue ? 'single' : 'range');
+                    close();
+                };
+
+                return (
+                    <div className="flex flex-col gap-3 p-3 sm:flex-row">
+                        <div>
+                            <div className="mb-2 inline-flex rounded-md border p-1">
+                                <Button
+                                    type="button"
+                                    variant={
+                                        dateMode === 'single'
+                                            ? 'secondary'
+                                            : 'ghost'
+                                    }
+                                    size="sm"
+                                    onClick={() => setDateMode('single')}
+                                >
+                                    Día
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={
+                                        dateMode === 'range'
+                                            ? 'secondary'
+                                            : 'ghost'
+                                    }
+                                    size="sm"
+                                    onClick={() => setDateMode('range')}
+                                >
+                                    Rango
+                                </Button>
+                            </div>
+                            {dateMode === 'single' ? (
+                                <Calendar
+                                    mode="single"
+                                    selected={singleDate}
+                                    onSelect={(date) => {
+                                        if (!date) {
+                                            onChange({
+                                                dateFrom: '',
+                                                dateTo: '',
+                                            });
+                                            return;
+                                        }
+                                        const formatted = format(
+                                            date,
+                                            'yyyy-MM-dd',
+                                        );
+                                        onChange({
+                                            dateFrom: formatted,
+                                            dateTo: formatted,
+                                        });
+                                        close();
+                                    }}
+                                    initialFocus
+                                />
+                            ) : (
+                                <Calendar
+                                    mode="range"
+                                    selected={rangeDate}
+                                    onSelect={(range) => {
+                                        if (!range?.from) {
+                                            onChange({
+                                                dateFrom: '',
+                                                dateTo: '',
+                                            });
+                                            return;
+                                        }
+                                        const fromValue = format(
+                                            range.from,
+                                            'yyyy-MM-dd',
+                                        );
+                                        const toValue = format(
+                                            range.to ?? range.from,
+                                            'yyyy-MM-dd',
+                                        );
+                                        onChange({
+                                            dateFrom: fromValue,
+                                            dateTo: toValue,
+                                        });
+                                        if (range.to) {
+                                            close();
+                                        }
+                                    }}
+                                    initialFocus
+                                />
+                            )}
                         </div>
-                        {dateMode === 'single' ? (
-                            <Calendar
-                                mode="single"
-                                selected={singleDate}
-                                onSelect={(date) => {
-                                    if (!date) {
-                                        onChange({ dateFrom: '', dateTo: '' });
-                                        return;
+                        <div className="flex min-w-[180px] flex-col gap-2 border-t pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-3">
+                            <span className="text-muted-foreground text-xs uppercase">
+                                Rápidos
+                            </span>
+                            {quickOptions.map((option) => (
+                                <Button
+                                    key={option.key}
+                                    type="button"
+                                    variant={
+                                        selectedQuickKey === option.key
+                                            ? 'secondary'
+                                            : 'ghost'
                                     }
-                                    const formatted = format(date, 'yyyy-MM-dd');
-                                    onChange({ dateFrom: formatted, dateTo: formatted });
-                                }}
-                                initialFocus
-                            />
-                        ) : (
-                            <Calendar
-                                mode="range"
-                                selected={rangeDate}
-                                onSelect={(range) => {
-                                    if (!range?.from) {
-                                        onChange({ dateFrom: '', dateTo: '' });
-                                        return;
+                                    size="sm"
+                                    className="justify-start"
+                                    onClick={() =>
+                                        applyQuickRange(option.from, option.to)
                                     }
-                                    const fromValue = format(range.from, 'yyyy-MM-dd');
-                                    const toValue = format(range.to ?? range.from, 'yyyy-MM-dd');
-                                    onChange({ dateFrom: fromValue, dateTo: toValue });
-                                }}
-                                initialFocus
-                            />
-                        )}
-                    </div>
-                    <div className="flex min-w-[180px] flex-col gap-2 border-t pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-3">
-                        <span className="text-xs text-muted-foreground uppercase">
-                            Rápidos
-                        </span>
-                        {quickOptions.map((option) => (
+                                >
+                                    {option.label}
+                                </Button>
+                            ))}
                             <Button
-                                key={option.key}
                                 type="button"
-                                variant={selectedQuickKey === option.key ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
                                 className="justify-start"
-                                onClick={() => setQuickRange(option.from, option.to)}
+                                onClick={() => {
+                                    onChange({ dateFrom: '', dateTo: '' });
+                                    close();
+                                }}
                             >
-                                {option.label}
+                                Limpiar
                             </Button>
-                        ))}
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => onChange({ dateFrom: '', dateTo: '' })}
-                        >
-                            Limpiar
-                        </Button>
+                        </div>
                     </div>
-                </div>
-            </PopoverContent>
-        </Popover>
+                );
+            }}
+        </FilterPill>
     );
 }

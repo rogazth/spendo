@@ -15,10 +15,15 @@ class UpdateTransactionTool extends Tool
         Update an existing transaction. Only provided fields will be changed.
         Use GetTransactionsTool first to find the transaction ID.
 
-        **Supported types**: expense, income.
-        Transfers (transfer_out / transfer_in) cannot be updated — delete and recreate them instead.
+        **Supports**: income/expense transactions (non-transfer).
+        Transfers cannot be updated — delete and recreate them via CreateTransferTool.
 
-        **Amount**: Provide in major currency units (e.g., 572000 for 572,000 CLP).
+        **Amount sign determines direction:**
+        - Negative amount → expense
+        - Positive amount → income
+        - Do not send a `type` field; transactions no longer have one.
+
+        **Amount**: Signed value in major currency units (e.g., -572000 for a 572,000 CLP expense).
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -31,8 +36,9 @@ class UpdateTransactionTool extends Tool
 
         $validated = $request->validate([
             'transaction_id' => ['required', 'integer'],
+            'type' => ['prohibited'],
             'description' => ['nullable', 'string', 'max:255'],
-            'amount' => ['nullable', 'numeric', 'gt:0'],
+            'amount' => ['nullable', 'numeric', 'not_in:0'],
             'category_id' => ['nullable', 'integer'],
             'account_id' => ['nullable', 'integer'],
             'tag_ids' => ['nullable', 'array'],
@@ -40,6 +46,8 @@ class UpdateTransactionTool extends Tool
             'transaction_date' => ['nullable', 'date'],
             'exclude_from_budget' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
+        ], [
+            'type.prohibited' => 'Transaction type is no longer used. Use a negative amount for expenses and a positive amount for income.',
         ]);
 
         $transaction = $user->transactions()->find($validated['transaction_id']);
@@ -87,7 +95,7 @@ class UpdateTransactionTool extends Tool
             'description' => $schema->string()
                 ->description('New description.'),
             'amount' => $schema->number()
-                ->description('New amount in major currency units (e.g., 572000 for 572,000 CLP).'),
+                ->description('New signed amount in major currency units. Negative = expense, positive = income. Do not send a type field.'),
             'category_id' => $schema->integer()
                 ->description('New category ID. Use GetCategoriesTool to find categories.'),
             'account_id' => $schema->integer()

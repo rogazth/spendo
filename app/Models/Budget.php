@@ -52,6 +52,40 @@ class Budget extends Model
     }
 
     /**
+     * @return array<int, array<int, int>>
+     */
+    public function budgetCategoryGroups(): array
+    {
+        return $this->items->mapWithKeys(function (BudgetItem $item): array {
+            $category = $item->category;
+
+            if (! $category) {
+                return [$item->id => []];
+            }
+
+            $categoryIds = [$category->id];
+            $childrenIds = $category->relationLoaded('children')
+                ? $category->children->pluck('id')->all()
+                : $category->children()->pluck('id')->all();
+
+            return [$item->id => array_values(array_unique(array_merge($categoryIds, $childrenIds)))];
+        })->all();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function budgetCategoryIds(): array
+    {
+        return collect($this->budgetCategoryGroups())
+            ->flatten()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Resolve the current (or reference-relative) cycle start and end dates.
      *
      * @return array{CarbonImmutable, CarbonImmutable}
@@ -74,13 +108,13 @@ class Budget extends Model
 
         if (in_array($this->frequency, ['weekly', 'biweekly'], true)) {
             $stepInDays = $this->frequency === 'weekly' ? 7 : 14;
-            $daysSinceAnchor = max(0, $anchorDate->diffInDays($effectiveReference, false));
+            $daysSinceAnchor = (int) floor(max(0, $anchorDate->diffInDays($effectiveReference, false)));
             $cycleIndex = intdiv($daysSinceAnchor, $stepInDays);
             $cycleStart = $anchorDate->addDays($cycleIndex * $stepInDays);
             $cycleEnd = $cycleStart->addDays($stepInDays - 1);
         } else {
             $stepInMonths = $this->frequency === 'bimonthly' ? 2 : 1;
-            $monthsSinceAnchor = max(0, $anchorDate->diffInMonths($effectiveReference, false));
+            $monthsSinceAnchor = (int) floor(max(0, $anchorDate->diffInMonths($effectiveReference, false)));
             $cycleIndex = intdiv($monthsSinceAnchor, $stepInMonths);
             $cycleStart = $anchorDate->addMonthsNoOverflow($cycleIndex * $stepInMonths);
             $cycleEnd = $cycleStart->addMonthsNoOverflow($stepInMonths)->subDay();

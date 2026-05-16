@@ -2,7 +2,6 @@
 
 namespace App\Actions\Accounts;
 
-use App\Enums\TransactionType;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Transaction;
@@ -38,10 +37,9 @@ class CreateAccountAction
 
                 Transaction::create([
                     'user_id' => $user->id,
-                    'type' => TransactionType::Income,
                     'account_id' => $account->id,
                     'category_id' => $categoryId,
-                    'amount' => $initialBalance,
+                    'amount' => abs($initialBalance),
                     'currency' => $account->currency,
                     'description' => 'Balance inicial',
                     'transaction_date' => now(),

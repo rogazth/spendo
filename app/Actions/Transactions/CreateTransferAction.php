@@ -2,7 +2,6 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
@@ -13,6 +12,12 @@ use InvalidArgumentException;
 class CreateTransferAction
 {
     /**
+     * Create a transfer as two linked transactions:
+     *   - origin account: negative signed amount (outflow)
+     *   - destination account: positive signed amount (inflow)
+     *
+     * Both rows are linked via `linked_transaction_id`.
+     *
      * @return array{0: Transaction, 1: Transaction}
      */
     public function handle(User $user, array $data): array
@@ -33,17 +38,18 @@ class CreateTransferAction
             throw new InvalidArgumentException('Origin and destination accounts must be different.');
         }
 
+        $absoluteAmount = abs($data['amount']);
+
         $transferCategory = Category::where('is_system', true)
             ->where('name', 'Transferencia')
             ->first();
 
-        [$transferOut, $transferIn] = DB::transaction(function () use ($user, $data, $originAccount, $destinationAccount, $transferCategory) {
+        [$transferOut, $transferIn] = DB::transaction(function () use ($user, $data, $originAccount, $destinationAccount, $transferCategory, $absoluteAmount) {
             $transferOut = Transaction::create([
                 'user_id' => $user->id,
-                'type' => TransactionType::TransferOut,
                 'account_id' => $originAccount->id,
                 'category_id' => $transferCategory?->id,
-                'amount' => $data['amount'],
+                'amount' => -$absoluteAmount,
                 'currency' => $originAccount->currency,
                 'description' => $data['description'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -53,11 +59,10 @@ class CreateTransferAction
 
             $transferIn = Transaction::create([
                 'user_id' => $user->id,
-                'type' => TransactionType::TransferIn,
                 'account_id' => $destinationAccount->id,
                 'category_id' => $transferCategory?->id,
                 'linked_transaction_id' => $transferOut->id,
-                'amount' => $data['amount'],
+                'amount' => $absoluteAmount,
                 'currency' => $destinationAccount->currency,
                 'description' => $data['description'] ?? null,
                 'notes' => $data['notes'] ?? null,

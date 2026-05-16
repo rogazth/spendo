@@ -1,9 +1,21 @@
-import { Head, router } from '@inertiajs/react';
-import { ReceiptIcon } from 'lucide-react';
-import { useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
+import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
+import { Loader2Icon, PlusIcon, ReceiptIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+    TransactionDayGroup,
+    groupTransactionsByDay,
+} from '@/components/transactions/transaction-day-group';
+import {
+    TransactionSummaryCards,
+    type TransactionSummaryEntry,
+} from '@/components/transactions/transaction-summary-cards';
+import {
+    ALL_FILTER,
+    TransactionsFilterBar,
+    type TransactionFilters,
+} from '@/components/transactions/transactions-filter-bar';
+import { TransactionFormDialog } from '@/components/forms/transaction-form-dialog';
 import { Button } from '@/components/ui/button';
-import { DateFilterDropdown } from '@/components/date-filter-dropdown';
 import {
     Empty,
     EmptyDescription,
@@ -11,32 +23,26 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { formatCurrency } from '@/lib/currency';
+import AppLayout from '@/layouts/app-layout';
 import type {
     Account,
     BreadcrumbItem,
     Budget,
-    Instrument,
-    Transaction,
+    Category,
     PaginatedResponse,
+    Transaction,
 } from '@/types';
 
 interface Props {
     transactions: PaginatedResponse<Transaction>;
+    summary: Record<string, TransactionSummaryEntry>;
     accounts: Account[];
-    instruments: Instrument[];
     budgets: Pick<Budget, 'id' | 'uuid' | 'name'>[];
+    categories: Category[];
     filters: {
         budget_id?: number | null;
-        instrument_ids?: number[];
         account_ids?: number[];
+        category_ids?: number[];
         date_from?: string;
         date_to?: string;
     };
@@ -47,29 +53,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Transacciones', href: '/transactions' },
 ];
 
-function formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('es-CL', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
-}
-
-function getTransactionTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        expense: 'Gasto',
-        income: 'Ingreso',
-        transfer_out: 'Transferencia Saliente',
-        transfer_in: 'Transferencia Entrante',
-        settlement: 'Liquidación TDC',
-    };
-    return labels[type] ?? type;
-}
-
-function isDebitTransaction(type: string): boolean {
-    return ['expense', 'transfer_out', 'settlement'].includes(type);
-}
-
 function applyFilters(params: Record<string, string | string[]>) {
     router.get('/transactions', params, {
         preserveScroll: true,
@@ -78,150 +61,109 @@ function applyFilters(params: Record<string, string | string[]>) {
     });
 }
 
+function paramsFromFilters(next: TransactionFilters): Record<string, string | string[]> {
+    const params: Record<string, string | string[]> = {};
+    if (next.date_from) params.date_from = next.date_from;
+    if (next.date_to) params.date_to = next.date_to;
+    if (next.budget_id !== ALL_FILTER) params.budget_id = next.budget_id;
+    if (next.account_id !== ALL_FILTER) params['account_ids[]'] = next.account_id;
+    if (next.category_ids.length > 0) params.category_ids = next.category_ids;
+    return params;
+}
+
 export default function TransactionsIndex({
     transactions,
+    summary,
     accounts,
-    instruments,
     budgets,
+    categories,
     filters,
 }: Props) {
-    const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
-    const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+    const { url } = usePage();
+    const [createOpen, setCreateOpen] = useState(false);
+    const [editing, setEditing] = useState<Transaction | null>(null);
 
-    const ALL = '__all__';
-    const selectedBudgetId = filters.budget_id ? String(filters.budget_id) : ALL;
-    const selectedAccountId = filters.account_ids?.[0] ? String(filters.account_ids[0]) : ALL;
-    const selectedInstrumentId = filters.instrument_ids?.[0]
-        ? String(filters.instrument_ids[0])
-        : ALL;
+    const hasUserFilters = useMemo(() => {
+        const queryString = url.split('?')[1] ?? '';
+        if (!queryString) return false;
+        const params = new URLSearchParams(queryString);
+        return (
+            params.has('date_from') ||
+            params.has('date_to') ||
+            params.has('budget_id') ||
+            params.has('account_ids[]') ||
+            params.has('account_ids') ||
+            params.has('category_ids[]') ||
+            params.has('category_ids')
+        );
+    }, [url]);
 
-    function buildParams(overrides: Record<string, string> = {}) {
-        const params: Record<string, string | string[]> = {};
-        if (dateFrom) params.date_from = dateFrom;
-        if (dateTo) params.date_to = dateTo;
-        if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
-        if (selectedAccountId !== ALL) params['account_ids[]'] = selectedAccountId;
-        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
-        return { ...params, ...overrides };
-    }
-
-    const handleDateChange = (next: { dateFrom: string; dateTo: string }) => {
-        setDateFrom(next.dateFrom);
-        setDateTo(next.dateTo);
-        const params: Record<string, string | string[]> = {};
-        if (next.dateFrom) params.date_from = next.dateFrom;
-        if (next.dateTo) params.date_to = next.dateTo;
-        if (selectedBudgetId !== ALL) params.budget_id = selectedBudgetId;
-        if (selectedAccountId !== ALL) params['account_ids[]'] = selectedAccountId;
-        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
-        applyFilters(params);
+    const currentFilters: TransactionFilters = {
+        budget_id: filters.budget_id ? String(filters.budget_id) : ALL_FILTER,
+        account_id: filters.account_ids?.[0] ? String(filters.account_ids[0]) : ALL_FILTER,
+        category_ids: filters.category_ids?.map(String) ?? [],
+        date_from: filters.date_from ?? '',
+        date_to: filters.date_to ?? '',
     };
 
-    const handleBudgetChange = (value: string) => {
-        const params: Record<string, string | string[]> = {};
-        if (dateFrom) params.date_from = dateFrom;
-        if (dateTo) params.date_to = dateTo;
-        if (value !== ALL) params.budget_id = value;
-        // Clear account when switching budgets; keep instrument
-        if (selectedInstrumentId !== ALL) params['instrument_ids[]'] = selectedInstrumentId;
-        applyFilters(params);
-    };
+    const selectedAccount = useMemo(
+        () =>
+            accounts.find(
+                (account) => String(account.id) === currentFilters.account_id,
+            ) ?? null,
+        [accounts, currentFilters.account_id],
+    );
 
-    const handleAccountChange = (value: string) => {
-        const next = buildParams(value !== ALL ? { 'account_ids[]': value } : {});
-        if (value === ALL) delete next['account_ids[]'];
-        applyFilters(next);
-    };
+    const groups = useMemo(
+        () => groupTransactionsByDay(transactions.data),
+        [transactions.data],
+    );
 
-    const handleInstrumentChange = (value: string) => {
-        const next = buildParams(value !== ALL ? { 'instrument_ids[]': value } : {});
-        if (value === ALL) delete next['instrument_ids[]'];
-        applyFilters(next);
+    const handleFilterChange = (next: Partial<TransactionFilters>) => {
+        const merged = { ...currentFilters, ...next };
+        applyFilters(paramsFromFilters(merged));
     };
-
-    const hasActiveFilters =
-        selectedBudgetId !== ALL ||
-        selectedAccountId !== ALL ||
-        selectedInstrumentId !== ALL ||
-        dateFrom ||
-        dateTo;
 
     const clearAllFilters = () => {
-        setDateFrom('');
-        setDateTo('');
         applyFilters({});
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Transacciones" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-balance">Transacciones</h1>
+
+            <div className="flex flex-1 flex-col gap-6 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                            Transacciones
+                        </h1>
+                        <p className="text-muted-foreground text-sm">
+                            Revisa y filtra tus movimientos por cuenta, presupuesto o fecha.
+                        </p>
+                    </div>
+                    <Button onClick={() => setCreateOpen(true)}>
+                        <PlusIcon />
+                        Nueva transacción
+                    </Button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Budget filter */}
-                    <Select value={selectedBudgetId} onValueChange={handleBudgetChange}>
-                        <SelectTrigger className="w-auto min-w-[160px] border-dashed">
-                            <SelectValue placeholder="Presupuesto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Todos los presupuestos</SelectItem>
-                            {budgets.map((b) => (
-                                <SelectItem key={b.id} value={String(b.id)}>
-                                    {b.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                <TransactionsFilterBar
+                    filters={currentFilters}
+                    accounts={accounts}
+                    budgets={budgets}
+                    categories={categories}
+                    onChange={handleFilterChange}
+                    onClear={clearAllFilters}
+                    showClear={hasUserFilters}
+                />
 
-                    {/* Account filter */}
-                    <Select
-                        value={selectedAccountId}
-                        onValueChange={handleAccountChange}
-                    >
-                        <SelectTrigger className="w-auto min-w-[160px] border-dashed">
-                            <SelectValue placeholder="Cuenta" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Todas las cuentas</SelectItem>
-                            {accounts.map((a) => (
-                                <SelectItem key={a.id} value={String(a.id)}>
-                                    {a.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {/* Instrument filter */}
-                    <Select value={selectedInstrumentId} onValueChange={handleInstrumentChange}>
-                        <SelectTrigger className="w-auto min-w-[160px] border-dashed">
-                            <SelectValue placeholder="Instrumento" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Todos los instrumentos</SelectItem>
-                            {instruments.map((i) => (
-                                <SelectItem key={i.id} value={String(i.id)}>
-                                    {i.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {/* Date filter */}
-                    <DateFilterDropdown
-                        dateFrom={dateFrom}
-                        dateTo={dateTo}
-                        onChange={handleDateChange}
+                {selectedAccount && (
+                    <TransactionSummaryCards
+                        account={selectedAccount}
+                        entry={summary[selectedAccount.currency]}
                     />
-
-                    {hasActiveFilters && (
-                        <Button variant="ghost" size="sm" onClick={clearAllFilters}>
-                            Limpiar filtros
-                        </Button>
-                    )}
-                </div>
+                )}
 
                 {transactions.data.length === 0 ? (
                     <Empty>
@@ -229,123 +171,51 @@ export default function TransactionsIndex({
                             <EmptyMedia variant="icon">
                                 <ReceiptIcon />
                             </EmptyMedia>
-                            <EmptyTitle>No tienes transacciones registradas</EmptyTitle>
+                            <EmptyTitle>No hay transacciones para mostrar</EmptyTitle>
                             <EmptyDescription>
-                                Las transacciones se crean mediante el asistente de IA.
+                                Crea una nueva o ajusta los filtros para ver más resultados.
                             </EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 ) : (
-                    <div className="rounded-lg border">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b bg-muted/50">
-                                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                                            Fecha
-                                        </th>
-                                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                                            Descripción
-                                        </th>
-                                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                                            Tipo
-                                        </th>
-                                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                                            Cuenta
-                                        </th>
-                                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                                            Instrumento
-                                        </th>
-                                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                                            Monto
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {transactions.data.map((transaction) => {
-                                        const isDebit = isDebitTransaction(transaction.type);
-                                        return (
-                                            <tr
-                                                key={transaction.uuid}
-                                                className="border-b last:border-0 hover:bg-muted/30"
-                                            >
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {formatDate(transaction.transaction_date)}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-2">
-                                                        {transaction.category && (
-                                                            <span
-                                                                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                                                style={{
-                                                                    backgroundColor:
-                                                                        transaction.category.color,
-                                                                }}
-                                                            />
-                                                        )}
-                                                        <div>
-                                                            <p className="font-medium">
-                                                                {transaction.description ?? '-'}
-                                                            </p>
-                                                            {transaction.category && (
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {transaction.category.name}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {getTransactionTypeLabel(transaction.type)}
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {transaction.account?.name ?? '-'}
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {transaction.instrument?.name ?? '-'}
-                                                </td>
-                                                <td
-                                                    className={`px-4 py-3 text-right font-medium tabular-nums ${
-                                                        isDebit
-                                                            ? 'text-red-600'
-                                                            : 'text-green-600'
-                                                    }`}
-                                                >
-                                                    {isDebit ? '-' : '+'}
-                                                    {formatCurrency(
-                                                        transaction.amount,
-                                                        transaction.currency,
-                                                        transaction.currency_locale ?? 'es-CL',
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                {transactions.meta.last_page > 1 && (
-                    <div className="flex justify-center gap-2">
-                        {transactions.links.prev && (
-                            <Button variant="outline" asChild>
-                                <a href={transactions.links.prev}>Anterior</a>
-                            </Button>
-                        )}
-                        <span className="flex items-center px-4 text-sm text-muted-foreground tabular-nums">
-                            Página {transactions.meta.current_page} de{' '}
-                            {transactions.meta.last_page}
-                        </span>
-                        {transactions.links.next && (
-                            <Button variant="outline" asChild>
-                                <a href={transactions.links.next}>Siguiente</a>
-                            </Button>
-                        )}
-                    </div>
+                    <InfiniteScroll
+                        data="transactions"
+                        className="space-y-4"
+                        loading={
+                            <div className="text-muted-foreground flex items-center justify-center gap-2 py-4 text-xs">
+                                <Loader2Icon className="size-4 animate-spin" />
+                                Cargando más transacciones…
+                            </div>
+                        }
+                    >
+                        {groups.map((group) => (
+                            <TransactionDayGroup
+                                key={group.date}
+                                date={group.date}
+                                transactions={group.transactions}
+                                onSelect={(tx) => setEditing(tx)}
+                            />
+                        ))}
+                    </InfiniteScroll>
                 )}
             </div>
+
+            <TransactionFormDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                accounts={accounts}
+                categories={categories}
+            />
+
+            <TransactionFormDialog
+                open={editing !== null}
+                onOpenChange={(open) => {
+                    if (!open) setEditing(null);
+                }}
+                transaction={editing ?? undefined}
+                accounts={accounts}
+                categories={categories}
+            />
         </AppLayout>
     );
 }

@@ -1,24 +1,17 @@
-// Transaction types
-export const TRANSACTION_TYPES = [
+// Transaction form modes (UI-only). The DB has no `type` column — direction
+// is derived from the sign of `amount` and presence of `linked_transaction_id`.
+export const TRANSACTION_MODES = [
+    { id: 'movement', label: 'Movimiento' },
+    { id: 'transfer', label: 'Transferencia' },
+] as const;
+export type TransactionMode = (typeof TRANSACTION_MODES)[number]['id'];
+
+export const TRANSACTION_DIRECTIONS = [
     { id: 'expense', label: 'Gasto' },
     { id: 'income', label: 'Ingreso' },
-    { id: 'transfer', label: 'Transferencia' },
-    { id: 'transfer_out', label: 'Transferencia Saliente' },
-    { id: 'transfer_in', label: 'Transferencia Entrante' },
-    { id: 'settlement', label: 'Liquidación' },
 ] as const;
-export type TransactionType = typeof TRANSACTION_TYPES[number]['id'];
-
-// Instrument types
-export const INSTRUMENT_TYPES = [
-    { id: 'checking', label: 'Cuenta Corriente' },
-    { id: 'savings', label: 'Cuenta de Ahorro' },
-    { id: 'cash', label: 'Efectivo' },
-    { id: 'investment', label: 'Inversión' },
-    { id: 'credit_card', label: 'Tarjeta de Crédito' },
-    { id: 'prepaid_card', label: 'Tarjeta Prepago' },
-] as const;
-export type InstrumentType = typeof INSTRUMENT_TYPES[number]['id'];
+export type TransactionDirection =
+    (typeof TRANSACTION_DIRECTIONS)[number]['id'];
 
 // Budget frequencies
 export const BUDGET_FREQUENCIES = [
@@ -27,7 +20,7 @@ export const BUDGET_FREQUENCIES = [
     { id: 'monthly', label: 'Mensual' },
     { id: 'bimonthly', label: 'Bimensual' },
 ] as const;
-export type BudgetFrequency = typeof BUDGET_FREQUENCIES[number]['id'];
+export type BudgetFrequency = (typeof BUDGET_FREQUENCIES)[number]['id'];
 
 // Base model with timestamps
 export interface Model {
@@ -65,7 +58,6 @@ export interface Category extends Model {
     user_id: number | null;
     parent_id: number | null;
     name: string;
-    type: CategoryType;
     emoji: string | null;
     color: string;
     is_system: boolean;
@@ -75,39 +67,14 @@ export interface Category extends Model {
     transactions?: Transaction[];
 }
 
-// Instrument model
-export interface Instrument extends Model {
-    user_id: number;
-    name: string;
-    type: InstrumentType;
-    currency: string;
-    currency_locale?: string;
-    credit_limit: number | null;
-    billing_cycle_day: number | null;
-    payment_due_day: number | null;
-    color: string;
-    icon: string | null;
-    last_four_digits: string | null;
-    is_active: boolean;
-    is_default: boolean;
-    sort_order: number;
-    // Computed
-    current_balance?: number;
-    current_debt?: number;
-    available_credit?: number | null;
-    // Relations
-    transactions?: Transaction[];
-}
-
-// Transaction model
+// Transaction model. `amount` is signed: negative = outflow (expense / transfer
+// out), positive = inflow (income / transfer in). `linked_transaction_id` is
+// non-null on both legs of a transfer.
 export interface Transaction extends Model {
     user_id: number;
     account_id: number | null;
-    instrument_id: number | null;
-    from_instrument_id: number | null;
     category_id: number | null;
     linked_transaction_id: number | null;
-    type: TransactionType;
     amount: number;
     currency: string;
     currency_locale?: string;
@@ -119,11 +86,27 @@ export interface Transaction extends Model {
     formatted_amount?: string;
     // Relations
     account?: Account;
-    instrument?: Instrument;
-    from_instrument?: Instrument;
     category?: Category;
     linked_transaction?: Transaction;
     attachments?: Attachment[];
+}
+
+export function isTransfer(
+    tx: Pick<Transaction, 'linked_transaction_id'>,
+): boolean {
+    return tx.linked_transaction_id !== null;
+}
+
+export function isExpense(
+    tx: Pick<Transaction, 'amount' | 'linked_transaction_id'>,
+): boolean {
+    return !isTransfer(tx) && tx.amount < 0;
+}
+
+export function isIncome(
+    tx: Pick<Transaction, 'amount' | 'linked_transaction_id'>,
+): boolean {
+    return !isTransfer(tx) && tx.amount > 0;
 }
 
 // Budget model
@@ -165,7 +148,6 @@ export interface BudgetItem extends Model {
 export interface RecurringTransaction extends Model {
     user_id: number;
     account_id: number;
-    instrument_id: number | null;
     category_id: number | null;
     amount: number;
     currency: string;
@@ -180,7 +162,6 @@ export interface RecurringTransaction extends Model {
     is_active: boolean;
     // Relations
     account?: Account;
-    instrument?: Instrument;
     category?: Category;
     transactions?: Transaction[];
 }
@@ -204,7 +185,6 @@ export interface UserSettings extends Model {
     user_id: number;
     default_currency: string;
     default_account_id: number | null;
-    default_instrument_id: number | null;
     locale: string;
     timezone: string;
     date_format: string;
@@ -213,7 +193,6 @@ export interface UserSettings extends Model {
     budget_cycle_start_day: number;
     // Relations
     default_account?: Account;
-    default_instrument?: Instrument;
 }
 
 // Pagination types
@@ -250,29 +229,13 @@ export interface AccountFormData {
 export interface CategoryFormData {
     parent_id: number | null;
     name: string;
-    type: CategoryType;
     emoji: string | null;
     color: string;
 }
 
-export interface InstrumentFormData {
-    name: string;
-    type: InstrumentType;
-    currency: string;
-    credit_limit: number | null;
-    billing_cycle_day: number | null;
-    payment_due_day: number | null;
-    color: string;
-    icon: string;
-    last_four_digits: string | null;
-    is_active: boolean;
-}
-
 export interface TransactionFormData {
     account_id: number | null;
-    instrument_id: number | null;
     category_id: number | null;
-    type: TransactionType;
     amount: number;
     currency: string;
     description: string;

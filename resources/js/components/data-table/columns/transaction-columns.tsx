@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatCurrency } from '@/lib/currency';
 import type { Transaction } from '@/types';
+import { isTransfer } from '@/types/models';
 
 function formatDate(date: string): string {
     return new Date(date).toLocaleDateString('es-CL', {
@@ -25,19 +26,11 @@ function formatDate(date: string): string {
     });
 }
 
-function getTransactionTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        expense: 'Gasto',
-        income: 'Ingreso',
-        transfer_out: 'Transferencia Saliente',
-        transfer_in: 'Transferencia Entrante',
-        settlement: 'Liquidación TDC',
-    };
-    return labels[type] || type;
-}
-
-function isDebitTransaction(type: string): boolean {
-    return ['expense', 'transfer_out', 'settlement'].includes(type);
+function getTransactionTypeLabel(tx: Transaction): string {
+    if (isTransfer(tx)) return 'Transferencia';
+    if (tx.amount < 0) return 'Gasto';
+    if (tx.amount > 0) return 'Ingreso';
+    return '—';
 }
 
 interface TransactionColumnsOptions {
@@ -99,11 +92,11 @@ export function getTransactionColumns({
             },
         },
         {
-            accessorKey: 'type',
+            id: 'type',
             header: 'Tipo',
             cell: ({ row }) => (
                 <span className="text-sm text-muted-foreground">
-                    {getTransactionTypeLabel(row.getValue('type'))}
+                    {getTransactionTypeLabel(row.original)}
                 </span>
             ),
         },
@@ -174,7 +167,7 @@ export function getTransactionColumns({
             },
             cell: ({ row }) => {
                 const transaction = row.original;
-                const isDebit = isDebitTransaction(transaction.type);
+                const isDebit = transaction.amount < 0;
                 return (
                     <div
                         className={`text-right font-medium ${
@@ -183,7 +176,7 @@ export function getTransactionColumns({
                     >
                         {isDebit ? '-' : '+'}
                         {formatCurrency(
-                            row.getValue('amount'),
+                            Math.abs(transaction.amount),
                             transaction.currency,
                             transaction.currency_locale,
                         )}

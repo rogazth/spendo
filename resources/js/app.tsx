@@ -6,6 +6,10 @@ import '../css/app.css';
 import { Toaster } from '@/components/ui/sonner';
 import { initializeTheme } from './hooks/use-appearance';
 
+if (import.meta.env.DEV) {
+    import('react-grab');
+}
+
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({

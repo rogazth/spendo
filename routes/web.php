@@ -23,7 +23,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('accounts/{account}/make-default', [AccountController::class, 'makeDefault'])
         ->name('accounts.make-default');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
-    Route::resource('budgets', BudgetController::class)->only(['index', 'store', 'show']);
+    Route::resource('budgets', BudgetController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::post('transfers', [TransactionController::class, 'storeTransfer'])->name('transfers.store');
     Route::resource('transactions', TransactionController::class)->except(['show', 'create', 'edit']);
     Route::resource('tags', TagController::class)->except(['show', 'create', 'edit']);
 });

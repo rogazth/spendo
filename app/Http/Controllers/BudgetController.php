@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Actions\Budgets\CreateBudgetAction;
 use App\Actions\Budgets\DeleteBudgetAction;
+use App\Actions\Budgets\UpdateBudgetAction;
 use App\Http\Requests\StoreBudgetRequest;
 use App\Http\Resources\BudgetResource;
-use App\Http\Resources\TransactionResource;
 use App\Models\Budget;
 use App\Models\BudgetItem;
 use App\Models\Category;
+use App\Models\Currency;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -28,13 +29,11 @@ class BudgetController extends Controller
             ->budgets()
             ->with(['items.category.children'])
             ->latest()
-            ->paginate(25)
-            ->withQueryString();
+            ->get();
 
-        $budgets->getCollection()->transform(function (Budget $budget) use ($referenceDate) {
+        $budgets->transform(function (Budget $budget) use ($referenceDate) {
             [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
-            $categoryIds = $this->collectBudgetCategoryIds($budget);
-            $spent = $this->calculateBudgetSpent($budget, $cycleStart, $cycleEnd, $categoryIds);
+            $spent = $this->calculateBudgetSpent($budget, $cycleStart, $cycleEnd);
             $totalBudgeted = $budget->total_budgeted;
             $percentage = $totalBudgeted > 0
                 ? min(100, round(($spent / $totalBudgeted) * 100, 2))
@@ -47,6 +46,28 @@ class BudgetController extends Controller
 
             return $budget;
         });
+
+        $summary = $budgets
+            ->groupBy('currency')
+            ->map(function ($group) {
+                $budgeted = (float) $group->sum('total_budgeted');
+                $spent = (float) $group->sum('current_cycle_spent');
+
+                return [
+                    'budgeted' => $budgeted,
+                    'spent' => $spent,
+                    'remaining' => (float) ($budgeted - $spent),
+                    'currency_locale' => Currency::localeFor($group->first()->currency),
+                ];
+            })
+            ->toArray();
+
+        $accounts = Auth::user()
+            ->accounts()
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
 
         $categories = Category::query()
             ->where(function ($query) {
@@ -67,15 +88,27 @@ class BudgetController extends Controller
 
         return Inertia::render('budgets/index', [
             'budgets' => BudgetResource::collection($budgets),
+            'summary' => $summary,
+            'accounts' => $accounts->map(fn ($account) => [
+                'id' => $account->id,
+                'uuid' => $account->uuid,
+                'name' => $account->name,
+                'currency' => $account->currency,
+                'currency_locale' => Currency::localeFor($account->currency),
+                'is_active' => $account->is_active,
+                'is_default' => $account->is_default,
+            ])->toArray(),
             'categories' => $categories->map(fn ($category) => [
                 'id' => $category->id,
                 'uuid' => $category->uuid,
                 'name' => $category->name,
+                'emoji' => $category->emoji,
                 'color' => $category->color,
                 'children' => $category->children->map(fn ($child) => [
                     'id' => $child->id,
                     'uuid' => $child->uuid,
                     'name' => $child->name,
+                    'emoji' => $child->emoji,
                     'color' => $child->color,
                     'parent_id' => $child->parent_id,
                 ])->toArray(),
@@ -92,20 +125,16 @@ class BudgetController extends Controller
             ->with('success', 'Budget creado exitosamente.');
     }
 
-    public function show(Budget $budget, Request $request): Response
+    public function show(Budget $budget): Response
     {
         $this->authorizeBudget($budget);
 
-        $scope = in_array($request->input('scope'), ['current', 'history'], true)
-            ? $request->input('scope')
-            : 'current';
         $referenceDate = CarbonImmutable::now()->startOfDay();
 
         $budget->load(['items.category.children']);
-        $categoryGroups = $this->budgetItemCategoryGroups($budget);
-        $categoryIds = collect($categoryGroups)->flatten()->unique()->values()->all();
+        $categoryGroups = $budget->budgetCategoryGroups();
 
-        [$cycleStart, $cycleEnd] = $this->resolveCycleRange($budget, $referenceDate);
+        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
         $categoryProgress = $this->buildCategoryProgress(
             $budget,
             $cycleStart,
@@ -113,8 +142,8 @@ class BudgetController extends Controller
             $categoryGroups,
         );
 
-        $totalBudgeted = $budget->total_budgeted;
-        $totalSpent = collect($categoryProgress)->sum('spent');
+        $totalBudgeted = (float) $budget->total_budgeted;
+        $totalSpent = (float) collect($categoryProgress)->sum('spent');
         $totalPercentage = $totalBudgeted > 0
             ? min(100, round(($totalSpent / $totalBudgeted) * 100, 2))
             : 0;
@@ -124,22 +153,29 @@ class BudgetController extends Controller
         $budget->setAttribute('current_cycle_spent', $totalSpent);
         $budget->setAttribute('current_cycle_percentage', $totalPercentage);
 
-        $scopeStart = $cycleStart;
-        $scopeEnd = $cycleEnd;
-        if ($scope === 'history') {
-            [$scopeStart, $scopeEnd] = $this->resolveHistoryRange($budget, $referenceDate);
-        }
+        $categories = Category::query()
+            ->where(function ($query) {
+                $query->whereNull('user_id')
+                    ->orWhere('user_id', Auth::id());
+            })
+            ->where('is_system', false)
+            ->whereNull('parent_id')
+            ->with([
+                'children' => fn ($query) => $query
+                    ->where('is_system', false)
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
-        $transactions = $this->buildBudgetTransactionsQuery(
-            $budget,
-            $scopeStart,
-            $scopeEnd,
-            $categoryIds,
-            true,
-        )
-            ->latest('transaction_date')
-            ->paginate(25)
-            ->withQueryString();
+        $accounts = Auth::user()
+            ->accounts()
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('budgets/show', [
             'budget' => (new BudgetResource($budget))->resolve(),
@@ -148,17 +184,47 @@ class BudgetController extends Controller
                 'spent' => $totalSpent,
                 'remaining' => $totalBudgeted - $totalSpent,
                 'percentage' => $totalPercentage,
+                'currency_locale' => Currency::localeFor($budget->currency),
                 'current_cycle_start' => $cycleStart->toDateString(),
                 'current_cycle_end' => $cycleEnd->toDateString(),
             ],
             'categoryProgress' => $categoryProgress,
-            'transactions' => TransactionResource::collection($transactions),
-            'scope' => $scope,
-            'range' => [
-                'start' => $scopeStart->toDateString(),
-                'end' => $scopeEnd->toDateString(),
-            ],
+            'accounts' => $accounts->map(fn ($account) => [
+                'id' => $account->id,
+                'uuid' => $account->uuid,
+                'name' => $account->name,
+                'currency' => $account->currency,
+                'currency_locale' => Currency::localeFor($account->currency),
+                'is_active' => $account->is_active,
+                'is_default' => $account->is_default,
+            ])->toArray(),
+            'categories' => $categories->map(fn ($category) => [
+                'id' => $category->id,
+                'uuid' => $category->uuid,
+                'name' => $category->name,
+                'emoji' => $category->emoji,
+                'color' => $category->color,
+                'children' => $category->children->map(fn ($child) => [
+                    'id' => $child->id,
+                    'uuid' => $child->uuid,
+                    'name' => $child->name,
+                    'emoji' => $child->emoji,
+                    'color' => $child->color,
+                    'parent_id' => $child->parent_id,
+                ])->toArray(),
+            ])->toArray(),
         ]);
+    }
+
+    public function update(StoreBudgetRequest $request, Budget $budget, UpdateBudgetAction $action): RedirectResponse
+    {
+        $this->authorizeBudget($budget);
+
+        $action->handle($budget, Auth::user(), $request->validated());
+
+        return redirect()
+            ->route('budgets.show', $budget)
+            ->with('success', 'Budget actualizado exitosamente.');
     }
 
     public function destroy(Budget $budget, DeleteBudgetAction $action): RedirectResponse
@@ -179,76 +245,19 @@ class BudgetController extends Controller
         }
     }
 
-    /**
-     * @return array{CarbonImmutable, CarbonImmutable}
-     */
-    private function resolveHistoryRange(Budget $budget, CarbonImmutable $referenceDate): array
-    {
-        $startDate = CarbonImmutable::parse($budget->anchor_date)->startOfDay();
-        $endDate = $referenceDate->startOfDay();
-
-        if ($budget->ends_at !== null) {
-            $budgetEndDate = CarbonImmutable::parse($budget->ends_at)->startOfDay();
-            if ($endDate->greaterThan($budgetEndDate)) {
-                $endDate = $budgetEndDate;
-            }
-        }
-
-        if ($endDate->lessThan($startDate)) {
-            $endDate = $startDate;
-        }
-
-        return [$startDate, $endDate];
-    }
-
-    /**
-     * @return array<int, array<int, int>>
-     */
-    private function budgetItemCategoryGroups(Budget $budget): array
-    {
-        return $budget->items->mapWithKeys(function (BudgetItem $item) {
-            $category = $item->category;
-            if (! $category) {
-                return [$item->id => []];
-            }
-
-            $categoryIds = [$category->id];
-            $childrenIds = $category->relationLoaded('children')
-                ? $category->children->pluck('id')->all()
-                : $category->children()->pluck('id')->all();
-
-            return [$item->id => array_values(array_unique(array_merge($categoryIds, $childrenIds)))];
-        })->all();
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function collectBudgetCategoryIds(Budget $budget): array
-    {
-        return collect($this->budgetItemCategoryGroups($budget))
-            ->flatten()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
     private function calculateBudgetSpent(
         Budget $budget,
         CarbonImmutable $startDate,
         CarbonImmutable $endDate,
-        array $categoryIds,
     ): float {
-        $spentInCents = $this->buildBudgetTransactionsQuery(
+        $totalInCents = (int) ($this->buildBudgetTransactionsQuery(
             $budget,
             $startDate,
             $endDate,
-            $categoryIds,
             false,
-        )->sum('amount');
+        )->selectRaw('COALESCE(SUM(-amount), 0) as total')->value('total') ?? 0);
 
-        return $spentInCents / 100;
+        return $totalInCents / 100;
     }
 
     /**
@@ -261,18 +270,16 @@ class BudgetController extends Controller
         CarbonImmutable $endDate,
         array $categoryGroups,
     ): array {
-        $allCategoryIds = collect($categoryGroups)->flatten()->unique()->values()->all();
         $transactions = $this->buildBudgetTransactionsQuery(
             $budget,
             $startDate,
             $endDate,
-            $allCategoryIds,
             false,
         )->get(['category_id', 'amount']);
 
         $spentByCategoryId = [];
         foreach ($transactions as $transaction) {
-            $spentByCategoryId[$transaction->category_id] = ($spentByCategoryId[$transaction->category_id] ?? 0) + $transaction->amount;
+            $spentByCategoryId[$transaction->category_id] = ($spentByCategoryId[$transaction->category_id] ?? 0) + abs($transaction->amount);
         }
 
         return $budget->items->map(function (BudgetItem $item) use ($categoryGroups, $spentByCategoryId) {
@@ -289,22 +296,19 @@ class BudgetController extends Controller
                 'category_id' => $item->category_id,
                 'category_name' => $item->category?->name ?? 'Sin categoría',
                 'category_color' => $item->category?->color ?? '#6B7280',
-                'budgeted' => $item->amount,
-                'spent' => $spent,
-                'remaining' => $remaining,
+                'category_emoji' => $item->category?->emoji ?? '💰',
+                'budgeted' => (float) $item->amount,
+                'spent' => (float) $spent,
+                'remaining' => (float) $remaining,
                 'percentage' => $percentage,
             ];
         })->values()->all();
     }
 
-    /**
-     * @param  array<int, int>  $categoryIds
-     */
     private function buildBudgetTransactionsQuery(
         Budget $budget,
         CarbonImmutable $startDate,
         CarbonImmutable $endDate,
-        array $categoryIds,
         bool $withRelations = true
     ): HasMany {
         $query = Auth::user()->transactions();
@@ -313,19 +317,7 @@ class BudgetController extends Controller
             $query->with(['category', 'account', 'linkedTransaction.account']);
         }
 
-        $query->where('type', 'expense')
-            ->where('exclude_from_budget', false)
-            ->whereDate('transaction_date', '>=', $startDate->toDateString())
-            ->whereDate('transaction_date', '<=', $endDate->toDateString())
-            ->where('currency', $budget->currency);
-
-        if ($categoryIds === []) {
-            $query->whereRaw('1 = 0');
-
-            return $query;
-        }
-
-        $query->whereIn('category_id', $categoryIds);
+        $query->forBudgetSpending($budget, $startDate, $endDate);
 
         return $query;
     }

@@ -1,25 +1,22 @@
 import { Head } from '@inertiajs/react';
-import { PiggyBankIcon } from 'lucide-react';
-import { getBudgetColumns } from '@/components/data-table/columns/budget-columns';
-import { DataTable } from '@/components/data-table/data-table';
+import { PlusIcon } from 'lucide-react';
+import { useState } from 'react';
+import { BudgetCard } from '@/components/budgets/budget-card';
 import {
-    Empty,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from '@/components/ui/empty';
-import AppLayout from '@/layouts/app-layout';
+    BudgetSummaryCards,
+    type BudgetSummaryEntry,
+} from '@/components/budgets/budget-summary-cards';
+import { CreateBudgetCard } from '@/components/budgets/create-budget-card';
+import { BudgetFormDialog } from '@/components/forms/budget-form-dialog';
 import { Button } from '@/components/ui/button';
-import type {
-    BreadcrumbItem,
-    Budget,
-    PaginatedResponse,
-} from '@/types';
-import { useMemo } from 'react';
+import AppLayout from '@/layouts/app-layout';
+import type { Account, BreadcrumbItem, Budget, Category } from '@/types';
 
 interface Props {
-    budgets: PaginatedResponse<Budget>;
+    budgets: { data: Budget[] };
+    summary: Record<string, BudgetSummaryEntry>;
+    accounts: Account[];
+    categories: Category[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -27,52 +24,55 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Budgets', href: '/budgets' },
 ];
 
-export default function BudgetsIndex({ budgets }: Props) {
-    const columns = useMemo(() => getBudgetColumns(), []);
+export default function BudgetsIndex({ budgets, summary, accounts, categories }: Props) {
+    const [createOpen, setCreateOpen] = useState(false);
+    const items = budgets.data;
+    const isEmpty = items.length === 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Budgets" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Budgets</h1>
+
+            <div className="flex flex-1 flex-col gap-6 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                            Budgets
+                        </h1>
+                        <p className="text-muted-foreground text-sm">
+                            Controla tus límites de gasto por categoría.
+                        </p>
+                    </div>
+                    <Button onClick={() => setCreateOpen(true)}>
+                        <PlusIcon />
+                        Crear budget
+                    </Button>
                 </div>
 
-                {budgets.data.length === 0 ? (
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                                <PiggyBankIcon />
-                            </EmptyMedia>
-                            <EmptyTitle>No tienes budgets creados</EmptyTitle>
-                            <EmptyDescription>
-                                Los budgets se crean mediante el asistente de IA.
-                            </EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
-                ) : (
-                    <DataTable columns={columns} data={budgets.data} />
-                )}
+                {!isEmpty && <BudgetSummaryCards summary={summary} />}
 
-                {budgets.meta.last_page > 1 && (
-                    <div className="flex justify-center gap-2">
-                        {budgets.links.prev && (
-                            <Button variant="outline" asChild>
-                                <a href={budgets.links.prev}>Anterior</a>
-                            </Button>
-                        )}
-                        <span className="flex items-center px-4 text-sm text-muted-foreground">
-                            Página {budgets.meta.current_page} de{' '}
-                            {budgets.meta.last_page}
-                        </span>
-                        {budgets.links.next && (
-                            <Button variant="outline" asChild>
-                                <a href={budgets.links.next}>Siguiente</a>
-                            </Button>
-                        )}
+                <div className="space-y-3">
+                    {!isEmpty && (
+                        <h2 className="text-foreground text-lg font-semibold">
+                            Active budgets
+                        </h2>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                        {items.map((budget) => (
+                            <BudgetCard key={budget.uuid} budget={budget} />
+                        ))}
+                        <CreateBudgetCard onClick={() => setCreateOpen(true)} />
                     </div>
-                )}
+                </div>
             </div>
+
+            <BudgetFormDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                accounts={accounts}
+                categories={categories}
+            />
         </AppLayout>
     );
 }

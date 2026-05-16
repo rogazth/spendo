@@ -32,7 +32,71 @@ test('index renders budgets page', function () {
 
     $this->actingAs($user)->get('/budgets')
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component('budgets/index'));
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('budgets/index')
+            ->has('budgets.data')
+            ->has('summary')
+            ->has('accounts')
+            ->has('categories')
+        );
+});
+
+test('index aggregates summary by currency', function () {
+    Carbon::setTestNow('2026-02-20 10:00:00');
+
+    $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $categoryClp = Category::factory()->expense()->for($user)->create();
+    $categoryUsd = Category::factory()->expense()->for($user)->create();
+
+    $clpBudget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+    ]);
+    $clpBudget->items()->create(['category_id' => $categoryClp->id, 'amount' => 200000]);
+
+    $usdBudget = Budget::factory()->for($user)->create([
+        'currency' => 'USD',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+    ]);
+    $usdBudget->items()->create(['category_id' => $categoryUsd->id, 'amount' => 500]);
+
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $account->id,
+        'category_id' => $categoryClp->id,
+        'amount' => 5000,
+        'currency' => 'CLP',
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+    ]);
+
+    $this->actingAs($user)->get('/budgets')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.CLP.budgeted', 200000)
+            ->where('summary.CLP.spent', 5000)
+            ->where('summary.CLP.remaining', 195000)
+            ->where('summary.USD.budgeted', 500)
+            ->where('summary.USD.spent', 0)
+            ->where('summary.USD.remaining', 500)
+        );
+
+    Carbon::setTestNow();
+});
+
+test('index includes active accounts only', function () {
+    $user = User::factory()->create();
+    Account::factory()->for($user)->create(['name' => 'Activa', 'is_active' => true]);
+    Account::factory()->for($user)->create(['name' => 'Inactiva', 'is_active' => false]);
+
+    $this->actingAs($user)->get('/budgets')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('accounts', 1)
+            ->where('accounts.0.name', 'Activa')
+        );
 });
 
 // ---------------------------------------------------------------------------
@@ -220,4 +284,101 @@ test('show returns 403 for another user budget', function () {
 
     $this->actingAs($other)->get("/budgets/{$budget->uuid}")
         ->assertForbidden();
+});
+
+// ---------------------------------------------------------------------------
+// Update
+// ---------------------------------------------------------------------------
+
+test('update modifies the budget and replaces items', function () {
+    $user = User::factory()->create();
+    $original = Category::factory()->expense()->for($user)->create();
+    $replacement = Category::factory()->expense()->for($user)->create();
+
+    $budget = Budget::factory()->for($user)->create([
+        'name' => 'Original',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+    ]);
+    $budget->items()->create(['category_id' => $original->id, 'amount' => 100000]);
+
+    $this->actingAs($user)->put("/budgets/{$budget->uuid}", [
+        'name' => 'Editado',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+        'items' => [['category_id' => $replacement->id, 'amount' => 250000]],
+    ])->assertRedirect("/budgets/{$budget->uuid}");
+
+    $this->assertDatabaseHas('budgets', ['id' => $budget->id, 'name' => 'Editado']);
+    $this->assertDatabaseHas('budget_items', [
+        'budget_id' => $budget->id,
+        'category_id' => $replacement->id,
+    ]);
+    $this->assertDatabaseMissing('budget_items', [
+        'budget_id' => $budget->id,
+        'category_id' => $original->id,
+    ]);
+});
+
+test('update returns 403 for another user budget', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $ownerCategory = Category::factory()->expense()->for($owner)->create();
+    $otherCategory = Category::factory()->expense()->for($other)->create();
+
+    $budget = Budget::factory()->for($owner)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+    ]);
+    $budget->items()->create(['category_id' => $ownerCategory->id, 'amount' => 10000]);
+
+    $this->actingAs($other)->put("/budgets/{$budget->uuid}", [
+        'name' => 'Hackeado',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'items' => [['category_id' => $otherCategory->id, 'amount' => 1000]],
+    ])->assertForbidden();
+});
+
+// ---------------------------------------------------------------------------
+// Destroy
+// ---------------------------------------------------------------------------
+
+test('destroy removes the budget', function () {
+    $user = User::factory()->create();
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+    ]);
+    $budget->items()->create(['category_id' => $category->id, 'amount' => 10000]);
+
+    $this->actingAs($user)->delete("/budgets/{$budget->uuid}")
+        ->assertRedirect('/budgets');
+
+    $this->assertSoftDeleted('budgets', ['id' => $budget->id]);
+});
+
+test('destroy returns 403 for another user budget', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $category = Category::factory()->expense()->for($owner)->create();
+
+    $budget = Budget::factory()->for($owner)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+    ]);
+    $budget->items()->create(['category_id' => $category->id, 'amount' => 10000]);
+
+    $this->actingAs($other)->delete("/budgets/{$budget->uuid}")
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
 });

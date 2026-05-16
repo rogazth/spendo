@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import {
     BUDGET_FREQUENCIES,
     type Account,
+    type Budget,
     type BudgetFrequency,
     type Category,
     type Currency,
@@ -40,6 +41,52 @@ interface BudgetFormDialogProps {
     onOpenChange: (open: boolean) => void;
     accounts: Account[];
     categories: Category[];
+    budget?: Budget | null;
+}
+
+interface BudgetFormData {
+    name: string;
+    description: string;
+    currency: string;
+    frequency: BudgetFrequency;
+    anchor_date: Date;
+    ends_at: Date | null;
+    items: Array<{
+        category_id: number | null;
+        amount: number | null;
+    }>;
+}
+
+function buildInitialData(
+    budget: Budget | null | undefined,
+    defaultCurrency: string,
+): BudgetFormData {
+    if (budget) {
+        return {
+            name: budget.name,
+            description: budget.description ?? '',
+            currency: budget.currency,
+            frequency: budget.frequency,
+            anchor_date: new Date(`${budget.anchor_date}T00:00:00`),
+            ends_at: budget.ends_at
+                ? new Date(`${budget.ends_at}T00:00:00`)
+                : null,
+            items: (budget.items ?? []).map((item) => ({
+                category_id: item.category_id,
+                amount: item.amount,
+            })),
+        };
+    }
+
+    return {
+        name: '',
+        description: '',
+        currency: defaultCurrency,
+        frequency: 'monthly',
+        anchor_date: new Date(),
+        ends_at: null,
+        items: [{ category_id: null, amount: null }],
+    };
 }
 
 export function BudgetFormDialog({
@@ -47,44 +94,22 @@ export function BudgetFormDialog({
     onOpenChange,
     accounts,
     categories,
+    budget = null,
 }: BudgetFormDialogProps) {
     const { currencies = [] } = usePage<{ currencies?: Currency[] }>().props;
     const defaultAccount = accounts.find((account) => account.is_default) ?? accounts[0];
+    const defaultCurrency = defaultAccount?.currency ?? 'CLP';
+    const isEdit = budget !== null;
 
-    const { data, setData, post, processing, errors, reset, transform } = useForm<{
-        name: string;
-        description: string;
-        currency: string;
-        frequency: BudgetFrequency;
-        anchor_date: Date;
-        ends_at: Date | null;
-        items: Array<{
-            category_id: number | null;
-            amount: number | null;
-        }>;
-    }>({
-        name: '',
-        description: '',
-        currency: defaultAccount?.currency ?? 'CLP',
-        frequency: 'monthly',
-        anchor_date: new Date(),
-        ends_at: null,
-        items: [{ category_id: null, amount: null }],
-    });
+    const { data, setData, post, put, processing, errors, reset, transform } = useForm<BudgetFormData>(
+        buildInitialData(budget, defaultCurrency),
+    );
 
     useEffect(() => {
         if (open) {
-            setData({
-                name: '',
-                description: '',
-                currency: defaultAccount?.currency ?? 'CLP',
-                frequency: 'monthly',
-                anchor_date: new Date(),
-                ends_at: null,
-                items: [{ category_id: null, amount: null }],
-            });
+            setData(buildInitialData(budget, defaultCurrency));
         }
-    }, [open]);
+    }, [open, budget]);
 
     const categoryOptions = useMemo(() => {
         return categories.flatMap((category) => {
@@ -149,17 +174,27 @@ export function BudgetFormDialog({
                 })),
         }));
 
-        post('/budgets', {
+        const options = {
             preserveScroll: true,
             onSuccess: () => {
                 onOpenChange(false);
                 reset();
-                toast.success('Budget creado');
+                toast.success(isEdit ? 'Budget actualizado' : 'Budget creado');
             },
             onError: () => {
-                toast.error('No se pudo crear el budget');
+                toast.error(
+                    isEdit
+                        ? 'No se pudo actualizar el budget'
+                        : 'No se pudo crear el budget',
+                );
             },
-        });
+        };
+
+        if (isEdit && budget) {
+            put(`/budgets/${budget.uuid}`, options);
+        } else {
+            post('/budgets', options);
+        }
     };
 
     return (
@@ -167,10 +202,13 @@ export function BudgetFormDialog({
             <DialogContent className="sm:max-w-[680px]">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
-                        <DialogTitle>Nuevo Budget</DialogTitle>
+                        <DialogTitle>
+                            {isEdit ? 'Editar Budget' : 'Nuevo Budget'}
+                        </DialogTitle>
                         <DialogDescription>
-                            Define un budget con frecuencia de repetición y
-                            límites por categoría.
+                            {isEdit
+                                ? 'Modifica el budget y sus categorías.'
+                                : 'Define un budget con frecuencia de repetición y límites por categoría.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -450,7 +488,11 @@ export function BudgetFormDialog({
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Guardando...' : 'Crear budget'}
+                            {processing
+                                ? 'Guardando...'
+                                : isEdit
+                                    ? 'Guardar cambios'
+                                    : 'Crear budget'}
                         </Button>
                     </DialogFooter>
                 </form>

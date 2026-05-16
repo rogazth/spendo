@@ -2,14 +2,20 @@
 
 namespace App\Actions\Transactions;
 
-use App\Enums\TransactionType;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
-class CreateIncomeAction
+class CreateTransactionAction
 {
+    /**
+     * Create a non-transfer transaction (income or expense).
+     *
+     * Sign of $data['amount'] determines direction:
+     *   - negative → expense
+     *   - positive → income
+     */
     public function handle(User $user, array $data): Transaction
     {
         $account = $user->accounts()->find($data['account_id'] ?? null);
@@ -28,12 +34,10 @@ class CreateIncomeAction
             if (! $category) {
                 throw new ModelNotFoundException('Category not found or not accessible.');
             }
-
         }
 
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'type' => TransactionType::Income,
             'account_id' => $account->id,
             'category_id' => $category?->id,
             'amount' => $data['amount'],

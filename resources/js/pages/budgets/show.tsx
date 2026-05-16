@@ -1,166 +1,213 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowLeftIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import {
+    BudgetItemCard,
+    type BudgetItemCardEntry,
+} from '@/components/budgets/budget-item-card';
+import {
+    BudgetSummaryCards,
+    type BudgetSummaryEntry,
+} from '@/components/budgets/budget-summary-cards';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { BudgetFormDialog } from '@/components/forms/budget-form-dialog';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { formatCurrency } from '@/lib/currency';
-import type { BreadcrumbItem, Budget, Transaction } from '@/types';
+import type { Account, BreadcrumbItem, Budget, Category } from '@/types';
 
-interface CategoryProgress {
-    id: number;
-    category_id: number;
-    category_name: string;
-    category_color: string;
-    budgeted: number;
-    spent: number;
-    remaining: number;
-    percentage: number;
-}
-
-interface Summary {
-    budgeted: number;
-    spent: number;
-    remaining: number;
+interface ShowSummary extends BudgetSummaryEntry {
     percentage: number;
     current_cycle_start: string;
     current_cycle_end: string;
 }
 
-interface Range {
-    start: string;
-    end: string;
-}
-
 interface Props {
     budget: Budget;
-    summary: Summary;
-    categoryProgress: CategoryProgress[];
-    transactions: {
-        data: Transaction[];
-        meta: { total: number; current_page: number; last_page: number };
-    };
-    scope: 'current' | 'history';
-    range: Range;
+    summary: ShowSummary;
+    categoryProgress: BudgetItemCardEntry[];
+    accounts: Account[];
+    categories: Category[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Presupuestos', href: '/budgets' },
-    { title: 'Detalle', href: '#' },
-];
+const FREQUENCY_LABELS: Record<string, string> = {
+    weekly: 'Semanal',
+    biweekly: 'Quincenal',
+    monthly: 'Mensual',
+    bimonthly: 'Bimensual',
+};
 
-export default function BudgetShow({ budget, summary, categoryProgress, transactions, scope, range }: Props) {
-    const currency = budget.currency ?? 'CLP';
+function formatDateRange(start: string, end: string, locale: string): string {
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate = new Date(`${end}T00:00:00`);
+    const options: Intl.DateTimeFormatOptions = {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    };
+    return `${startDate.toLocaleDateString(locale, options)} — ${endDate.toLocaleDateString(locale, options)}`;
+}
+
+export default function BudgetShow({
+    budget,
+    summary,
+    categoryProgress,
+    accounts,
+    categories,
+}: Props) {
+    const [editOpen, setEditOpen] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const locale = summary.currency_locale ?? 'es-CL';
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Dashboard', href: '/dashboard' },
+        { title: 'Budgets', href: '/budgets' },
+        { title: budget.name, href: `/budgets/${budget.uuid}` },
+    ];
+
+    const summaryByCurrency: Record<string, BudgetSummaryEntry> = {
+        [budget.currency]: summary,
+    };
+
+    const handleDelete = () => {
+        setDeleting(true);
+        router.delete(`/budgets/${budget.uuid}`, {
+            preserveScroll: false,
+            onSuccess: () => {
+                toast.success('Budget eliminado');
+            },
+            onError: () => {
+                toast.error('No se pudo eliminar el budget');
+                setDeleting(false);
+                setConfirmDeleteOpen(false);
+            },
+        });
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={budget.name} />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">{budget.name}</h1>
-                    <div className="flex gap-2">
-                        <Link
-                            href={`/budgets/${budget.uuid}`}
-                            className={scope === 'current' ? 'font-semibold' : 'text-muted-foreground'}
-                        >
-                            Ciclo actual
-                        </Link>
-                        <Link
-                            href={`/budgets/${budget.uuid}?scope=history`}
-                            className={scope === 'history' ? 'font-semibold' : 'text-muted-foreground'}
-                        >
-                            Historial
-                        </Link>
+
+            <div className="flex flex-1 flex-col gap-6 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                asChild
+                                className="text-muted-foreground -ml-2 size-8"
+                            >
+                                <Link href="/budgets" aria-label="Volver a budgets">
+                                    <ArrowLeftIcon />
+                                </Link>
+                            </Button>
+                            <h1 className="text-foreground truncate text-2xl font-bold tracking-tight">
+                                {budget.name}
+                            </h1>
+                        </div>
+                        <p className="text-muted-foreground text-sm">
+                            {FREQUENCY_LABELS[budget.frequency] ?? budget.frequency}
+                            {' · '}
+                            {formatDateRange(
+                                summary.current_cycle_start,
+                                summary.current_cycle_end,
+                                locale,
+                            )}
+                        </p>
+                        {budget.description && (
+                            <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
+                                {budget.description}
+                            </p>
+                        )}
                     </div>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon">
+                                <span className="sr-only">Abrir menú</span>
+                                <MoreHorizontalIcon />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                                <PencilIcon />
+                                Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setConfirmDeleteOpen(true)}
+                            >
+                                <Trash2Icon />
+                                Eliminar
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
-                <div className="text-sm text-muted-foreground">
-                    {range.start} — {range.end}
+                <BudgetSummaryCards summary={summaryByCurrency} />
+
+                <div className="space-y-3">
+                    <h2 className="text-foreground text-lg font-semibold">
+                        Categorías presupuestadas
+                    </h2>
+
+                    {categoryProgress.length === 0 ? (
+                        <div className="bg-card border-border text-muted-foreground rounded-xl border p-6 text-center text-sm">
+                            Este budget no tiene categorías.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                            {categoryProgress.map((item) => (
+                                <BudgetItemCard
+                                    key={item.id}
+                                    item={item}
+                                    currency={budget.currency}
+                                    locale={locale}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Presupuestado</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{formatCurrency(summary.budgeted, currency)}</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Gastado</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{formatCurrency(summary.spent, currency)}</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Restante</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{formatCurrency(summary.remaining, currency)}</p>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Por categoría</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {categoryProgress.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Sin categorías</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {categoryProgress.map((item) => (
-                                    <div key={item.id} className="flex items-center justify-between gap-4">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div
-                                                className="h-3 w-3 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: item.category_color }}
-                                            />
-                                            <span className="text-sm truncate">{item.category_name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-sm flex-shrink-0">
-                                            <span>{formatCurrency(item.spent, currency)}</span>
-                                            <span className="text-muted-foreground">/ {formatCurrency(item.budgeted, currency)}</span>
-                                            <Badge variant={item.percentage >= 100 ? 'destructive' : 'secondary'}>
-                                                {item.percentage}%
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Transacciones ({transactions.meta.total})</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {transactions.data.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Sin transacciones</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {transactions.data.map((tx) => (
-                                    <div key={tx.id} className="flex items-center justify-between text-sm">
-                                        <div className="min-w-0">
-                                            <p className="truncate">{tx.description ?? '—'}</p>
-                                            <p className="text-muted-foreground">{tx.transaction_date}</p>
-                                        </div>
-                                        <span className="font-medium flex-shrink-0 ml-4">
-                                            {formatCurrency(tx.amount, tx.currency)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
             </div>
+
+            <BudgetFormDialog
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                accounts={accounts}
+                categories={categories}
+                budget={budget}
+            />
+
+            <ConfirmDialog
+                open={confirmDeleteOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setConfirmDeleteOpen(false);
+                        setDeleting(false);
+                    }
+                }}
+                title="¿Eliminar budget?"
+                description={
+                    <>
+                        Se eliminará{' '}
+                        <span className="font-semibold">{budget.name}</span> y
+                        todas sus categorías presupuestadas. Esta acción no se
+                        puede deshacer.
+                    </>
+                }
+                variant="destructive"
+                confirmLabel="Eliminar"
+                onConfirm={handleDelete}
+                loading={deleting}
+            />
         </AppLayout>
     );
 }

@@ -2,10 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Actions\Transactions\CreateExpenseAction;
-use App\Actions\Transactions\CreateIncomeAction;
-use App\Actions\Transactions\CreateTransferAction;
-use App\Enums\TransactionType;
+use App\Actions\Transactions\CreateTransactionAction;
 use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -18,20 +15,19 @@ class CreateTransactionTool extends Tool
      * The tool's description.
      */
     protected string $description = <<<'MARKDOWN'
-        Create a new transaction (expense, income, or transfer).
+        Create a new transaction (income or expense).
 
-        **For expenses:**
         - Requires: account_id, category_id, amount, description
-        - Optionally: tag_ids, exclude_from_budget
+        - Optionally: tag_ids, transaction_date, notes, exclude_from_budget, idempotency_key
 
-        **For income:**
-        - Requires: account_id, category_id (income type), amount, description
+        **Amount sign determines direction:**
+        - Negative amount → expense (e.g., -58900 for a 58,900 CLP grocery purchase)
+        - Positive amount → income (e.g., 1500000 for a 1,500,000 CLP paycheck)
+        - Do not send a `type` field; transactions no longer have one.
 
-        **For transfers:**
-        - Requires: origin_account_id, destination_account_id, amount, description
-        - Creates linked transfer_out + transfer_in transactions
+        Use the CreateTransferTool for transfers between accounts.
 
-        **Amount**: Provide in major currency units (e.g., 572000 for 572,000 CLP)
+        **Amount**: Provide in major currency units (e.g., 572000 for 572,000 CLP).
     MARKDOWN;
 
     /**
@@ -46,28 +42,26 @@ class CreateTransactionTool extends Tool
         }
 
         $validated = $request->validate([
-            'type' => ['required', 'string', 'in:expense,income,transfer'],
-            'amount' => ['required', 'numeric', 'gt:0'],
+            'type' => ['prohibited'],
+            'amount' => ['required', 'numeric', 'not_in:0'],
             'description' => ['required', 'string', 'max:255'],
-            'category_id' => ['nullable', 'integer'],
+            'account_id' => ['required', 'integer'],
+            'category_id' => ['required', 'integer'],
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer'],
-            'account_id' => ['nullable', 'integer'],
-            'origin_account_id' => ['nullable', 'integer'],
-            'destination_account_id' => ['nullable', 'integer'],
             'transaction_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
             'exclude_from_budget' => ['nullable', 'boolean'],
             'idempotency_key' => ['nullable', 'string', 'max:255'],
         ], [
-            'type.required' => 'Transaction type is required (expense, income, or transfer).',
-            'type.in' => 'Transaction type must be expense, income, or transfer.',
-            'amount.required' => 'Amount is required in major currency units (e.g., 572000 for CLP).',
-            'amount.gt' => 'Amount must be greater than zero.',
+            'type.prohibited' => 'Transaction type is no longer used. Use a negative amount for expenses and a positive amount for income.',
+            'amount.required' => 'Amount is required. Use a negative value for expenses and a positive value for income.',
+            'amount.not_in' => 'Amount cannot be zero.',
             'description.required' => 'Description is required.',
+            'account_id.required' => 'Account ID is required. Use GetAccountsTool to find accounts.',
+            'category_id.required' => 'Category ID is required. Use GetCategoriesTool to find categories.',
         ]);
 
-        // Idempotency check
         if (! empty($validated['idempotency_key'])) {
             $idempotencyTag = 'idempotency:'.str_replace(['%', '_'], ['\%', '\_'], $validated['idempotency_key']);
             $existing = $user->transactions()
@@ -76,23 +70,6 @@ class CreateTransactionTool extends Tool
 
             if ($existing) {
                 $existing->load(['category', 'account', 'tags']);
-
-                // For transfers, return both legs
-                if (in_array($existing->type, [TransactionType::TransferOut, TransactionType::TransferIn])) {
-                    $linked = $existing->linked_transaction_id
-                        ? $user->transactions()->with(['category', 'account', 'tags'])->find($existing->linked_transaction_id)
-                        : null;
-
-                    $out = $existing->type === TransactionType::TransferOut ? $existing : $linked;
-                    $in = $existing->type === TransactionType::TransferIn ? $existing : $linked;
-
-                    return Response::text(json_encode([
-                        'success' => true,
-                        'message' => 'Transfer already exists (idempotent).',
-                        'transfer_out' => $out ? (new TransactionResource($out))->resolve() : null,
-                        'transfer_in' => $in ? (new TransactionResource($in))->resolve() : null,
-                    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-                }
 
                 return Response::text(json_encode([
                     'success' => true,
@@ -105,27 +82,8 @@ class CreateTransactionTool extends Tool
         $data = $validated;
         $data['notes'] = $this->buildNotes($validated);
 
-        $type = $validated['type'];
-
-        return match ($type) {
-            'expense' => $this->createExpense($user, $data),
-            'income' => $this->createIncome($user, $data),
-            'transfer' => $this->createTransfer($user, $data),
-        };
-    }
-
-    private function createExpense(mixed $user, array $data): Response
-    {
-        if (empty($data['category_id'])) {
-            return Response::error('Category is required for expenses. Use GetCategoriesTool to find expense categories.');
-        }
-
-        if (empty($data['account_id'])) {
-            return Response::error('Account is required for expenses. Use GetAccountsTool to find available accounts.');
-        }
-
         try {
-            $transaction = app(CreateExpenseAction::class)->handle($user, $data);
+            $transaction = app(CreateTransactionAction::class)->handle($user, $data);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return Response::error($e->getMessage());
         } catch (\InvalidArgumentException $e) {
@@ -136,64 +94,8 @@ class CreateTransactionTool extends Tool
 
         return Response::text(json_encode([
             'success' => true,
-            'message' => 'Expense created successfully.',
+            'message' => 'Transaction created successfully.',
             'transaction' => (new TransactionResource($transaction))->resolve(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-    }
-
-    private function createIncome(mixed $user, array $data): Response
-    {
-        if (empty($data['category_id'])) {
-            return Response::error('Category is required for income. Use GetCategoriesTool to find income categories.');
-        }
-
-        if (empty($data['account_id'])) {
-            return Response::error('Account is required for income. Use GetAccountsTool to find available accounts.');
-        }
-
-        try {
-            $transaction = app(CreateIncomeAction::class)->handle($user, $data);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return Response::error($e->getMessage());
-        } catch (\InvalidArgumentException $e) {
-            return Response::error($e->getMessage());
-        }
-
-        $transaction->load(['category', 'account', 'tags']);
-
-        return Response::text(json_encode([
-            'success' => true,
-            'message' => 'Income created successfully.',
-            'transaction' => (new TransactionResource($transaction))->resolve(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-    }
-
-    private function createTransfer(mixed $user, array $data): Response
-    {
-        if (empty($data['origin_account_id'])) {
-            return Response::error('Origin account is required for transfers.');
-        }
-
-        if (empty($data['destination_account_id'])) {
-            return Response::error('Destination account is required for transfers.');
-        }
-
-        try {
-            [$transferOut, $transferIn] = app(CreateTransferAction::class)->handle($user, $data);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return Response::error($e->getMessage());
-        } catch (\InvalidArgumentException $e) {
-            return Response::error($e->getMessage());
-        }
-
-        $transferOut->load(['account', 'tags']);
-        $transferIn->load(['account', 'tags']);
-
-        return Response::text(json_encode([
-            'success' => true,
-            'message' => 'Transfer created successfully.',
-            'transfer_out' => (new TransactionResource($transferOut))->resolve(),
-            'transfer_in' => (new TransactionResource($transferIn))->resolve(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
@@ -217,32 +119,26 @@ class CreateTransactionTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'type' => $schema->string()
-                ->description('Transaction type: expense, income, or transfer')
-                ->enum(['expense', 'income', 'transfer'])
-                ->required(),
             'amount' => $schema->number()
-                ->description('Amount in major currency units (e.g., 572000 for 572,000 CLP)')
+                ->description('Signed amount in major currency units. Negative = expense, positive = income (e.g., -58900 for a 58,900 CLP grocery purchase). Do not send a type field.')
                 ->required(),
             'description' => $schema->string()
-                ->description('Transaction description (e.g., "Supermercado Líder")')
+                ->description('Transaction description (e.g., "Supermercado Líder").')
+                ->required(),
+            'account_id' => $schema->integer()
+                ->description('Account ID. Use GetAccountsTool to find accounts.')
                 ->required(),
             'category_id' => $schema->integer()
-                ->description('Category ID. Required for expense and income. Use GetCategoriesTool to find categories.'),
+                ->description('Category ID. Use GetCategoriesTool to find categories.')
+                ->required(),
             'tag_ids' => $schema->array()
                 ->description('Optional array of tag IDs to attach to the transaction.'),
-            'account_id' => $schema->integer()
-                ->description('Account ID. Required for expense and income. Use GetAccountsTool to find accounts.'),
-            'origin_account_id' => $schema->integer()
-                ->description('Origin account ID. Required for transfers.'),
-            'destination_account_id' => $schema->integer()
-                ->description('Destination account ID. Required for transfers.'),
             'transaction_date' => $schema->string()
                 ->description('Transaction date (YYYY-MM-DD). Defaults to today.'),
             'notes' => $schema->string()
                 ->description('Optional notes for the transaction.'),
             'exclude_from_budget' => $schema->boolean()
-                ->description('Exclude this expense from budget calculations (default: false).'),
+                ->description('Exclude this transaction from budget calculations (default: false).'),
             'idempotency_key' => $schema->string()
                 ->description('Optional idempotency key to prevent duplicate transactions from repeated submissions.'),
         ];

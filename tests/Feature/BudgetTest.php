@@ -139,18 +139,19 @@ test('calculates current cycle spending including children and excluding flagged
         ->component('budgets/show')
         ->where('summary.spent', 140)
         ->where('categoryProgress.0.spent', 140)
-        ->where('range.start', '2026-02-10')
-        ->where('range.end', '2026-03-09')
+        ->where('summary.current_cycle_start', '2026-02-10')
+        ->where('summary.current_cycle_end', '2026-03-09')
     );
 
     Carbon::setTestNow();
 });
 
-test('only expense type counts toward budget spending', function () {
+test('budget spending excludes income and transfers (only expenses count)', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
     $accountA = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $accountB = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
     $budget = Budget::factory()->for($user)->create([
@@ -168,11 +169,68 @@ test('only expense type counts toward budget spending', function () {
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',
     ]);
-    Transaction::factory()->transferOut()->for($user)->create([
+
+    $transferOut = Transaction::factory()->transferOut()->for($user)->create([
         'account_id' => $accountA->id,
         'category_id' => $category->id,
         'currency' => 'CLP',
+        'amount' => -100,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+    ]);
+    $transferIn = Transaction::factory()->transferIn()->for($user)->create([
+        'account_id' => $accountB->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
         'amount' => 100,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+        'linked_transaction_id' => $transferOut->id,
+    ]);
+    $transferOut->update(['linked_transaction_id' => $transferIn->id]);
+
+    $this->actingAs($user)->get("/budgets/{$budget->uuid}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.spent', 0)
+        );
+
+    Carbon::setTestNow();
+});
+
+test('budget spending excludes transactions from accounts excluded from budget', function () {
+    Carbon::setTestNow('2026-02-20 10:00:00');
+
+    $user = User::factory()->create();
+    $includedAccount = Account::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'include_in_budget' => true,
+    ]);
+    $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create([
+        'currency' => 'CLP',
+    ]);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-02-01',
+    ]);
+    $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
+
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $includedAccount->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
+        'amount' => 100,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-02-10',
+    ]);
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $excludedAccount->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
+        'amount' => 900,
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-10',
     ]);
@@ -180,7 +238,8 @@ test('only expense type counts toward budget spending', function () {
     $this->actingAs($user)->get("/budgets/{$budget->uuid}")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('summary.spent', 0)
+            ->where('summary.spent', 100)
+            ->where('categoryProgress.0.spent', 100)
         );
 
     Carbon::setTestNow();
@@ -286,7 +345,7 @@ test('cycle boundary: exact end date is included in budget spending', function (
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('summary.spent', 75)
-            ->where('range.end', '2026-03-09')
+            ->where('summary.current_cycle_end', '2026-03-09')
         );
 
     Carbon::setTestNow();
@@ -350,15 +409,15 @@ test('biweekly frequency computes correct cycle range', function () {
     $this->actingAs($user)->get("/budgets/{$budget->uuid}")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('range.start', '2026-03-01')
-            ->where('range.end', '2026-03-14')
+            ->where('summary.current_cycle_start', '2026-03-01')
+            ->where('summary.current_cycle_end', '2026-03-14')
             ->where('summary.spent', 80)
         );
 
     Carbon::setTestNow();
 });
 
-test('history scope returns all transactions since anchor date', function () {
+test('show only reflects current cycle spending', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
@@ -376,6 +435,7 @@ test('history scope returns all transactions since anchor date', function () {
         'amount' => 800,
     ]);
 
+    // In current cycle (2026-02-10 .. 2026-03-09): counted.
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
@@ -384,6 +444,7 @@ test('history scope returns all transactions since anchor date', function () {
         'exclude_from_budget' => false,
         'transaction_date' => '2026-02-15',
     ]);
+    // Outside current cycle: ignored.
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $account->id,
         'category_id' => $category->id,
@@ -393,14 +454,15 @@ test('history scope returns all transactions since anchor date', function () {
         'transaction_date' => '2026-01-20',
     ]);
 
-    $this->actingAs($user)->get("/budgets/{$budget->uuid}?scope=history")
+    $this->actingAs($user)->get("/budgets/{$budget->uuid}")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('budgets/show')
-            ->where('scope', 'history')
-            ->where('range.start', '2026-01-10')
-            ->where('range.end', '2026-02-20')
-            ->where('transactions.meta.total', 2)
+            ->where('summary.spent', 100)
+            ->where('summary.current_cycle_start', '2026-02-10')
+            ->where('summary.current_cycle_end', '2026-03-09')
+            ->missing('transactions')
+            ->missing('scope')
         );
 
     Carbon::setTestNow();

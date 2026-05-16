@@ -14,22 +14,32 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
 
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-muted-foreground mb-2 text-[11px] font-semibold tracking-wider uppercase">
+                Platform
+            </SidebarGroupLabel>
             <SidebarMenu>
-                {items.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                            asChild
-                            isActive={isCurrentUrl(item.href)}
-                            tooltip={{ children: item.title }}
-                        >
-                            <Link href={item.href} prefetch>
-                                {item.icon && <item.icon />}
-                                <span>{item.title}</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                ))}
+                {items.map((item) => {
+                    const active = isCurrentUrl(item.href);
+                    return (
+                        <SidebarMenuItem key={item.title}>
+                            <SidebarMenuButton
+                                asChild
+                                isActive={active}
+                                tooltip={{ children: item.title }}
+                                className={
+                                    active
+                                        ? 'text-sidebar-accent-foreground font-medium'
+                                        : 'text-muted-foreground hover:text-sidebar-accent-foreground font-medium'
+                                }
+                            >
+                                <Link href={item.href} prefetch>
+                                    {item.icon && <item.icon />}
+                                    <span>{item.title}</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    );
+                })}
             </SidebarMenu>
         </SidebarGroup>
     );

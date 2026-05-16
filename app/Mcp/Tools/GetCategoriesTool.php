@@ -18,7 +18,7 @@ class GetCategoriesTool extends Tool
      */
     protected string $description = <<<'MARKDOWN'
         Get all categories organized hierarchically.
-        Any category can be used for any transaction type (expense, income, transfer).
+        Categories do not determine transaction direction. Income/expense direction comes from the signed transaction amount.
         System categories (Balance Inicial, Transferencia, etc.) are shown separately and cannot be modified.
     MARKDOWN;
 
