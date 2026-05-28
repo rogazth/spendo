@@ -16,7 +16,6 @@ class CreateCategoryAction
         return Category::create([
             ...$data,
             'user_id' => $user->id,
-            'is_system' => false,
         ]);
     }
 }

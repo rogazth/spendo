@@ -125,11 +125,7 @@ class TransactionController extends Controller
             ->orderBy('name')
             ->get();
 
-        $categories = Category::query()
-            ->where(function ($query) {
-                $query->whereNull('user_id')
-                    ->orWhere('user_id', Auth::id());
-            })
+        $categories = $user->categories()
             ->whereNull('parent_id')
             ->with('children')
             ->get();
@@ -160,7 +156,6 @@ class TransactionController extends Controller
                 'name' => $cat->name,
                 'color' => $cat->color,
                 'emoji' => $cat->emoji,
-                'is_system' => $cat->is_system,
                 'children' => $cat->children->map(fn ($child) => [
                     'id' => $child->id,
                     'uuid' => $child->uuid,
@@ -281,12 +276,8 @@ class TransactionController extends Controller
      */
     private function expandCategoryIdsWithChildren(array $categoryIds): array
     {
-        $childIds = Category::query()
+        $childIds = Auth::user()->categories()
             ->whereIn('parent_id', $categoryIds)
-            ->where(function ($query) {
-                $query->whereNull('user_id')
-                    ->orWhere('user_id', Auth::id());
-            })
             ->pluck('id')
             ->all();
 

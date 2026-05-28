@@ -16,12 +16,10 @@ class DummyDataSeeder extends Seeder
         $incomeCategoryNames = ['Ingresos', 'Sueldo', 'Freelance', 'Pensión', 'Bono / Aguinaldo', 'Otros Ingresos'];
 
         $incomeCategories = Category::whereNull('parent_id')
-            ->where('is_system', false)
             ->whereIn('name', $incomeCategoryNames)
             ->get();
 
         $expenseCategories = Category::whereNull('parent_id')
-            ->where('is_system', false)
             ->whereNotIn('name', $incomeCategoryNames)
             ->get();
 

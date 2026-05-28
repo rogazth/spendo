@@ -4,7 +4,6 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Categories\CreateCategoryAction;
 use App\Http\Resources\CategoryResource;
-use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -16,8 +15,7 @@ class CreateCategoryTool extends Tool
         Create a new category for classifying transactions.
 
         Categories do not determine transaction direction. Income/expense direction comes from the signed transaction amount.
-        **Subcategories**: Provide parent_id to create a subcategory. The parent must be a top-level, non-system category.
-        **Note**: System categories cannot be created via this tool.
+        **Subcategories**: Provide parent_id to create a subcategory. The parent must be one of the user's top-level categories.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -37,12 +35,8 @@ class CreateCategoryTool extends Tool
             'name.required' => 'Category name is required.',
         ]);
 
-        // Check for duplicate name
-        $existing = Category::where('name', $validated['name'])
-            ->where(function ($q) use ($user) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', $user->id);
-            })
+        $existing = $user->categories()
+            ->where('name', $validated['name'])
             ->first();
 
         if ($existing) {
@@ -50,16 +44,12 @@ class CreateCategoryTool extends Tool
         }
 
         if (! empty($validated['parent_id'])) {
-            $parentCategory = Category::where(function ($q) use ($user) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', $user->id);
-            })
+            $parentCategory = $user->categories()
                 ->whereNull('parent_id')
-                ->where('is_system', false)
                 ->find($validated['parent_id']);
 
             if (! $parentCategory) {
-                return Response::error('Parent category not found or not valid (must be a top-level, non-system category).');
+                return Response::error('Parent category not found or not valid (must be one of your top-level categories).');
             }
         }
 

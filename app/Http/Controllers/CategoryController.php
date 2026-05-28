@@ -27,16 +27,11 @@ class CategoryController extends Controller
         $monthEnd = $today->endOfMonth();
         $daysInMonth = $monthEnd->day;
 
-        $categories = Category::query()
-            ->where(function ($query) use ($user) {
-                $query->whereNull('user_id')
-                    ->orWhere('user_id', $user->id);
-            })
+        $categories = $user->categories()
             ->with(['children' => function ($query) {
                 $query->orderBy('sort_order')->orderBy('name');
             }])
             ->whereNull('parent_id')
-            ->orderByDesc('user_id')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -104,8 +99,6 @@ class CategoryController extends Controller
                     'name' => $child->name,
                     'color' => $child->color,
                     'emoji' => $child->emoji,
-                    'is_system' => (bool) $child->is_system,
-                    'is_user_owned' => $child->user_id !== null,
                     'transaction_count' => $agg['transaction_count'],
                     'total_spent' => $agg['total_spent'],
                     'total_income' => $agg['total_income'],
@@ -140,8 +133,6 @@ class CategoryController extends Controller
                 'name' => $parent->name,
                 'color' => $parent->color,
                 'emoji' => $parent->emoji,
-                'is_system' => (bool) $parent->is_system,
-                'is_user_owned' => $parent->user_id !== null,
                 'transaction_count' => $rolledCount,
                 'total_spent' => $rolledSpent,
                 'total_income' => $rolledIncome,
@@ -162,7 +153,6 @@ class CategoryController extends Controller
             ->first();
 
         $parentOptions = $categories
-            ->filter(fn (Category $c) => ! $c->is_system)
             ->map(fn (Category $c) => [
                 'id' => $c->id,
                 'uuid' => $c->uuid,
@@ -216,11 +206,7 @@ class CategoryController extends Controller
     {
         $this->authorizeCategory($category);
 
-        try {
-            $action->handle($category, $request->validated());
-        } catch (\InvalidArgumentException) {
-            abort(403, 'No puedes editar categorías del sistema.');
-        }
+        $action->handle($category, $request->validated());
 
         return redirect()->route('categories.index')
             ->with('success', 'Categoría actualizada correctamente.');
@@ -230,11 +216,7 @@ class CategoryController extends Controller
     {
         $this->authorizeCategory($category);
 
-        try {
-            $action->handle($category);
-        } catch (\InvalidArgumentException) {
-            abort(403, 'No puedes eliminar categorías del sistema.');
-        }
+        $action->handle($category);
 
         return redirect()->route('categories.index')
             ->with('success', 'Categoría eliminada correctamente.');
@@ -242,13 +224,7 @@ class CategoryController extends Controller
 
     private function authorizeCategory(Category $category): void
     {
-        $user = Auth::user();
-
-        if ($category->user_id === null) {
-            return;
-        }
-
-        if ($category->user_id !== $user->id) {
+        if ($category->user_id !== Auth::id()) {
             abort(403);
         }
     }

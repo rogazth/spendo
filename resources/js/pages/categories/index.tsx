@@ -18,8 +18,6 @@ interface CategoryRow {
     name: string;
     color: string;
     emoji: string | null;
-    is_system: boolean;
-    is_user_owned: boolean;
     transaction_count: number;
     total_spent: number;
     total_income: number;
@@ -73,12 +71,10 @@ function fmtMonthLabel(period: Period): string {
     });
 }
 
-type CategoryStatus = 'top' | 'active' | 'income' | 'idle' | 'system';
+type CategoryStatus = 'top' | 'active' | 'income' | 'idle';
 
 function categoryStatus(c: CategoryRow, topId: number | null): CategoryStatus {
-    if (c.transaction_count === 0) {
-        return c.is_system && !c.is_user_owned ? 'system' : 'idle';
-    }
+    if (c.transaction_count === 0) return 'idle';
     if (topId !== null && c.id === topId) return 'top';
     if (c.total_spent === 0 && c.total_income > 0) return 'income';
     return 'active';
@@ -89,7 +85,6 @@ const STATUS_DOT: Record<CategoryStatus, string> = {
     active: 'bg-emerald-500',
     income: 'bg-sky-500',
     idle: 'bg-muted-foreground/40',
-    system: 'bg-slate-400',
 };
 
 const STATUS_LABEL: Record<CategoryStatus, string> = {
@@ -97,7 +92,6 @@ const STATUS_LABEL: Record<CategoryStatus, string> = {
     active: 'active',
     income: 'income',
     idle: 'idle',
-    system: 'system',
 };
 
 export default function CategoriesIndex({ categories, totals, period }: Props) {
@@ -460,11 +454,6 @@ function CategoryRow({
                     >
                         {row.name}
                     </span>
-                    {row.is_system && !row.is_user_owned && (
-                        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider uppercase">
-                            system
-                        </span>
-                    )}
                 </div>
             </td>
             <td className="text-muted-foreground px-3 py-2.5 text-right font-mono tabular-nums">

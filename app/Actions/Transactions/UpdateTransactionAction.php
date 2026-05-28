@@ -2,7 +2,6 @@
 
 namespace App\Actions\Transactions;
 
-use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -39,12 +38,10 @@ class UpdateTransactionAction
         }
 
         if (! empty($data['category_id'])) {
-            $category = Category::where(function ($q) use ($user) {
-                $q->whereNull('user_id')->orWhere('user_id', $user->id);
-            })->find($data['category_id']);
+            $category = $user->categories()->find($data['category_id']);
 
             if (! $category) {
-                throw new ModelNotFoundException('Category not found or not accessible.');
+                throw new ModelNotFoundException('Category not found.');
             }
 
             $updates['category_id'] = $category->id;

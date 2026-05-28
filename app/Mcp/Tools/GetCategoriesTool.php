@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Http\Resources\CategoryResource;
-use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -19,7 +18,7 @@ class GetCategoriesTool extends Tool
     protected string $description = <<<'MARKDOWN'
         Get all categories organized hierarchically.
         Categories do not determine transaction direction. Income/expense direction comes from the signed transaction amount.
-        System categories (Balance Inicial, Transferencia, etc.) are shown separately and cannot be modified.
+        Transfers and initial balance transactions have no category (use the transaction `type` field instead).
     MARKDOWN;
 
     /**
@@ -33,32 +32,18 @@ class GetCategoriesTool extends Tool
             return Response::error('User not authenticated.');
         }
 
-        $categories = Category::query()
-            ->where(function ($q) use ($user) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', $user->id);
-            })
-            ->with(['children' => function ($q) use ($user) {
-                $q->where(function ($q) use ($user) {
-                    $q->whereNull('user_id')
-                        ->orWhere('user_id', $user->id);
-                });
-            }])
+        $categories = $user->categories()
+            ->with('children')
             ->whereNull('parent_id')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
-        $result = collect(CategoryResource::collection($categories)->resolve());
-
-        $grouped = [
-            'categories' => $result->where('is_system', false)->values(),
-            'system' => $result->where('is_system', true)->values(),
-        ];
+        $result = CategoryResource::collection($categories)->resolve();
 
         return Response::text(json_encode([
-            'total_count' => $result->count(),
-            'categories_by_group' => $grouped,
+            'total_count' => count($result),
+            'categories' => $result,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

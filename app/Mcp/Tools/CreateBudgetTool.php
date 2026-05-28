@@ -4,7 +4,6 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Budgets\CreateBudgetAction;
 use App\Http\Resources\BudgetResource;
-use App\Models\Category;
 use App\Models\Currency;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -65,16 +64,12 @@ class CreateBudgetTool extends Tool
             return Response::error('Duplicate category IDs found. Each category can only appear once in a budget.');
         }
 
-        $categories = Category::whereIn('id', $categoryIds->all())
-            ->where(function ($q) use ($user) {
-                $q->whereNull('user_id')
-                    ->orWhere('user_id', $user->id);
-            })
-            ->where('is_system', false)
+        $categories = $user->categories()
+            ->whereIn('id', $categoryIds->all())
             ->get(['id', 'parent_id', 'name']);
 
         if ($categories->count() !== $categoryIds->count()) {
-            return Response::error('Some categories were not found or are system categories. Use GetCategoriesTool to find valid categories.');
+            return Response::error('Some categories were not found. Use GetCategoriesTool to find valid categories.');
         }
 
         // Check parent+child overlap

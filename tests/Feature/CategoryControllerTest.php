@@ -139,7 +139,6 @@ test('store creates a category', function () {
     $this->assertDatabaseHas('categories', [
         'user_id' => $user->id,
         'name' => 'Viajes',
-        'is_system' => false,
     ]);
 });
 
@@ -178,14 +177,6 @@ test('show renders category detail page', function () {
         );
 });
 
-test('show allows access to system categories', function () {
-    $user = User::factory()->create();
-    $system = Category::factory()->system()->create();
-
-    $this->actingAs($user)->get("/categories/{$system->uuid}")
-        ->assertOk();
-});
-
 test('show returns 403 for another user category', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();
@@ -208,15 +199,6 @@ test('update modifies a user category', function () {
     ])->assertRedirect('/categories');
 
     expect($category->fresh()->name)->toBe('Actualizada');
-});
-
-test('update returns 403 for system categories', function () {
-    $user = User::factory()->create();
-    $system = Category::factory()->system()->create();
-
-    $this->actingAs($user)->put("/categories/{$system->uuid}", [
-        'name' => 'Hack',
-    ])->assertForbidden();
 });
 
 test('update returns 403 for another user category', function () {
@@ -243,14 +225,6 @@ test('destroy soft-deletes category and orphans its children', function () {
 
     $this->assertSoftDeleted('categories', ['id' => $parent->id]);
     expect($child->fresh()->parent_id)->toBeNull();
-});
-
-test('destroy returns 403 for system categories', function () {
-    $user = User::factory()->create();
-    $system = Category::factory()->system()->create();
-
-    $this->actingAs($user)->delete("/categories/{$system->uuid}")
-        ->assertForbidden();
 });
 
 test('destroy returns 403 for another user category', function () {

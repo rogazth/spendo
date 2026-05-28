@@ -47,11 +47,6 @@ describe('CreateAccountTool', function () {
 
     it('creates an account with initial balance', function () {
         $user = User::factory()->create();
-        Category::factory()->create([
-            'user_id' => null,
-            'name' => 'Balance Inicial',
-            'is_system' => true,
-        ]);
 
         $response = SpendoServer::actingAs($user)->tool(CreateAccountTool::class, [
             'name' => 'Savings Account',
@@ -63,8 +58,10 @@ describe('CreateAccountTool', function () {
 
         $this->assertDatabaseHas('transactions', [
             'user_id' => $user->id,
-            'amount' => 50000000, // 500000 * 100
+            'amount' => 50000000,
             'description' => 'Balance inicial',
+            'type' => 'initial_balance',
+            'category_id' => null,
         ]);
     });
 
@@ -199,32 +196,13 @@ describe('UpdateCategoryTool', function () {
         $response->assertOk()->assertSee('New');
     });
 
-    it('rejects system category updates', function () {
+    it('rejects updates to another user\'s category', function () {
         $user = User::factory()->create();
-        $system = Category::factory()->create([
-            'user_id' => null,
-            'name' => 'System Cat',
-            'is_system' => true,
-        ]);
+        $other = User::factory()->create();
+        $foreign = Category::factory()->for($other)->create(['name' => 'Foreign']);
 
         $response = SpendoServer::actingAs($user)->tool(UpdateCategoryTool::class, [
-            'category_id' => $system->id,
-            'name' => 'Hacked',
-        ]);
-
-        $response->assertHasErrors(['not found']);
-    });
-
-    it('rejects editing global non-system categories', function () {
-        $user = User::factory()->create();
-        $global = Category::factory()->create([
-            'user_id' => null,
-            'name' => 'Shared Category',
-            'is_system' => false,
-        ]);
-
-        $response = SpendoServer::actingAs($user)->tool(UpdateCategoryTool::class, [
-            'category_id' => $global->id,
+            'category_id' => $foreign->id,
             'name' => 'Hijacked',
         ]);
 
@@ -549,26 +527,17 @@ describe('GetBudgetMetricsTool', function () {
 // ─── Regression Tests ─────────────────────────────────────────────────────
 
 describe('GetCategoriesTool - Cross-user isolation', function () {
-    it('does not leak another user subcategories under shared parents', function () {
+    it('only returns the authenticated user\'s categories', function () {
         $userA = User::factory()->create();
         $userB = User::factory()->create();
 
-        $globalParent = Category::factory()->create([
-            'user_id' => null,
-            'parent_id' => null,
-            'is_system' => false,
-            'name' => 'SharedParent',
-        ]);
-
-        Category::factory()->for($userA)->create([
-            'parent_id' => $globalParent->id,
-            'name' => 'UserA Private',
-        ]);
+        Category::factory()->for($userA)->create(['name' => 'UserA Private']);
+        Category::factory()->for($userB)->create(['name' => 'UserB Visible']);
 
         $response = SpendoServer::actingAs($userB)->tool(GetCategoriesTool::class);
 
         $response->assertOk()
-            ->assertSee('SharedParent')
+            ->assertSee('UserB Visible')
             ->assertDontSee('UserA Private');
     });
 });

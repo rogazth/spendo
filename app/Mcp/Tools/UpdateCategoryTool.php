@@ -4,7 +4,6 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Categories\UpdateCategoryAction;
 use App\Http\Resources\CategoryResource;
-use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -14,7 +13,7 @@ class UpdateCategoryTool extends Tool
 {
     protected string $description = <<<'MARKDOWN'
         Update an existing category. Only provided fields will be updated.
-        System categories cannot be modified. Use GetCategoriesTool to find category IDs.
+        Use GetCategoriesTool to find category IDs.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -37,16 +36,13 @@ class UpdateCategoryTool extends Tool
         $category = $user->categories()->find($validated['category_id']);
 
         if (! $category) {
-            return Response::error('Category not found. Only user-created categories can be modified.');
+            return Response::error('Category not found.');
         }
 
         if (isset($validated['name']) && $validated['name'] !== $category->name) {
-            $duplicate = Category::where('name', $validated['name'])
+            $duplicate = $user->categories()
+                ->where('name', $validated['name'])
                 ->where('id', '!=', $category->id)
-                ->where(function ($q) use ($user) {
-                    $q->whereNull('user_id')
-                        ->orWhere('user_id', $user->id);
-                })
                 ->first();
 
             if ($duplicate) {

@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Category;
 use App\Models\Currency;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -79,13 +78,8 @@ class StoreBudgetRequest extends FormRequest
                 return;
             }
 
-            $categories = Category::query()
+            $categories = $user->categories()
                 ->whereIn('id', $selectedCategoryIds->all())
-                ->where(function ($query) use ($user) {
-                    $query->whereNull('user_id')
-                        ->orWhere('user_id', $user->id);
-                })
-                ->where('is_system', false)
                 ->get(['id', 'parent_id']);
 
             if ($categories->count() !== $selectedCategoryIds->count()) {

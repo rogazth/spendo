@@ -23,12 +23,6 @@ describe('CreateTransferTool', function () {
         $origin = Account::factory()->for($user)->create(['name' => 'Origin']);
         $dest = Account::factory()->for($user)->create(['name' => 'Destination']);
 
-        Category::factory()->create([
-            'user_id' => null,
-            'name' => 'Transferencia',
-            'is_system' => true,
-        ]);
-
         $response = SpendoServer::actingAs($user)->tool(CreateTransferTool::class, [
             'amount' => 100000,
             'description' => 'Savings deposit',
@@ -58,12 +52,6 @@ describe('CreateTransferTool', function () {
         $user = User::factory()->create();
         $origin = Account::factory()->for($user)->create();
         $dest = Account::factory()->for($user)->create();
-
-        Category::factory()->create([
-            'user_id' => null,
-            'name' => 'Transferencia',
-            'is_system' => true,
-        ]);
 
         SpendoServer::actingAs($user)->tool(CreateTransferTool::class, [
             'amount' => 50000,

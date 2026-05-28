@@ -62,12 +62,11 @@ export interface Account extends Model {
 
 // Category model
 export interface Category extends Model {
-    user_id: number | null;
+    user_id: number;
     parent_id: number | null;
     name: string;
     emoji: string | null;
     color: string;
-    is_system: boolean;
     // Relations
     parent?: Category;
     children?: Category[];

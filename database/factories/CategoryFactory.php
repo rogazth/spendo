@@ -32,12 +32,11 @@ class CategoryFactory extends Factory
         $category = fake()->randomElement(self::$expenseCategories);
 
         return [
-            'user_id' => null,
+            'user_id' => User::factory(),
             'parent_id' => null,
             'name' => $category['name'],
             'emoji' => $category['emoji'],
             'color' => $category['color'],
-            'is_system' => false,
             'sort_order' => 0,
         ];
     }
@@ -58,20 +57,11 @@ class CategoryFactory extends Factory
         ]);
     }
 
-    public function system(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'user_id' => null,
-            'is_system' => true,
-        ]);
-    }
-
     public function userCategory(): static
     {
         return $this->state(fn (array $attributes) => [
             'user_id' => User::factory(),
             'name' => fake()->randomElement(['Mi categoría', 'Gastos personales', 'Regalos', 'Viajes', 'Suscripciones']),
-            'is_system' => false,
         ]);
     }
 

@@ -19,14 +19,12 @@ class Category extends Model
         'name',
         'emoji',
         'color',
-        'is_system',
         'sort_order',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_system' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

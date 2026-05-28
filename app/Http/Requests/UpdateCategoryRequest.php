@@ -27,10 +27,7 @@ class UpdateCategoryRequest extends FormRequest
                 'string',
                 'max:255',
                 Rule::unique('categories', 'name')->where(function ($query) use ($user) {
-                    $query->where(function ($q) use ($user) {
-                        $q->whereNull('user_id')
-                            ->orWhere('user_id', $user->id);
-                    })
+                    $query->where('user_id', $user->id)
                         ->whereNull('deleted_at');
                 })->ignore($category?->id),
             ],
@@ -38,12 +35,8 @@ class UpdateCategoryRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::exists('categories', 'id')->where(function ($query) use ($user, $category) {
-                    $query->where(function ($q) use ($user) {
-                        $q->whereNull('user_id')
-                            ->orWhere('user_id', $user->id);
-                    })
+                    $query->where('user_id', $user->id)
                         ->whereNull('parent_id')
-                        ->where('is_system', false)
                         ->where('id', '!=', $category->id);
                 }),
             ],

@@ -9,7 +9,6 @@ use App\Http\Requests\StoreBudgetRequest;
 use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
 use App\Models\BudgetItem;
-use App\Models\Category;
 use App\Models\Currency;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -69,16 +68,10 @@ class BudgetController extends Controller
             ->orderBy('name')
             ->get();
 
-        $categories = Category::query()
-            ->where(function ($query) {
-                $query->whereNull('user_id')
-                    ->orWhere('user_id', Auth::id());
-            })
-            ->where('is_system', false)
+        $categories = Auth::user()->categories()
             ->whereNull('parent_id')
             ->with([
                 'children' => fn ($query) => $query
-                    ->where('is_system', false)
                     ->orderBy('sort_order')
                     ->orderBy('name'),
             ])
@@ -153,16 +146,10 @@ class BudgetController extends Controller
         $budget->setAttribute('current_cycle_spent', $totalSpent);
         $budget->setAttribute('current_cycle_percentage', $totalPercentage);
 
-        $categories = Category::query()
-            ->where(function ($query) {
-                $query->whereNull('user_id')
-                    ->orWhere('user_id', Auth::id());
-            })
-            ->where('is_system', false)
+        $categories = Auth::user()->categories()
             ->whereNull('parent_id')
             ->with([
                 'children' => fn ($query) => $query
-                    ->where('is_system', false)
                     ->orderBy('sort_order')
                     ->orderBy('name'),
             ])
