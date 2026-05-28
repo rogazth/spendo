@@ -1,5 +1,6 @@
 import { CheckIcon, WalletIcon } from 'lucide-react';
 import { Fragment } from 'react';
+import { CategoryAvatar } from '@/components/categories/category-avatar';
 import { DateFilterDropdown } from '@/components/date-filter-dropdown';
 import { FilterPill } from '@/components/filter-pill';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,6 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { formatCurrency } from '@/lib/currency';
-import { cn } from '@/lib/utils';
 import type { Account, Budget, Category } from '@/types';
 
 const ALL = '__all__';
@@ -24,6 +24,7 @@ export interface TransactionFilters {
     category_ids: string[];
     date_from: string;
     date_to: string;
+    dates_all: boolean;
 }
 
 interface TransactionsFilterBarProps {
@@ -65,38 +66,6 @@ function flattenCategories(categories: Category[]): FlatCategory[] {
             ...children,
         ];
     });
-}
-
-interface CategoryAvatarProps {
-    color: string;
-    emoji: string | null;
-    size?: 'sm' | 'md';
-}
-
-function CategoryAvatar({ color, emoji, size = 'sm' }: CategoryAvatarProps) {
-    const sizeClass =
-        size === 'sm' ? 'size-5 text-[11px]' : 'size-6 text-[13px]';
-
-    return (
-        <span
-            className={cn(
-                'inline-flex shrink-0 items-center justify-center rounded-md border leading-none',
-                sizeClass,
-            )}
-            style={{
-                backgroundColor: `${color}20`,
-                borderColor: color,
-            }}
-            aria-hidden
-        >
-            {emoji ?? (
-                <span
-                    className="size-1.5 rounded-full"
-                    style={{ backgroundColor: color }}
-                />
-            )}
-        </span>
-    );
 }
 
 export function TransactionsFilterBar({
@@ -183,10 +152,19 @@ export function TransactionsFilterBar({
             <DateFilterDropdown
                 dateFrom={filters.date_from}
                 dateTo={filters.date_to}
+                datesAll={filters.dates_all}
                 onChange={(next) =>
                     onChange({
                         date_from: next.dateFrom,
                         date_to: next.dateTo,
+                        dates_all: false,
+                    })
+                }
+                onClearDates={() =>
+                    onChange({
+                        date_from: '',
+                        date_to: '',
+                        dates_all: true,
                     })
                 }
             />

@@ -2,8 +2,9 @@ import { useForm, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { CategoryPicker } from '@/components/categories/category-picker';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -111,25 +112,6 @@ export function BudgetFormDialog({
         }
     }, [open, budget]);
 
-    const categoryOptions = useMemo(() => {
-        return categories.flatMap((category) => {
-            const parent = {
-                id: category.id,
-                label: category.name,
-                depth: 0,
-                color: category.color,
-            };
-            const children = (category.children ?? []).map((child) => ({
-                id: child.id,
-                label: child.name,
-                depth: 1,
-                color: child.color,
-            }));
-
-            return [parent, ...children];
-        });
-    }, [categories]);
-
     const addItem = () => {
         setData('items', [...data.items, { category_id: null, amount: null }]);
     };
@@ -199,7 +181,7 @@ export function BudgetFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[680px]">
+            <DialogContent className="max-h-[95vh] gap-4 overflow-y-auto sm:max-w-[680px]">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle>
@@ -402,48 +384,15 @@ export function BudgetFormDialog({
                                 >
                                     <div className="space-y-2">
                                         <Label>Categoría</Label>
-                                        <Select
-                                            value={
-                                                item.category_id?.toString() ?? ''
-                                            }
-                                            onValueChange={(value) =>
+                                        <CategoryPicker
+                                            categories={categories}
+                                            value={item.category_id}
+                                            onChange={(id) =>
                                                 updateItem(index, {
-                                                    category_id: parseInt(
-                                                        value,
-                                                        10,
-                                                    ),
+                                                    category_id: id,
                                                 })
                                             }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecciona categoría" />
-                                            </SelectTrigger>
-                                            <SelectContent position="popper" className="max-h-60">
-                                                {categoryOptions.map((category) => (
-                                                    <SelectItem
-                                                        key={category.id}
-                                                        value={category.id.toString()}
-                                                    >
-                                                        <span
-                                                            className={cn(
-                                                                'inline-flex items-center gap-2',
-                                                                category.depth ===
-                                                                    1 && 'pl-4',
-                                                            )}
-                                                        >
-                                                            <span
-                                                                className="h-2.5 w-2.5 rounded-full"
-                                                                style={{
-                                                                    backgroundColor:
-                                                                        category.color,
-                                                                }}
-                                                            />
-                                                            {category.label}
-                                                        </span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        />
                                     </div>
 
                                     <div className="space-y-2">
