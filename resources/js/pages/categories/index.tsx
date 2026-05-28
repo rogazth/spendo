@@ -1,6 +1,24 @@
-import { Head } from '@inertiajs/react';
-import { ChevronDownIcon, ChevronRightIcon, TagIcon } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import {
+    ChevronDownIcon,
+    ChevronRightIcon,
+    MoreHorizontalIcon,
+    PencilIcon,
+    PlusIcon,
+    TagIcon,
+    Trash2Icon,
+} from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { CategoryFormDialog } from '@/components/forms/category-form-dialog';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Empty,
     EmptyDescription,
@@ -10,11 +28,12 @@ import {
 } from '@/components/ui/empty';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import type { BreadcrumbItem } from '@/types';
+import type { BreadcrumbItem, Category } from '@/types';
 
 interface CategoryRow {
     id: number;
     uuid: string;
+    parent_id: number | null;
     name: string;
     color: string;
     emoji: string | null;
@@ -46,10 +65,32 @@ interface Period {
     today: string;
 }
 
+interface ParentOption {
+    id: number;
+    uuid: string;
+    name: string;
+    color: string;
+}
+
 interface Props {
     categories: ParentCategoryRow[];
+    parentCategories: ParentOption[];
     totals: Totals;
     period: Period;
+}
+
+function rowToCategory(row: CategoryRow): Category {
+    return {
+        id: row.id,
+        uuid: row.uuid,
+        parent_id: row.parent_id,
+        user_id: 0,
+        name: row.name,
+        emoji: row.emoji,
+        color: row.color,
+        created_at: '',
+        updated_at: '',
+    };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -94,24 +135,75 @@ const STATUS_LABEL: Record<CategoryStatus, string> = {
     idle: 'idle',
 };
 
-export default function CategoriesIndex({ categories, totals, period }: Props) {
+export default function CategoriesIndex({
+    categories,
+    parentCategories,
+    totals,
+    period,
+}: Props) {
     const isEmpty = categories.length === 0;
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<Category | undefined>();
+    const [deleting, setDeleting] = useState<CategoryRow | null>(null);
+    const [deletePending, setDeletePending] = useState(false);
+
+    const parentOptions: Category[] = parentCategories.map((p) => ({
+        id: p.id,
+        uuid: p.uuid,
+        parent_id: null,
+        user_id: 0,
+        name: p.name,
+        emoji: null,
+        color: p.color,
+        created_at: '',
+        updated_at: '',
+    }));
+
+    const openCreate = () => {
+        setEditing(undefined);
+        setFormOpen(true);
+    };
+
+    const openEdit = (row: CategoryRow) => {
+        setEditing(rowToCategory(row));
+        setFormOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (!deleting) return;
+        setDeletePending(true);
+        router.delete(`/categories/${deleting.uuid}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Categoría eliminada');
+                setDeleting(null);
+            },
+            onError: () => toast.error('Error al eliminar la categoría'),
+            onFinish: () => setDeletePending(false),
+        });
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Categorías" />
 
             <div className="flex flex-1 flex-col gap-6 p-6">
-                <div>
-                    <h1 className="text-foreground text-2xl font-bold tracking-tight">
-                        Categorías
-                    </h1>
-                    <p className="text-muted-foreground text-sm">
-                        Status board · uso del mes en curso ·{' '}
-                        <span className="font-mono">
-                            {fmtMonthLabel(period)}
-                        </span>
-                    </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                            Categorías
+                        </h1>
+                        <p className="text-muted-foreground text-sm">
+                            Status board · uso del mes en curso ·{' '}
+                            <span className="font-mono">
+                                {fmtMonthLabel(period)}
+                            </span>
+                        </p>
+                    </div>
+                    <Button onClick={openCreate} size="sm">
+                        <PlusIcon className="size-4" />
+                        Nueva categoría
+                    </Button>
                 </div>
 
                 {isEmpty ? (
@@ -121,11 +213,11 @@ export default function CategoriesIndex({ categories, totals, period }: Props) {
                                 <TagIcon />
                             </EmptyMedia>
                             <EmptyTitle>
-                                No hay categorías disponibles
+                                Aún no tienes categorías
                             </EmptyTitle>
                             <EmptyDescription>
-                                Las categorías se administran mediante el
-                                asistente de IA.
+                                Crea tu primera categoría para empezar a
+                                organizar tus movimientos.
                             </EmptyDescription>
                         </EmptyHeader>
                     </Empty>
@@ -135,10 +227,46 @@ export default function CategoriesIndex({ categories, totals, period }: Props) {
                         <CategoriesBoard
                             categories={categories}
                             totals={totals}
+                            onEdit={openEdit}
+                            onDelete={(row) => setDeleting(row)}
                         />
                     </>
                 )}
             </div>
+
+            <CategoryFormDialog
+                open={formOpen}
+                onOpenChange={setFormOpen}
+                category={editing}
+                parentCategories={parentOptions}
+            />
+
+            <ConfirmDialog
+                open={deleting !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleting(null);
+                }}
+                title="Eliminar categoría"
+                description={
+                    deleting ? (
+                        <>
+                            Vas a eliminar{' '}
+                            <span className="font-semibold">
+                                {deleting.name}
+                            </span>
+                            . Las subcategorías quedarán sin padre y las
+                            transacciones existentes mantendrán la referencia
+                            (puedes recuperarla más tarde).
+                        </>
+                    ) : (
+                        ''
+                    )
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={confirmDelete}
+                loading={deletePending}
+            />
         </AppLayout>
     );
 }
@@ -214,9 +342,13 @@ function KpiCell({
 function CategoriesBoard({
     categories,
     totals,
+    onEdit,
+    onDelete,
 }: {
     categories: ParentCategoryRow[];
     totals: Totals;
+    onEdit: (row: CategoryRow) => void;
+    onDelete: (row: CategoryRow) => void;
 }) {
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const topId = totals.top_category
@@ -335,6 +467,8 @@ function CategoriesBoard({
                                     onToggle={() => toggleExpand(parent.id)}
                                     denom={denom}
                                     topId={topId}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
                                 />
                             );
                         })}
@@ -352,6 +486,8 @@ function CategoryRows({
     onToggle,
     denom,
     topId,
+    onEdit,
+    onDelete,
 }: {
     parent: ParentCategoryRow;
     expanded: boolean;
@@ -359,6 +495,8 @@ function CategoryRows({
     onToggle: () => void;
     denom: number;
     topId: number | null;
+    onEdit: (row: CategoryRow) => void;
+    onDelete: (row: CategoryRow) => void;
 }) {
     return (
         <>
@@ -370,6 +508,8 @@ function CategoryRows({
                 onToggle={onToggle}
                 denom={denom}
                 topId={topId}
+                onEdit={onEdit}
+                onDelete={onDelete}
             />
             {expanded &&
                 parent.children.map((child) => (
@@ -382,6 +522,8 @@ function CategoryRows({
                         onToggle={() => undefined}
                         denom={denom}
                         topId={topId}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
                     />
                 ))}
         </>
@@ -396,6 +538,8 @@ function CategoryRow({
     onToggle,
     denom,
     topId,
+    onEdit,
+    onDelete,
 }: {
     row: CategoryRow;
     level: 0 | 1;
@@ -404,6 +548,8 @@ function CategoryRow({
     onToggle: () => void;
     denom: number;
     topId: number | null;
+    onEdit: (row: CategoryRow) => void;
+    onDelete: (row: CategoryRow) => void;
 }) {
     const status = categoryStatus(row, topId);
     const share =
@@ -512,16 +658,43 @@ function CategoryRow({
                 </div>
             </td>
             <td className="px-3 py-2.5">
-                <div className="flex items-center justify-center gap-1.5">
-                    <span
-                        className={cn(
-                            'size-1.5 rounded-full',
-                            STATUS_DOT[status],
-                        )}
-                    />
-                    <span className="text-muted-foreground font-mono text-[10px] uppercase">
-                        {STATUS_LABEL[status]}
-                    </span>
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                        <span
+                            className={cn(
+                                'size-1.5 rounded-full',
+                                STATUS_DOT[status],
+                            )}
+                        />
+                        <span className="text-muted-foreground font-mono text-[10px] uppercase">
+                            {STATUS_LABEL[status]}
+                        </span>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-foreground size-7"
+                                aria-label="Acciones"
+                            >
+                                <MoreHorizontalIcon className="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onEdit(row)}>
+                                <PencilIcon />
+                                Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => onDelete(row)}
+                                variant="destructive"
+                            >
+                                <Trash2Icon />
+                                Eliminar
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </td>
         </tr>

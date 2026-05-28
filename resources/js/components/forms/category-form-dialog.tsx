@@ -109,17 +109,35 @@ export function CategoryFormDialog({
                     </DialogHeader>
 
                     <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Nombre</Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) =>
-                                    setData('name', e.target.value)
-                                }
-                                placeholder="Ej: Alimentación"
-                            />
-                            <InputError message={errors.name} />
+                        <div className="grid grid-cols-[5.5rem_1fr] gap-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="emoji">Emoji</Label>
+                                <Input
+                                    id="emoji"
+                                    value={data.emoji ?? ''}
+                                    onChange={(e) =>
+                                        setData(
+                                            'emoji',
+                                            e.target.value || null,
+                                        )
+                                    }
+                                    placeholder="🏷️"
+                                    maxLength={8}
+                                    className="text-center text-lg"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="name">Nombre</Label>
+                                <Input
+                                    id="name"
+                                    value={data.name}
+                                    onChange={(e) =>
+                                        setData('name', e.target.value)
+                                    }
+                                    placeholder="Ej: Alimentación"
+                                />
+                                <InputError message={errors.name} />
+                            </div>
                         </div>
 
                         {filteredParents.length > 0 && (

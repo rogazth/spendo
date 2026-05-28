@@ -96,6 +96,7 @@ class CategoryController extends Controller
                 return [
                     'id' => $child->id,
                     'uuid' => $child->uuid,
+                    'parent_id' => $child->parent_id,
                     'name' => $child->name,
                     'color' => $child->color,
                     'emoji' => $child->emoji,
@@ -130,6 +131,7 @@ class CategoryController extends Controller
             return [
                 'id' => $parent->id,
                 'uuid' => $parent->uuid,
+                'parent_id' => null,
                 'name' => $parent->name,
                 'color' => $parent->color,
                 'emoji' => $parent->emoji,
