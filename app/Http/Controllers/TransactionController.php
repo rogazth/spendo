@@ -25,13 +25,15 @@ class TransactionController extends Controller
 {
     public function index(Request $request): Response
     {
+        $user = Auth::user();
         $accountIds = $this->extractIdFilter($request, 'account_ids');
         $categoryIds = $this->extractIdFilter($request, 'category_ids');
         $tagIds = $this->extractIdFilter($request, 'tag_ids');
         $budgetId = $request->input('budget_id') ? (int) $request->input('budget_id') : null;
+        $datesAll = $request->input('dates') === 'all';
 
         if (empty($accountIds)) {
-            $defaultAccount = Auth::user()
+            $defaultAccount = $user
                 ->accounts()
                 ->where('is_active', true)
                 ->orderByDesc('is_default')
@@ -46,9 +48,11 @@ class TransactionController extends Controller
 
         $activeBudget = null;
         $budgetDateRangeApplied = false;
+        $resolvedDateFrom = $request->input('date_from');
+        $resolvedDateTo = $request->input('date_to');
 
         if ($budgetId) {
-            $activeBudget = Auth::user()
+            $activeBudget = $user
                 ->budgets()
                 ->with('items.category.children')
                 ->find($budgetId);
@@ -58,18 +62,28 @@ class TransactionController extends Controller
             }
         }
 
-        $query = Auth::user()
+        $query = $user
             ->transactions()
             ->with(['category', 'account', 'tags', 'linkedTransaction.account']);
 
         if ($activeBudget) {
-            if ($request->filled('date_from') || $request->filled('date_to')) {
+            if ($datesAll) {
+                $query->forBudgetSpending($activeBudget);
+            } elseif ($request->filled('date_from') || $request->filled('date_to')) {
                 $query->forBudgetSpending($activeBudget);
             } else {
                 [$cycleStart, $cycleEnd] = $activeBudget->resolveCycleRange(CarbonImmutable::now()->startOfDay());
                 $query->forBudgetSpending($activeBudget, $cycleStart, $cycleEnd);
                 $budgetDateRangeApplied = true;
+                $resolvedDateFrom = $cycleStart->toDateString();
+                $resolvedDateTo = $cycleEnd->toDateString();
             }
+        } elseif (! $datesAll && ! $request->filled('date_from') && ! $request->filled('date_to')) {
+            [$cycleStart, $cycleEnd] = $user->resolveCurrentCycleRange(CarbonImmutable::now()->startOfDay());
+            $query->whereBetween('transaction_date', [$cycleStart->startOfDay(), $cycleEnd->endOfDay()]);
+            $budgetDateRangeApplied = true;
+            $resolvedDateFrom = $cycleStart->toDateString();
+            $resolvedDateTo = $cycleEnd->toDateString();
         }
 
         if ($accountIds) {
@@ -100,12 +114,12 @@ class TransactionController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $accounts = Auth::user()
+        $accounts = $user
             ->accounts()
             ->where('is_active', true)
             ->get();
 
-        $budgets = Auth::user()
+        $budgets = $user
             ->budgets()
             ->orderBy('name')
             ->get();
@@ -159,8 +173,9 @@ class TransactionController extends Controller
                 'account_ids' => $accountIds,
                 'category_ids' => $categoryIds,
                 'tag_ids' => $tagIds,
-                'date_from' => $request->input('date_from'),
-                'date_to' => $request->input('date_to'),
+                'date_from' => $resolvedDateFrom,
+                'date_to' => $resolvedDateTo,
+                'dates' => $datesAll ? 'all' : null,
             ],
         ]);
     }

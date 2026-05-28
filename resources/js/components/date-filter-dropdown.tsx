@@ -18,7 +18,9 @@ import { Calendar } from '@/components/ui/calendar';
 interface DateFilterDropdownProps {
     dateFrom: string;
     dateTo: string;
+    datesAll?: boolean;
     onChange: (next: { dateFrom: string; dateTo: string }) => void;
+    onClearDates?: () => void;
 }
 
 function parseLocalDate(value: string): Date | undefined {
@@ -31,8 +33,17 @@ function parseLocalDate(value: string): Date | undefined {
 export function DateFilterDropdown({
     dateFrom,
     dateTo,
+    datesAll,
     onChange,
+    onClearDates,
 }: DateFilterDropdownProps) {
+    const clearDates = () => {
+        if (onClearDates) {
+            onClearDates();
+        } else {
+            onChange({ dateFrom: '', dateTo: '' });
+        }
+    };
     const [dateMode, setDateMode] = useState<'single' | 'range'>(
         dateFrom && dateTo && dateFrom !== dateTo ? 'range' : 'single',
     );
@@ -109,11 +120,13 @@ export function DateFilterDropdown({
         );
     }, [dateFrom, dateTo, quickOptions]);
 
+    const pillValue = datesAll ? 'Todas las fechas' : dateValue;
+
     return (
         <FilterPill
             label="Fecha"
-            value={dateValue}
-            onClear={() => onChange({ dateFrom: '', dateTo: '' })}
+            value={pillValue}
+            onClear={clearDates}
             contentClassName="w-[340px] max-w-[calc(100vw-2rem)] p-0 sm:w-[520px]"
         >
             {({ close }) => {
@@ -160,10 +173,7 @@ export function DateFilterDropdown({
                                     selected={singleDate}
                                     onSelect={(date) => {
                                         if (!date) {
-                                            onChange({
-                                                dateFrom: '',
-                                                dateTo: '',
-                                            });
+                                            clearDates();
                                             return;
                                         }
                                         const formatted = format(
@@ -184,10 +194,7 @@ export function DateFilterDropdown({
                                     selected={rangeDate}
                                     onSelect={(range) => {
                                         if (!range?.from) {
-                                            onChange({
-                                                dateFrom: '',
-                                                dateTo: '',
-                                            });
+                                            clearDates();
                                             return;
                                         }
                                         const fromValue = format(
@@ -238,7 +245,7 @@ export function DateFilterDropdown({
                                 size="sm"
                                 className="justify-start"
                                 onClick={() => {
-                                    onChange({ dateFrom: '', dateTo: '' });
+                                    clearDates();
                                     close();
                                 }}
                             >

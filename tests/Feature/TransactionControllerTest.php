@@ -67,7 +67,7 @@ test('index filters by account', function () {
     Transaction::factory()->income()->for($user)->create(['account_id' => $accountA->id]);
     Transaction::factory()->income()->for($user)->create(['account_id' => $accountB->id]);
 
-    $this->actingAs($user)->get("/transactions?account_ids[]={$accountA->id}")
+    $this->actingAs($user)->get("/transactions?account_ids[]={$accountA->id}&dates=all")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('transactions.meta.total', 2));
 });
@@ -80,7 +80,7 @@ test('index defaults to user default account when no account filter is set', fun
     Transaction::factory()->income()->for($user)->create(['account_id' => $defaultAccount->id]);
     Transaction::factory()->income()->for($user)->create(['account_id' => $otherAccount->id]);
 
-    $this->actingAs($user)->get('/transactions')
+    $this->actingAs($user)->get('/transactions?dates=all')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('transactions.meta.total', 1)
@@ -108,7 +108,7 @@ test('index summary reports income and expenses per currency', function () {
         'amount' => -30000,
     ]);
 
-    $this->actingAs($user)->get("/transactions?account_ids[]={$account->id}")
+    $this->actingAs($user)->get("/transactions?account_ids[]={$account->id}&dates=all")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('summary.CLP.income', 200000)

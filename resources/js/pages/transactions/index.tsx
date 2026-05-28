@@ -43,8 +43,9 @@ interface Props {
         budget_id?: number | null;
         account_ids?: number[];
         category_ids?: number[];
-        date_from?: string;
-        date_to?: string;
+        date_from?: string | null;
+        date_to?: string | null;
+        dates?: string | null;
     };
 }
 
@@ -63,8 +64,12 @@ function applyFilters(params: Record<string, string | string[]>) {
 
 function paramsFromFilters(next: TransactionFilters): Record<string, string | string[]> {
     const params: Record<string, string | string[]> = {};
-    if (next.date_from) params.date_from = next.date_from;
-    if (next.date_to) params.date_to = next.date_to;
+    if (next.dates_all) {
+        params.dates = 'all';
+    } else {
+        if (next.date_from) params.date_from = next.date_from;
+        if (next.date_to) params.date_to = next.date_to;
+    }
     if (next.budget_id !== ALL_FILTER) params.budget_id = next.budget_id;
     if (next.account_id !== ALL_FILTER) params['account_ids[]'] = next.account_id;
     if (next.category_ids.length > 0) params.category_ids = next.category_ids;
@@ -90,6 +95,7 @@ export default function TransactionsIndex({
         return (
             params.has('date_from') ||
             params.has('date_to') ||
+            params.has('dates') ||
             params.has('budget_id') ||
             params.has('account_ids[]') ||
             params.has('account_ids') ||
@@ -104,6 +110,7 @@ export default function TransactionsIndex({
         category_ids: filters.category_ids?.map(String) ?? [],
         date_from: filters.date_from ?? '',
         date_to: filters.date_to ?? '',
+        dates_all: filters.dates === 'all',
     };
 
     const selectedAccount = useMemo(

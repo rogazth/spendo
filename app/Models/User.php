@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\HasUuid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -76,6 +77,23 @@ class User extends Authenticatable
     public function activeAccounts(): HasMany
     {
         return $this->accounts()->where('is_active', true);
+    }
+
+    /**
+     * @return array{CarbonImmutable, CarbonImmutable}
+     */
+    public function resolveCurrentCycleRange(CarbonImmutable $reference): array
+    {
+        $day = (int) ($this->settings?->budget_cycle_start_day ?? 1);
+        $reference = $reference->startOfDay();
+
+        $cycleStart = $reference->day >= $day
+            ? $reference->setDay($day)
+            : $reference->subMonthNoOverflow()->setDay($day);
+
+        $cycleEnd = $cycleStart->addMonthNoOverflow()->subDay();
+
+        return [$cycleStart, $cycleEnd];
     }
 
     public function getInitialsAttribute(): string
