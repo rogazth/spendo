@@ -6,6 +6,7 @@ use App\Actions\Transactions\CreateTransactionAction;
 use App\Actions\Transactions\CreateTransferAction;
 use App\Actions\Transactions\DeleteTransactionAction;
 use App\Actions\Transactions\UpdateTransactionAction;
+use App\Enums\TransactionType;
 use App\Http\Requests\StoreTransactionRequest;
 use App\Http\Requests\StoreTransferRequest;
 use App\Http\Requests\UpdateTransactionRequest;
@@ -246,7 +247,7 @@ class TransactionController extends Controller
     private function buildCurrencySummary($query): array
     {
         $rows = (clone $query)
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->select('currency')
             ->selectRaw('COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as income_cents')
             ->selectRaw('COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) as expense_cents')

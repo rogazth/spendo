@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Categories\CreateCategoryAction;
 use App\Actions\Categories\DeleteCategoryAction;
 use App\Actions\Categories\UpdateCategoryAction;
+use App\Enums\TransactionType;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
@@ -42,14 +43,14 @@ class CategoryController extends Controller
 
         $byCategory = Transaction::query()
             ->where('user_id', $user->id)
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->whereBetween('transaction_date', [$monthStart->startOfDay(), $monthEnd->endOfDay()])
             ->get(['category_id', 'amount', 'transaction_date'])
             ->groupBy('category_id');
 
         $lastUsedByCategory = Transaction::query()
             ->where('user_id', $user->id)
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->whereNotNull('category_id')
             ->selectRaw('category_id, MAX(transaction_date) as last_used_at')
             ->groupBy('category_id')

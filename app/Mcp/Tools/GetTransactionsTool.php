@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\TransactionType;
 use App\Http\Resources\TransactionResource;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -44,12 +45,12 @@ class GetTransactionsTool extends Tool
         }
 
         if (! $request->get('include_transfers', true)) {
-            $query->whereNull('linked_transaction_id');
+            $query->where('type', '!=', TransactionType::Transfer);
         }
 
         if ($transfersOnly = $request->get('transfers_only')) {
             if ($transfersOnly) {
-                $query->whereNotNull('linked_transaction_id');
+                $query->where('type', TransactionType::Transfer);
             }
         }
 
@@ -107,7 +108,7 @@ class GetTransactionsTool extends Tool
 
         $totalsQuery = clone $query;
         $nonTransferTotals = (clone $totalsQuery)
-            ->whereNull('linked_transaction_id')
+            ->where('type', '!=', TransactionType::Transfer)
             ->selectRaw('COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) as total_debit')
             ->selectRaw('COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_credit')
             ->first();

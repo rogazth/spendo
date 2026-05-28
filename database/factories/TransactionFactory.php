@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\TransactionType;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Transaction;
@@ -55,6 +56,7 @@ class TransactionFactory extends Factory
             'account_id' => Account::factory(),
             'category_id' => Category::factory(),
             'linked_transaction_id' => null,
+            'type' => TransactionType::Regular,
             'amount' => -fake()->numberBetween(100000, 15000000),
             'currency' => 'CLP',
             'description' => 'Compra en '.fake()->randomElement(self::$merchants),
@@ -97,6 +99,9 @@ class TransactionFactory extends Factory
     {
         return $this
             ->state(fn () => [
+                'type' => TransactionType::Transfer,
+                'category_id' => null,
+                'exclude_from_budget' => true,
                 'amount' => -fake()->numberBetween(1000000, 50000000),
                 'description' => 'Transferencia saliente',
             ])
@@ -111,6 +116,9 @@ class TransactionFactory extends Factory
     {
         return $this
             ->state(fn () => [
+                'type' => TransactionType::Transfer,
+                'category_id' => null,
+                'exclude_from_budget' => true,
                 'amount' => fake()->numberBetween(1000000, 50000000),
                 'description' => 'Transferencia entrante',
             ])

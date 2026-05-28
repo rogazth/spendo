@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Actions\Transactions\CreateTransferAction;
+use App\Enums\TransactionType;
 use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -58,7 +59,7 @@ class CreateTransferTool extends Tool
         if (! empty($validated['idempotency_key'])) {
             $idempotencyTag = 'idempotency:'.str_replace(['%', '_'], ['\%', '\_'], $validated['idempotency_key']);
             $existing = $user->transactions()
-                ->whereNotNull('linked_transaction_id')
+                ->where('type', TransactionType::Transfer)
                 ->whereRaw("notes LIKE ? ESCAPE '\\'", ['%'.$idempotencyTag.'%'])
                 ->first();
 

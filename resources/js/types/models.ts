@@ -1,10 +1,17 @@
-// Transaction form modes (UI-only). The DB has no `type` column — direction
-// is derived from the sign of `amount` and presence of `linked_transaction_id`.
+// Transaction form modes (UI-only). The DB column `type` carries the kind of
+// transaction; direction comes from the sign of `amount`.
 export const TRANSACTION_MODES = [
     { id: 'movement', label: 'Movimiento' },
     { id: 'transfer', label: 'Transferencia' },
 ] as const;
 export type TransactionMode = (typeof TRANSACTION_MODES)[number]['id'];
+
+export const TRANSACTION_TYPES = [
+    { id: 'regular', label: 'Regular' },
+    { id: 'transfer', label: 'Transferencia' },
+    { id: 'initial_balance', label: 'Balance inicial' },
+] as const;
+export type TransactionType = (typeof TRANSACTION_TYPES)[number]['id'];
 
 export const TRANSACTION_DIRECTIONS = [
     { id: 'expense', label: 'Gasto' },
@@ -67,14 +74,16 @@ export interface Category extends Model {
     transactions?: Transaction[];
 }
 
-// Transaction model. `amount` is signed: negative = outflow (expense / transfer
-// out), positive = inflow (income / transfer in). `linked_transaction_id` is
-// non-null on both legs of a transfer.
+// Transaction model. `amount` is signed: negative = outflow, positive = inflow.
+// `type` discriminates between regular movements, transfers (both legs), and
+// initial balance entries. `linked_transaction_id` points to the other leg of
+// a transfer.
 export interface Transaction extends Model {
     user_id: number;
     account_id: number | null;
     category_id: number | null;
     linked_transaction_id: number | null;
+    type: TransactionType;
     amount: number;
     currency: string;
     currency_locale?: string;
@@ -91,22 +100,24 @@ export interface Transaction extends Model {
     attachments?: Attachment[];
 }
 
-export function isTransfer(
-    tx: Pick<Transaction, 'linked_transaction_id'>,
-): boolean {
-    return tx.linked_transaction_id !== null;
+export function isTransfer(tx: Pick<Transaction, 'type'>): boolean {
+    return tx.type === 'transfer';
 }
 
-export function isExpense(
-    tx: Pick<Transaction, 'amount' | 'linked_transaction_id'>,
-): boolean {
-    return !isTransfer(tx) && tx.amount < 0;
+export function isInitialBalance(tx: Pick<Transaction, 'type'>): boolean {
+    return tx.type === 'initial_balance';
 }
 
-export function isIncome(
-    tx: Pick<Transaction, 'amount' | 'linked_transaction_id'>,
-): boolean {
-    return !isTransfer(tx) && tx.amount > 0;
+export function isRegular(tx: Pick<Transaction, 'type'>): boolean {
+    return tx.type === 'regular';
+}
+
+export function isExpense(tx: Pick<Transaction, 'amount' | 'type'>): boolean {
+    return isRegular(tx) && tx.amount < 0;
+}
+
+export function isIncome(tx: Pick<Transaction, 'amount' | 'type'>): boolean {
+    return isRegular(tx) && tx.amount > 0;
 }
 
 // Budget model

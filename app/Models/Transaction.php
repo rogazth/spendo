@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\HasUuid;
+use App\Enums\TransactionType;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -23,6 +24,7 @@ class Transaction extends Model
         'account_id',
         'category_id',
         'linked_transaction_id',
+        'type',
         'amount',
         'currency',
         'description',
@@ -31,10 +33,15 @@ class Transaction extends Model
         'transaction_date',
     ];
 
+    protected $attributes = [
+        'type' => TransactionType::Regular->value,
+    ];
+
     protected function casts(): array
     {
         return [
             'amount' => 'integer',
+            'type' => TransactionType::class,
             'exclude_from_budget' => 'boolean',
             'transaction_date' => 'datetime',
         ];
@@ -79,7 +86,7 @@ class Transaction extends Model
     {
         return $query
             ->where('amount', '<', 0)
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->where('exclude_from_budget', false)
             ->whereHas('account', fn (Builder $query) => $query->where('include_in_budget', true));
     }
@@ -146,16 +153,26 @@ class Transaction extends Model
 
     public function isTransfer(): bool
     {
-        return $this->linked_transaction_id !== null;
+        return $this->type === TransactionType::Transfer;
+    }
+
+    public function isInitialBalance(): bool
+    {
+        return $this->type === TransactionType::InitialBalance;
+    }
+
+    public function isRegular(): bool
+    {
+        return $this->type === TransactionType::Regular;
     }
 
     public function isIncome(): bool
     {
-        return ! $this->isTransfer() && $this->amount > 0;
+        return $this->isRegular() && $this->amount > 0;
     }
 
     public function isExpense(): bool
     {
-        return ! $this->isTransfer() && $this->amount < 0;
+        return $this->isRegular() && $this->amount < 0;
     }
 }

@@ -2,8 +2,8 @@
 
 namespace App\Actions\Accounts;
 
+use App\Enums\TransactionType;
 use App\Models\Account;
-use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -32,13 +32,10 @@ class CreateAccountAction
             $initialBalance = $data['initial_balance'] ?? 0;
 
             if ($initialBalance > 0) {
-                $categoryId = Category::where('is_system', true)
-                    ->first()?->id;
-
                 Transaction::create([
                     'user_id' => $user->id,
                     'account_id' => $account->id,
-                    'category_id' => $categoryId,
+                    'type' => TransactionType::InitialBalance,
                     'amount' => abs($initialBalance),
                     'currency' => $account->currency,
                     'description' => 'Balance inicial',

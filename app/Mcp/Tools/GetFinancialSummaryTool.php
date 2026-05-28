@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\TransactionType;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -48,7 +49,7 @@ class GetFinancialSummaryTool extends Tool
             ->count();
 
         $monthlyExpensesCents = (int) ($user->transactions()
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->where('amount', '<', 0)
             ->whereMonth('transaction_date', now()->month)
             ->whereYear('transaction_date', now()->year)
@@ -56,7 +57,7 @@ class GetFinancialSummaryTool extends Tool
             ->value('total') ?? 0);
 
         $monthlyIncomeCents = (int) ($user->transactions()
-            ->whereNull('linked_transaction_id')
+            ->where('type', TransactionType::Regular)
             ->where('amount', '>', 0)
             ->whereMonth('transaction_date', now()->month)
             ->whereYear('transaction_date', now()->year)

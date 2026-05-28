@@ -2,7 +2,7 @@
 
 namespace App\Actions\Transactions;
 
-use App\Models\Category;
+use App\Enums\TransactionType;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -40,15 +40,11 @@ class CreateTransferAction
 
         $absoluteAmount = abs($data['amount']);
 
-        $transferCategory = Category::where('is_system', true)
-            ->where('name', 'Transferencia')
-            ->first();
-
-        [$transferOut, $transferIn] = DB::transaction(function () use ($user, $data, $originAccount, $destinationAccount, $transferCategory, $absoluteAmount) {
+        [$transferOut, $transferIn] = DB::transaction(function () use ($user, $data, $originAccount, $destinationAccount, $absoluteAmount) {
             $transferOut = Transaction::create([
                 'user_id' => $user->id,
                 'account_id' => $originAccount->id,
-                'category_id' => $transferCategory?->id,
+                'type' => TransactionType::Transfer,
                 'amount' => -$absoluteAmount,
                 'currency' => $originAccount->currency,
                 'description' => $data['description'] ?? null,
@@ -60,7 +56,7 @@ class CreateTransferAction
             $transferIn = Transaction::create([
                 'user_id' => $user->id,
                 'account_id' => $destinationAccount->id,
-                'category_id' => $transferCategory?->id,
+                'type' => TransactionType::Transfer,
                 'linked_transaction_id' => $transferOut->id,
                 'amount' => $absoluteAmount,
                 'currency' => $destinationAccount->currency,

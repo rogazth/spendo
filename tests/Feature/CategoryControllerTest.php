@@ -98,12 +98,12 @@ test('index excludes transfers and prior-month transactions from aggregates', fu
         'transaction_date' => CarbonImmutable::now()->subMonth(),
     ]);
 
-    $transferOut = Transaction::factory()->for($user)->for($account)->for($category)->create([
+    $transferOut = Transaction::factory()->transferOut()->for($user)->for($account)->create([
         'amount' => -7000,
         'currency' => 'CLP',
         'transaction_date' => CarbonImmutable::now()->startOfMonth(),
     ]);
-    $transferIn = Transaction::factory()->for($user)->for($other)->for($category)->create([
+    $transferIn = Transaction::factory()->transferIn()->for($user)->for($other)->create([
         'amount' => 7000,
         'currency' => 'CLP',
         'transaction_date' => CarbonImmutable::now()->startOfMonth(),
