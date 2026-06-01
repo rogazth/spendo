@@ -273,6 +273,21 @@ test('store transfer rejects same origin and destination account', function () {
     ])->assertSessionHasErrors(['origin_account_id', 'destination_account_id']);
 });
 
+test('store transfer rejects accounts with different currencies', function () {
+    $user = User::factory()->create();
+    $origin = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $destination = Account::factory()->for($user)->usd()->create();
+
+    $this->actingAs($user)->post('/transfers', [
+        'origin_account_id' => $origin->id,
+        'destination_account_id' => $destination->id,
+        'amount' => 50000,
+        'transaction_date' => '2026-02-15',
+    ])->assertSessionHasErrors(['destination_account_id']);
+
+    expect(Transaction::query()->whereNotNull('linked_transaction_id')->count())->toBe(0);
+});
+
 test('store transfer returns 404 when accounts belong to another user', function () {
     $owner = User::factory()->create();
     $other = User::factory()->create();

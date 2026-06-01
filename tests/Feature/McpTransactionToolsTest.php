@@ -87,6 +87,23 @@ describe('CreateTransferTool', function () {
         $response->assertHasErrors(['must be different']);
     });
 
+    it('rejects transfer between accounts with different currencies', function () {
+        $user = User::factory()->create();
+        $origin = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $dest = Account::factory()->for($user)->usd()->create();
+
+        $response = SpendoServer::actingAs($user)->tool(CreateTransferTool::class, [
+            'amount' => 100000,
+            'description' => 'Cross-currency transfer',
+            'origin_account_id' => $origin->id,
+            'destination_account_id' => $dest->id,
+        ]);
+
+        $response->assertHasErrors(['same currency']);
+
+        expect(Transaction::query()->whereNotNull('linked_transaction_id')->count())->toBe(0);
+    });
+
     it('rejects transfer without origin account', function () {
         $user = User::factory()->create();
         $dest = Account::factory()->for($user)->create();

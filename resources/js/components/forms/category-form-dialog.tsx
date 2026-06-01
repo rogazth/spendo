@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { CategoryPicker } from '@/components/categories/category-picker';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,15 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import type { Category } from '@/types';
 import { DEFAULT_COLORS } from '@/constants/colors';
+import type { Category } from '@/types';
 
 interface CategoryFormDialogProps {
     open: boolean;
@@ -116,10 +110,7 @@ export function CategoryFormDialog({
                                     id="emoji"
                                     value={data.emoji ?? ''}
                                     onChange={(e) =>
-                                        setData(
-                                            'emoji',
-                                            e.target.value || null,
-                                        )
+                                        setData('emoji', e.target.value || null)
                                     }
                                     placeholder="🏷️"
                                     maxLength={8}
@@ -145,43 +136,16 @@ export function CategoryFormDialog({
                                 <Label htmlFor="parent_id">
                                     Categoría Padre (opcional)
                                 </Label>
-                                <Select
-                                    value={data.parent_id?.toString() || 'none'}
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'parent_id',
-                                            value === 'none'
-                                                ? null
-                                                : parseInt(value),
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Sin categoría padre" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">
-                                            Sin categoría padre
-                                        </SelectItem>
-                                        {filteredParents.map((cat) => (
-                                            <SelectItem
-                                                key={cat.id}
-                                                value={cat.id.toString()}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className="h-3 w-3 rounded-full"
-                                                        style={{
-                                                            backgroundColor:
-                                                                cat.color,
-                                                        }}
-                                                    />
-                                                    {cat.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <CategoryPicker
+                                    id="parent_id"
+                                    categories={filteredParents}
+                                    value={data.parent_id}
+                                    onChange={(id) => setData('parent_id', id)}
+                                    placeholder="Sin categoría padre"
+                                    parentsOnly
+                                    allowClear
+                                    clearLabel="Sin categoría padre"
+                                />
                                 <InputError message={errors.parent_id} />
                             </div>
                         )}

@@ -28,6 +28,9 @@ interface CategoryPickerProps {
     triggerClassName?: string;
     disabled?: boolean;
     id?: string;
+    parentsOnly?: boolean;
+    allowClear?: boolean;
+    clearLabel?: string;
 }
 
 interface SelectedCategory {
@@ -77,6 +80,9 @@ export function CategoryPicker({
     triggerClassName,
     disabled,
     id,
+    parentsOnly = false,
+    allowClear = false,
+    clearLabel = 'Sin categoría',
 }: CategoryPickerProps) {
     const [open, setOpen] = useState(false);
     const selected = useMemo(
@@ -85,7 +91,7 @@ export function CategoryPicker({
     );
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={setOpen} modal>
             <PopoverTrigger asChild>
                 <Button
                     id={id}
@@ -125,6 +131,24 @@ export function CategoryPicker({
                     <CommandList>
                         <CommandEmpty>{emptyMessage}</CommandEmpty>
                         <CommandGroup>
+                            {allowClear && (
+                                <CommandItem
+                                    value="category-none"
+                                    keywords={['ninguna', 'sin', clearLabel]}
+                                    onSelect={() => {
+                                        onChange(null);
+                                        setOpen(false);
+                                    }}
+                                    className="gap-2 text-muted-foreground"
+                                >
+                                    <span className="flex-1 truncate">
+                                        {clearLabel}
+                                    </span>
+                                    {value === null && (
+                                        <CheckIcon className="size-4 shrink-0 text-foreground" />
+                                    )}
+                                </CommandItem>
+                            )}
                             {categories.map((parent) => (
                                 <Fragment key={parent.id}>
                                     <CommandItem
@@ -145,33 +169,37 @@ export function CategoryPicker({
                                             {parent.name}
                                         </span>
                                         {selected?.id === parent.id && (
-                                            <CheckIcon className="text-foreground size-4 shrink-0" />
+                                            <CheckIcon className="size-4 shrink-0 text-foreground" />
                                         )}
                                     </CommandItem>
-                                    {parent.children?.map((child) => (
-                                        <CommandItem
-                                            key={child.id}
-                                            value={`category-${child.id}`}
-                                            keywords={[child.name, parent.name]}
-                                            onSelect={() => {
-                                                onChange(child.id);
-                                                setOpen(false);
-                                            }}
-                                            className="gap-2 pl-8"
-                                        >
-                                            <CategoryAvatar
-                                                color={child.color}
-                                                emoji={child.emoji}
-                                                size="md"
-                                            />
-                                            <span className="flex-1 truncate">
-                                                {child.name}
-                                            </span>
-                                            {selected?.id === child.id && (
-                                                <CheckIcon className="text-foreground size-4 shrink-0" />
-                                            )}
-                                        </CommandItem>
-                                    ))}
+                                    {!parentsOnly &&
+                                        parent.children?.map((child) => (
+                                            <CommandItem
+                                                key={child.id}
+                                                value={`category-${child.id}`}
+                                                keywords={[
+                                                    child.name,
+                                                    parent.name,
+                                                ]}
+                                                onSelect={() => {
+                                                    onChange(child.id);
+                                                    setOpen(false);
+                                                }}
+                                                className="gap-2 pl-8"
+                                            >
+                                                <CategoryAvatar
+                                                    color={child.color}
+                                                    emoji={child.emoji}
+                                                    size="md"
+                                                />
+                                                <span className="flex-1 truncate">
+                                                    {child.name}
+                                                </span>
+                                                {selected?.id === child.id && (
+                                                    <CheckIcon className="size-4 shrink-0 text-foreground" />
+                                                )}
+                                            </CommandItem>
+                                        ))}
                                 </Fragment>
                             ))}
                         </CommandGroup>

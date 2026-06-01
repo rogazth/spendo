@@ -3,12 +3,39 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreTransferRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $originId = $this->input('origin_account_id');
+            $destinationId = $this->input('destination_account_id');
+
+            if (! $originId || ! $destinationId || ! $this->user()) {
+                return;
+            }
+
+            $currencies = $this->user()->accounts()
+                ->whereIn('id', [$originId, $destinationId])
+                ->pluck('currency', 'id');
+
+            $originCurrency = $currencies->get((int) $originId);
+            $destinationCurrency = $currencies->get((int) $destinationId);
+
+            if ($originCurrency && $destinationCurrency && $originCurrency !== $destinationCurrency) {
+                $validator->errors()->add(
+                    'destination_account_id',
+                    'La cuenta de destino debe tener la misma divisa que la de origen.'
+                );
+            }
+        });
     }
 
     /**

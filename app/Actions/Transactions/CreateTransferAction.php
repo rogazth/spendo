@@ -38,6 +38,10 @@ class CreateTransferAction
             throw new InvalidArgumentException('Origin and destination accounts must be different.');
         }
 
+        if ($originAccount->currency !== $destinationAccount->currency) {
+            throw new InvalidArgumentException('Origin and destination accounts must share the same currency.');
+        }
+
         $absoluteAmount = abs($data['amount']);
 
         [$transferOut, $transferIn] = DB::transaction(function () use ($user, $data, $originAccount, $destinationAccount, $absoluteAmount) {

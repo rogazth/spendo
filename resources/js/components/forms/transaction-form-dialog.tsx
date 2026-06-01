@@ -1,14 +1,10 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import {
-    CalendarIcon,
-    FolderIcon,
-    StickyNoteIcon,
-    WalletIcon,
-} from 'lucide-react';
+import { CalendarIcon, StickyNoteIcon, WalletIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { CategoryPicker } from '@/components/categories/category-picker';
 import { AmountDisplay } from '@/components/forms/transaction-form/amount-display';
 import { Numpad } from '@/components/forms/transaction-form/numpad';
 import InputError from '@/components/input-error';
@@ -55,19 +51,6 @@ interface TransactionFormDialogProps {
     categories: Category[];
 }
 
-interface FlatCategory extends Category {
-    depth: 0 | 1;
-}
-
-function flattenCategories(categories: Category[]): FlatCategory[] {
-    return categories.flatMap((category) => {
-        const children: FlatCategory[] = (category.children ?? []).map(
-            (child) => ({ ...child, depth: 1 }),
-        );
-        return [{ ...category, depth: 0 } as FlatCategory, ...children];
-    });
-}
-
 export function TransactionFormDialog({
     open,
     onOpenChange,
@@ -81,7 +64,9 @@ export function TransactionFormDialog({
     const defaultAccount =
         accounts.find((account) => account.is_default) ?? accounts[0];
     const fallbackDestinationAccount = accounts.find(
-        (account) => account.id !== defaultAccount?.id,
+        (account) =>
+            account.id !== defaultAccount?.id &&
+            account.currency === defaultAccount?.currency,
     );
 
     const [mode, setMode] = useState<TransactionMode>('movement');
@@ -213,11 +198,6 @@ export function TransactionFormDialog({
     );
     const magnitude = cents / Math.pow(10, fractionDigits);
     const maxCents = 99_999_999_999;
-
-    const filteredCategories = useMemo(
-        () => flattenCategories(categories),
-        [categories],
-    );
 
     const handleDigit = (digit: number) => {
         setCents((current) => {
@@ -359,7 +339,7 @@ export function TransactionFormDialog({
                 {mode === 'movement' ? (
                     <MovementChips
                         accounts={accounts}
-                        categories={filteredCategories}
+                        categories={categories}
                         accountId={movement.data.account_id}
                         categoryId={movement.data.category_id}
                         description={movement.data.description}
@@ -411,12 +391,25 @@ export function TransactionFormDialog({
                         }
                         onOriginChange={(id) => {
                             transfer.setData('origin_account_id', id);
-                            if (
-                                id !== null &&
-                                transfer.data.destination_account_id === id
-                            ) {
+                            const newOrigin = accounts.find(
+                                (account) => account.id === id,
+                            );
+                            const currentDestination = accounts.find(
+                                (account) =>
+                                    account.id ===
+                                    transfer.data.destination_account_id,
+                            );
+                            const destinationIsInvalid =
+                                !currentDestination ||
+                                currentDestination.id === id ||
+                                currentDestination.currency !==
+                                    newOrigin?.currency;
+                            if (id !== null && destinationIsInvalid) {
                                 const next = accounts.find(
-                                    (account) => account.id !== id,
+                                    (account) =>
+                                        account.id !== id &&
+                                        account.currency ===
+                                            newOrigin?.currency,
                                 );
                                 transfer.setData(
                                     'destination_account_id',
@@ -503,7 +496,7 @@ export function TransactionFormDialog({
 
 interface MovementChipsProps {
     accounts: Account[];
-    categories: FlatCategory[];
+    categories: Category[];
     accountId: number | null;
     categoryId: number | null;
     description: string;
@@ -542,7 +535,6 @@ function MovementChips({
     onExcludeFromBudgetChange,
 }: MovementChipsProps) {
     const account = accounts.find((a) => a.id === accountId);
-    const category = categories.find((c) => c.id === categoryId);
 
     return (
         <div className="grid grid-cols-2 gap-2">
@@ -551,10 +543,12 @@ function MovementChips({
                 onChange={onAccountChange}
                 accounts={accounts}
             />
-            <CategoryChip
-                category={category}
-                onChange={onCategoryChange}
+            <CategoryPicker
                 categories={categories}
+                value={categoryId}
+                onChange={onCategoryChange}
+                placeholder="Categoría"
+                triggerClassName="h-10"
             />
             <DateChip
                 date={date}
@@ -623,7 +617,9 @@ function TransferChips({
 }: TransferChipsProps) {
     const origin = accounts.find((a) => a.id === originId);
     const destination = accounts.find((a) => a.id === destinationId);
-    const destinationOptions = accounts.filter((a) => a.id !== originId);
+    const destinationOptions = accounts.filter(
+        (a) => a.id !== originId && a.currency === origin?.currency,
+    );
 
     return (
         <div className="space-y-2">
@@ -687,6 +683,13 @@ function TransferChips({
                         ))}
                     </SelectContent>
                 </Select>
+                {destinationOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        No tienes otra cuenta en {origin?.currency}. Las
+                        transferencias deben ser entre cuentas de la misma
+                        divisa.
+                    </p>
+                )}
             </div>
             <div className="grid grid-cols-2 gap-2">
                 <DateChip
@@ -739,48 +742,6 @@ function AccountChip({ account, onChange, accounts }: AccountChipProps) {
                 {accounts.map((option) => (
                     <SelectItem key={option.id} value={option.id.toString()}>
                         <AccountSummary account={option} />
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
-    );
-}
-
-interface CategoryChipProps {
-    category: FlatCategory | undefined;
-    onChange: (id: number | null) => void;
-    categories: FlatCategory[];
-}
-
-function CategoryChip({ category, onChange, categories }: CategoryChipProps) {
-    return (
-        <Select
-            value={category?.id?.toString() ?? ''}
-            onValueChange={(value) =>
-                onChange(value ? parseInt(value, 10) : null)
-            }
-        >
-            <SelectTrigger className="h-10 justify-start gap-2 text-left">
-                <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-medium">
-                    {category?.name ?? 'Categoría'}
-                </span>
-            </SelectTrigger>
-            <SelectContent>
-                {categories.map((option) => (
-                    <SelectItem key={option.id} value={option.id.toString()}>
-                        <span
-                            className={cn(
-                                'flex items-center gap-2',
-                                option.depth === 1 && 'pl-4',
-                            )}
-                        >
-                            <span
-                                className="size-2 rounded-full"
-                                style={{ backgroundColor: option.color }}
-                            />
-                            {option.name}
-                        </span>
                     </SelectItem>
                 ))}
             </SelectContent>
