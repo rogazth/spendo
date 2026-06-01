@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserSettings;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -72,6 +73,7 @@ test('calculates current cycle spending including children and excluding flagged
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 10]);
     $accountA = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $accountB = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $parentCategory = Category::factory()->expense()->for($user)->create([
@@ -290,6 +292,7 @@ test('cycle boundary: exact anchor date is included in budget spending', functio
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 10]);
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
@@ -322,6 +325,7 @@ test('cycle boundary: exact end date is included in budget spending', function (
     Carbon::setTestNow('2026-03-09 10:00:00');
 
     $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 10]);
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
@@ -355,6 +359,7 @@ test('transaction one day before cycle start is excluded from budget', function 
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 10]);
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
@@ -421,6 +426,7 @@ test('show only reflects current cycle spending', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 10]);
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $category = Category::factory()->expense()->for($user)->create();
 
@@ -463,6 +469,53 @@ test('show only reflects current cycle spending', function () {
             ->where('summary.current_cycle_end', '2026-03-09')
             ->missing('transactions')
             ->missing('scope')
+        );
+
+    Carbon::setTestNow();
+});
+
+test('monthly budget cycle follows the user global cycle start day, not the anchor', function () {
+    Carbon::setTestNow('2026-06-10 10:00:00');
+
+    $user = User::factory()->create();
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 29]);
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    // Anchor day (3rd) is intentionally different from the global cycle day (29th).
+    $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => '2026-01-03',
+        'ends_at' => null,
+    ]);
+    $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
+
+    // In cycle (2026-05-29 .. 2026-06-28): counted.
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $account->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
+        'amount' => 120,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-06-05',
+    ]);
+    // Before the cycle start: ignored.
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $account->id,
+        'category_id' => $category->id,
+        'currency' => 'CLP',
+        'amount' => 70,
+        'exclude_from_budget' => false,
+        'transaction_date' => '2026-05-28',
+    ]);
+
+    $this->actingAs($user)->get("/budgets/{$budget->uuid}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.current_cycle_start', '2026-05-29')
+            ->where('summary.current_cycle_end', '2026-06-28')
+            ->where('summary.spent', 120)
         );
 
     Carbon::setTestNow();

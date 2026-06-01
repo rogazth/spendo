@@ -23,6 +23,7 @@ class BudgetController extends Controller
     public function index(Request $request): Response
     {
         $referenceDate = CarbonImmutable::now()->startOfDay();
+        $cycleStartDay = (int) (Auth::user()->settings?->budget_cycle_start_day ?? 1);
 
         $budgets = Auth::user()
             ->budgets()
@@ -30,8 +31,8 @@ class BudgetController extends Controller
             ->latest()
             ->get();
 
-        $budgets->transform(function (Budget $budget) use ($referenceDate) {
-            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
+        $budgets->transform(function (Budget $budget) use ($referenceDate, $cycleStartDay) {
+            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate, $cycleStartDay);
             $spent = $this->calculateBudgetSpent($budget, $cycleStart, $cycleEnd);
             $totalBudgeted = $budget->total_budgeted;
             $percentage = $totalBudgeted > 0
@@ -123,11 +124,12 @@ class BudgetController extends Controller
         $this->authorizeBudget($budget);
 
         $referenceDate = CarbonImmutable::now()->startOfDay();
+        $cycleStartDay = (int) (Auth::user()->settings?->budget_cycle_start_day ?? 1);
 
         $budget->load(['items.category.children']);
         $categoryGroups = $budget->budgetCategoryGroups();
 
-        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
+        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate, $cycleStartDay);
         $categoryProgress = $this->buildCategoryProgress(
             $budget,
             $cycleStart,

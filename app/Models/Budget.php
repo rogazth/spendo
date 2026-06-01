@@ -88,11 +88,14 @@ class Budget extends Model
     /**
      * Resolve the current (or reference-relative) cycle start and end dates.
      *
+     * Monthly budgets follow the user's global cycle start day rather than the
+     * anchor's day-of-month; pass $monthlyCycleStartDay to avoid loading the
+     * user relation in a loop. The anchor still applies to the other frequencies.
+     *
      * @return array{CarbonImmutable, CarbonImmutable}
      */
-    public function resolveCycleRange(CarbonImmutable $referenceDate): array
+    public function resolveCycleRange(CarbonImmutable $referenceDate, ?int $monthlyCycleStartDay = null): array
     {
-        $anchorDate = CarbonImmutable::parse($this->anchor_date)->startOfDay();
         $effectiveReference = $referenceDate->startOfDay();
         $budgetEndDate = $this->ends_at
             ? CarbonImmutable::parse($this->ends_at)->startOfDay()
@@ -101,6 +104,19 @@ class Budget extends Model
         if ($budgetEndDate !== null && $effectiveReference->greaterThan($budgetEndDate)) {
             $effectiveReference = $budgetEndDate;
         }
+
+        if ($this->frequency === 'monthly') {
+            $day = $monthlyCycleStartDay ?? (int) ($this->user?->settings?->budget_cycle_start_day ?? 1);
+            [$cycleStart, $cycleEnd] = User::resolveMonthlyCycleForDay($effectiveReference, $day);
+
+            if ($budgetEndDate !== null && $cycleEnd->greaterThan($budgetEndDate)) {
+                $cycleEnd = $budgetEndDate;
+            }
+
+            return [$cycleStart, $cycleEnd];
+        }
+
+        $anchorDate = CarbonImmutable::parse($this->anchor_date)->startOfDay();
 
         if ($effectiveReference->lessThan($anchorDate)) {
             $effectiveReference = $anchorDate;
@@ -113,11 +129,11 @@ class Budget extends Model
             $cycleStart = $anchorDate->addDays($cycleIndex * $stepInDays);
             $cycleEnd = $cycleStart->addDays($stepInDays - 1);
         } else {
-            $stepInMonths = $this->frequency === 'bimonthly' ? 2 : 1;
+            $stepInMonths = 2;
             $monthsSinceAnchor = (int) floor(max(0, $anchorDate->diffInMonths($effectiveReference, false)));
             $cycleIndex = intdiv($monthsSinceAnchor, $stepInMonths);
             $cycleStart = $anchorDate->addMonthsNoOverflow($cycleIndex * $stepInMonths);
-            $cycleEnd = $cycleStart->addMonthsNoOverflow($stepInMonths)->subDay();
+            $cycleEnd = $anchorDate->addMonthsNoOverflow(($cycleIndex + 1) * $stepInMonths)->subDay();
         }
 
         if ($budgetEndDate !== null && $cycleEnd->greaterThan($budgetEndDate)) {

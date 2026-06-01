@@ -30,9 +30,9 @@ class BudgetMetricsService
         $activeBudgets = Budget::query()
             ->where('user_id', $user->id)
             ->where('is_active', true)
-            ->where('anchor_date', '<=', $referenceDate->toDateString())
+            ->whereDate('anchor_date', '<=', $referenceDate->toDateString())
             ->where(function ($q) use ($referenceDate) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>=', $referenceDate->toDateString());
+                $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', $referenceDate->toDateString());
             })
             ->with(['items.category.children'])
             ->get();
@@ -77,7 +77,10 @@ class BudgetMetricsService
      */
     private function compute(User $user, Budget $budget, CarbonImmutable $referenceDate): array
     {
-        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
+        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange(
+            $referenceDate,
+            (int) ($user->settings?->budget_cycle_start_day ?? 1),
+        );
         $categoryGroups = $budget->budgetCategoryGroups();
 
         $spentByCategory = [];

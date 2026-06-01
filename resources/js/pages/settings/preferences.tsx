@@ -29,7 +29,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Preferences({ settings, currencies, timezones }: Props) {
+export default function Preferences({
+    settings,
+    currencies,
+    timezones,
+}: Props) {
     const { data, setData, patch, errors, processing } = useForm({
         default_currency: settings.default_currency ?? 'CLP',
         budget_cycle_start_day: settings.budget_cycle_start_day ?? 1,
@@ -49,7 +53,7 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
         });
     };
 
-    const dayOptions = Array.from({ length: 28 }, (_, i) => i + 1);
+    const dayOptions = Array.from({ length: 31 }, (_, i) => i + 1);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -67,17 +71,27 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <Label htmlFor="default_currency">Moneda predeterminada</Label>
+                            <Label htmlFor="default_currency">
+                                Moneda predeterminada
+                            </Label>
                             <Select
                                 value={data.default_currency}
-                                onValueChange={(value) => setData('default_currency', value)}
+                                onValueChange={(value) =>
+                                    setData('default_currency', value)
+                                }
                             >
-                                <SelectTrigger id="default_currency" className="w-full">
+                                <SelectTrigger
+                                    id="default_currency"
+                                    className="w-full"
+                                >
                                     <SelectValue placeholder="Selecciona una moneda" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {currencies.map((currency) => (
-                                        <SelectItem key={currency.value} value={currency.value}>
+                                        <SelectItem
+                                            key={currency.value}
+                                            value={currency.value}
+                                        >
                                             {currency.label}
                                         </SelectItem>
                                     ))}
@@ -90,14 +104,19 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
                             <Label htmlFor="timezone">Zona horaria</Label>
                             <Select
                                 value={data.timezone}
-                                onValueChange={(value) => setData('timezone', value)}
+                                onValueChange={(value) =>
+                                    setData('timezone', value)
+                                }
                             >
                                 <SelectTrigger id="timezone" className="w-full">
                                     <SelectValue placeholder="Selecciona una zona horaria" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {timezones.map((tz) => (
-                                        <SelectItem key={tz.value} value={tz.value}>
+                                        <SelectItem
+                                            key={tz.value}
+                                            value={tz.value}
+                                        >
                                             {tz.label}
                                         </SelectItem>
                                     ))}
@@ -107,30 +126,52 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="budget_cycle_start_day">Día de inicio del ciclo mensual</Label>
+                            <Label htmlFor="budget_cycle_start_day">
+                                Día de inicio del ciclo mensual
+                            </Label>
                             <Select
                                 value={String(data.budget_cycle_start_day)}
-                                onValueChange={(value) => setData('budget_cycle_start_day', parseInt(value))}
+                                onValueChange={(value) =>
+                                    setData(
+                                        'budget_cycle_start_day',
+                                        parseInt(value),
+                                    )
+                                }
                             >
-                                <SelectTrigger id="budget_cycle_start_day" className="w-full">
+                                <SelectTrigger
+                                    id="budget_cycle_start_day"
+                                    className="w-full"
+                                >
                                     <SelectValue placeholder="Selecciona un día" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {dayOptions.map((day) => (
-                                        <SelectItem key={day} value={String(day)}>
+                                        <SelectItem
+                                            key={day}
+                                            value={String(day)}
+                                        >
                                             Día {day}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-muted-foreground text-sm">
-                                Define el rango por defecto al ver tus transacciones: desde este día hasta el mismo día del mes siguiente.
+                            <p className="text-sm text-muted-foreground">
+                                Define el rango por defecto al ver tus
+                                transacciones y el ciclo de tus budgets
+                                mensuales: desde este día hasta el mismo día del
+                                mes siguiente. En meses que no tienen el día
+                                elegido (ej. 31 en abril), se usa el último día
+                                del mes.
                             </p>
-                            <InputError message={errors.budget_cycle_start_day} />
+                            <InputError
+                                message={errors.budget_cycle_start_day}
+                            />
                         </div>
 
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Guardando...' : 'Guardar preferencias'}
+                            {processing
+                                ? 'Guardando...'
+                                : 'Guardar preferencias'}
                         </Button>
                     </form>
                 </div>

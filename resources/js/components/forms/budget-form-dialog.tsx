@@ -1,4 +1,4 @@
-import { useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, PlusIcon, Trash2Icon } from 'lucide-react';
@@ -18,7 +18,11 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/ui/money-input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -98,13 +102,13 @@ export function BudgetFormDialog({
     budget = null,
 }: BudgetFormDialogProps) {
     const { currencies = [] } = usePage<{ currencies?: Currency[] }>().props;
-    const defaultAccount = accounts.find((account) => account.is_default) ?? accounts[0];
+    const defaultAccount =
+        accounts.find((account) => account.is_default) ?? accounts[0];
     const defaultCurrency = defaultAccount?.currency ?? 'CLP';
     const isEdit = budget !== null;
 
-    const { data, setData, post, put, processing, errors, reset, transform } = useForm<BudgetFormData>(
-        buildInitialData(budget, defaultCurrency),
-    );
+    const { data, setData, post, put, processing, errors, reset, transform } =
+        useForm<BudgetFormData>(buildInitialData(budget, defaultCurrency));
 
     useEffect(() => {
         if (open) {
@@ -138,23 +142,31 @@ export function BudgetFormDialog({
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
 
-        transform((formData) => ({
-            ...formData,
-            anchor_date: format(formData.anchor_date, 'yyyy-MM-dd'),
-            ends_at: formData.ends_at
-                ? format(formData.ends_at, 'yyyy-MM-dd')
-                : null,
-            description: formData.description || null,
-            items: formData.items
-                .filter(
-                    (item) =>
-                        item.category_id !== null && item.amount !== null,
-                )
-                .map((item) => ({
-                    category_id: item.category_id,
-                    amount: item.amount,
-                })),
-        }));
+        transform((formData) => {
+            const { anchor_date, ...rest } = formData;
+
+            return {
+                ...rest,
+                ends_at: formData.ends_at
+                    ? format(formData.ends_at, 'yyyy-MM-dd')
+                    : null,
+                description: formData.description || null,
+                items: formData.items
+                    .filter(
+                        (item) =>
+                            item.category_id !== null && item.amount !== null,
+                    )
+                    .map((item) => ({
+                        category_id: item.category_id,
+                        amount: item.amount,
+                    })),
+                // Monthly budgets inherit the user's global cycle start day,
+                // so the anchor date is derived server-side.
+                ...(formData.frequency === 'monthly'
+                    ? {}
+                    : { anchor_date: format(anchor_date, 'yyyy-MM-dd') }),
+            };
+        });
 
         const options = {
             preserveScroll: true,
@@ -205,7 +217,7 @@ export function BudgetFormDialog({
                                         setData('name', event.target.value)
                                     }
                                     placeholder="Ej: Comida hogar"
-                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                 />
                                 <InputError message={errors.name} />
                             </div>
@@ -257,7 +269,8 @@ export function BudgetFormDialog({
                                                 key={currency.code}
                                                 value={currency.code}
                                             >
-                                                {currency.code} - {currency.name}
+                                                {currency.code} -{' '}
+                                                {currency.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -265,37 +278,60 @@ export function BudgetFormDialog({
                                 <InputError message={errors.currency} />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Fecha ancla</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full justify-start text-left font-normal"
+                            {data.frequency === 'monthly' ? (
+                                <div className="space-y-2">
+                                    <Label>Inicio del ciclo</Label>
+                                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                                        Según tu configuración mensual
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Los budgets mensuales siguen tu{' '}
+                                        <Link
+                                            href="/settings/preferences"
+                                            className="underline underline-offset-2"
                                         >
-                                            <CalendarIcon className="h-4 w-4" />
-                                            {format(data.anchor_date, 'PPP', {
-                                                locale: es,
-                                            })}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        className="w-auto p-0"
-                                        align="start"
-                                    >
-                                        <Calendar
-                                            mode="single"
-                                            selected={data.anchor_date}
-                                            onSelect={(date) =>
-                                                date &&
-                                                setData('anchor_date', date)
-                                            }
-                                            initialFocus
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                                <InputError message={errors.anchor_date} />
-                            </div>
+                                            día de inicio de ciclo
+                                        </Link>
+                                        .
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <Label>Fecha de inicio del ciclo</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className="w-full justify-start text-left font-normal"
+                                            >
+                                                <CalendarIcon className="h-4 w-4" />
+                                                {format(
+                                                    data.anchor_date,
+                                                    'PPP',
+                                                    {
+                                                        locale: es,
+                                                    },
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="w-auto p-0"
+                                            align="start"
+                                        >
+                                            <Calendar
+                                                mode="single"
+                                                selected={data.anchor_date}
+                                                onSelect={(date) =>
+                                                    date &&
+                                                    setData('anchor_date', date)
+                                                }
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                    <InputError message={errors.anchor_date} />
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -328,7 +364,9 @@ export function BudgetFormDialog({
                                                 locale: es,
                                             })
                                         ) : (
-                                            <span>Sin fecha de finalización</span>
+                                            <span>
+                                                Sin fecha de finalización
+                                            </span>
                                         )}
                                     </Button>
                                 </PopoverTrigger>
@@ -440,8 +478,8 @@ export function BudgetFormDialog({
                             {processing
                                 ? 'Guardando...'
                                 : isEdit
-                                    ? 'Guardar cambios'
-                                    : 'Crear budget'}
+                                  ? 'Guardar cambios'
+                                  : 'Crear budget'}
                         </Button>
                     </DialogFooter>
                 </form>

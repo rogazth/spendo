@@ -84,14 +84,33 @@ class User extends Authenticatable
      */
     public function resolveCurrentCycleRange(CarbonImmutable $reference): array
     {
-        $day = (int) ($this->settings?->budget_cycle_start_day ?? 1);
+        return self::resolveMonthlyCycleForDay(
+            $reference,
+            (int) ($this->settings?->budget_cycle_start_day ?? 1),
+        );
+    }
+
+    /**
+     * Resolve the monthly cycle [start, end] that contains $reference for a given
+     * start day-of-month. Days that do not exist in a month (e.g. 29 in February,
+     * 31 in April) fall back to that month's last day.
+     *
+     * @return array{CarbonImmutable, CarbonImmutable}
+     */
+    public static function resolveMonthlyCycleForDay(CarbonImmutable $reference, int $day): array
+    {
         $reference = $reference->startOfDay();
+        $startDayThisMonth = min($day, $reference->daysInMonth);
 
-        $cycleStart = $reference->day >= $day
-            ? $reference->setDay($day)
-            : $reference->subMonthNoOverflow()->setDay($day);
+        if ($reference->day >= $startDayThisMonth) {
+            $cycleStart = $reference->setDay($startDayThisMonth);
+        } else {
+            $previousMonth = $reference->subMonthNoOverflow();
+            $cycleStart = $previousMonth->setDay(min($day, $previousMonth->daysInMonth));
+        }
 
-        $cycleEnd = $cycleStart->addMonthNoOverflow()->subDay();
+        $nextMonth = $cycleStart->addMonthNoOverflow();
+        $cycleEnd = $nextMonth->setDay(min($day, $nextMonth->daysInMonth))->subDay();
 
         return [$cycleStart, $cycleEnd];
     }

@@ -49,7 +49,10 @@ class GetBudgetMetricsTool extends Tool
         $scope = $validated['scope'] ?? 'current';
         $referenceDate = CarbonImmutable::now()->startOfDay();
 
-        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
+        [$cycleStart, $cycleEnd] = $budget->resolveCycleRange(
+            $referenceDate,
+            (int) ($user->settings?->budget_cycle_start_day ?? 1),
+        );
 
         if ($scope === 'custom') {
             if (empty($validated['start_date']) || empty($validated['end_date'])) {

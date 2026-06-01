@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Currency;
+use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -16,6 +18,21 @@ class StoreBudgetRequest extends FormRequest
     }
 
     /**
+     * Monthly budgets follow the user's global cycle start day, so the form does
+     * not collect an anchor date. Derive one (the current cycle start) when absent
+     * to satisfy the not-null column and keep the budget within the active range.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('frequency') === 'monthly' && ! $this->filled('anchor_date')) {
+            $day = (int) (Auth::user()?->settings?->budget_cycle_start_day ?? 1);
+            [$cycleStart] = User::resolveMonthlyCycleForDay(CarbonImmutable::now()->startOfDay(), $day);
+
+            $this->merge(['anchor_date' => $cycleStart->toDateString()]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -25,7 +42,7 @@ class StoreBudgetRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'biweekly', 'monthly', 'bimonthly'])],
-            'anchor_date' => ['required', 'date'],
+            'anchor_date' => ['required_unless:frequency,monthly', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:anchor_date'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.category_id' => ['required', 'integer', 'exists:categories,id', 'distinct'],
@@ -43,7 +60,8 @@ class StoreBudgetRequest extends FormRequest
             'currency.required' => 'La moneda del budget es requerida.',
             'frequency.required' => 'La frecuencia del budget es requerida.',
             'frequency.in' => 'La frecuencia seleccionada no es válida.',
-            'anchor_date.required' => 'La fecha de anclaje es requerida.',
+            'anchor_date.required' => 'La fecha de inicio es requerida.',
+            'anchor_date.required_unless' => 'La fecha de inicio es requerida.',
             'ends_at.after_or_equal' => 'La fecha de finalización debe ser posterior o igual a la fecha de anclaje.',
             'items.required' => 'Debes agregar al menos una categoría al budget.',
             'items.min' => 'Debes agregar al menos una categoría al budget.',

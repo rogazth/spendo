@@ -19,6 +19,9 @@ Las apps existentes asumen que método de pago = cuenta. En la realidad:
 
 1. Modelo de datos que separa Account vs PaymentMethod
 2. Presupuestos con períodos configurables (no atado a mes calendario)
+   - **Día de inicio de ciclo (global)**: en Preferencias, día 1–31. Los días que no existen en un mes (ej. 29 en febrero, 31 en abril) caen al último día del mes. Define el rango por defecto de transacciones y el ciclo de los budgets mensuales.
+   - **Budget mensual**: hereda el día de inicio de ciclo global (estilo YNAB); no se elige fecha por budget.
+   - **Budget semanal / quincenal / bimestral**: usa una fecha ancla propia que fija el inicio del primer ciclo.
 3. Categorías jerárquicas (2 niveles)
 4. Bot de Telegram: foto de factura → AI extrae datos → registra transacción (v2)
 

@@ -85,7 +85,10 @@ class GetTransactionsTool extends Tool
                 $endDate = $request->get('end_date');
 
                 if (! $startDate && ! $endDate) {
-                    [$cycleStart, $cycleEnd] = $budget->resolveCycleRange(CarbonImmutable::now()->startOfDay());
+                    [$cycleStart, $cycleEnd] = $budget->resolveCycleRange(
+                        CarbonImmutable::now()->startOfDay(),
+                        (int) ($user->settings?->budget_cycle_start_day ?? 1),
+                    );
                     $startDate = $cycleStart;
                     $endDate = $cycleEnd;
                     $budgetDateRangeApplied = true;

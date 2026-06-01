@@ -17,6 +17,7 @@ use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserSettings;
 
 beforeEach(function () {
     Currency::updateOrCreate(['code' => 'CLP'], ['name' => 'Peso chileno', 'locale' => 'es-CL']);
@@ -248,6 +249,26 @@ describe('CreateBudgetTool', function () {
             'category_id' => $cat2->id,
             'amount' => 33000000, // 330000 * 100
         ]);
+    });
+
+    it('creates a monthly budget without an anchor date, deriving it from the global cycle day', function () {
+        $user = User::factory()->create();
+        UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 15]);
+        $cat = Category::factory()->expense()->for($user)->create(['name' => 'Rent']);
+
+        $response = SpendoServer::actingAs($user)->tool(CreateBudgetTool::class, [
+            'name' => 'No Anchor',
+            'currency' => 'CLP',
+            'frequency' => 'monthly',
+            'items' => [
+                ['category_id' => $cat->id, 'amount' => 100000],
+            ],
+        ]);
+
+        $response->assertOk()->assertSee('created successfully');
+
+        $budget = Budget::query()->where('name', 'No Anchor')->firstOrFail();
+        expect($budget->anchor_date->day)->toBe(15);
     });
 
     it('rejects parent and child categories in same budget', function () {

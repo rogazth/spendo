@@ -73,7 +73,10 @@ class TransactionController extends Controller
             } elseif ($request->filled('date_from') || $request->filled('date_to')) {
                 $query->forBudgetSpending($activeBudget);
             } else {
-                [$cycleStart, $cycleEnd] = $activeBudget->resolveCycleRange(CarbonImmutable::now()->startOfDay());
+                [$cycleStart, $cycleEnd] = $activeBudget->resolveCycleRange(
+                    CarbonImmutable::now()->startOfDay(),
+                    (int) ($user->settings?->budget_cycle_start_day ?? 1),
+                );
                 $query->forBudgetSpending($activeBudget, $cycleStart, $cycleEnd);
                 $budgetDateRangeApplied = true;
                 $resolvedDateFrom = $cycleStart->toDateString();

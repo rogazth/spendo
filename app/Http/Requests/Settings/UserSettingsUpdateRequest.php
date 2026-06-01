@@ -20,7 +20,7 @@ class UserSettingsUpdateRequest extends FormRequest
     {
         return [
             'default_currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
-            'budget_cycle_start_day' => ['required', 'integer', 'min:1', 'max:28'],
+            'budget_cycle_start_day' => ['required', 'integer', 'min:1', 'max:31'],
             'timezone' => ['required', 'string', 'timezone:all'],
         ];
     }
@@ -35,7 +35,7 @@ class UserSettingsUpdateRequest extends FormRequest
             'default_currency.in' => 'La moneda seleccionada no es válida.',
             'budget_cycle_start_day.required' => 'El día de inicio del ciclo es requerido.',
             'budget_cycle_start_day.min' => 'El día debe ser al menos 1.',
-            'budget_cycle_start_day.max' => 'El día no puede ser mayor a 28.',
+            'budget_cycle_start_day.max' => 'El día no puede ser mayor a 31.',
             'timezone.required' => 'La zona horaria es requerida.',
             'timezone.timezone' => 'La zona horaria no es válida.',
         ];

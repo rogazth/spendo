@@ -13,6 +13,11 @@ use Inertia\Testing\AssertableInertia as Assert;
 test('filters transactions by tag', function () {
     $this->seed(CurrencySeeder::class);
 
+    // Pin the clock to mid-month so both transactions land in the same default
+    // cycle regardless of when the suite runs (near a month boundary `subDay()`
+    // would otherwise fall into the previous cycle and be scoped out).
+    CarbonImmutable::setTestNow('2026-05-15 12:00:00');
+
     $user = User::factory()->create();
     $account = Account::factory()->for($user)->create();
     $category = Category::factory()->expense()->for($user)->create();
@@ -24,7 +29,7 @@ test('filters transactions by tag', function () {
         'account_id' => $account->id,
         'category_id' => $category->id,
         'description' => 'Tx Tag A',
-        'transaction_date' => now()->subDay(),
+        'transaction_date' => CarbonImmutable::parse('2026-05-14'),
     ]);
     $txA->tags()->attach($tagA);
 
@@ -32,7 +37,7 @@ test('filters transactions by tag', function () {
         'account_id' => $account->id,
         'category_id' => $category->id,
         'description' => 'Tx Tag B',
-        'transaction_date' => now(),
+        'transaction_date' => CarbonImmutable::parse('2026-05-15'),
     ]);
     $txB->tags()->attach($tagB);
 
@@ -44,6 +49,8 @@ test('filters transactions by tag', function () {
         ->where('transactions.meta.total', 1)
         ->where('transactions.data.0.description', 'Tx Tag A')
     );
+
+    CarbonImmutable::setTestNow();
 });
 
 test('stores and updates exclude_from_budget in transactions', function () {

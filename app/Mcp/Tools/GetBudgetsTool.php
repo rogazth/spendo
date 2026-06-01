@@ -38,9 +38,10 @@ class GetBudgetsTool extends Tool
 
         $budgets = $query->latest()->get();
         $referenceDate = CarbonImmutable::now()->startOfDay();
+        $cycleStartDay = (int) ($user->settings?->budget_cycle_start_day ?? 1);
 
-        $result = $budgets->map(function (Budget $budget) use ($referenceDate, $user) {
-            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate);
+        $result = $budgets->map(function (Budget $budget) use ($referenceDate, $user, $cycleStartDay) {
+            [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate, $cycleStartDay);
             $spent = $this->calculateBudgetSpent($user, $budget, $cycleStart, $cycleEnd);
             $totalBudgeted = $budget->total_budgeted;
             $remaining = $totalBudgeted - $spent;

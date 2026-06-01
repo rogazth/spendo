@@ -98,13 +98,35 @@ test('preferences update validates its fields', function () {
         ->patch(route('user-settings.update'), [
             'default_currency' => 'ZZZ',
             'timezone' => 'Not/AZone',
-            'budget_cycle_start_day' => 31,
+            'budget_cycle_start_day' => 32,
         ]);
 
     $response->assertSessionHasErrors([
         'default_currency',
         'timezone',
         'budget_cycle_start_day',
+    ]);
+});
+
+test('preferences accept an end-of-month cycle start day', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->from(route('user-settings.edit'))
+        ->patch(route('user-settings.update'), [
+            'default_currency' => 'CLP',
+            'timezone' => 'America/Santiago',
+            'budget_cycle_start_day' => 29,
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('user-settings.edit'));
+
+    $this->assertDatabaseHas('user_settings', [
+        'user_id' => $user->id,
+        'budget_cycle_start_day' => 29,
     ]);
 });
 
