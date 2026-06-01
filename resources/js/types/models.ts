@@ -192,17 +192,9 @@ export interface Attachment extends Model {
 
 // User Settings model
 export interface UserSettings extends Model {
-    user_id: number;
     default_currency: string;
-    default_account_id: number | null;
-    locale: string;
     timezone: string;
-    date_format: string;
-    time_format: string;
-    first_day_of_week: number;
     budget_cycle_start_day: number;
-    // Relations
-    default_account?: Account;
 }
 
 // Pagination types

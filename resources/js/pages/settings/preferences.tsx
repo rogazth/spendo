@@ -62,7 +62,7 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
                     <Heading
                         variant="small"
                         title="Preferencias"
-                        description="Configura tu moneda, zona horaria y ciclo de presupuesto"
+                        description="Configura tu moneda, zona horaria y ciclo mensual"
                     />
 
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -107,7 +107,7 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="budget_cycle_start_day">Día de inicio del ciclo de presupuesto</Label>
+                            <Label htmlFor="budget_cycle_start_day">Día de inicio del ciclo mensual</Label>
                             <Select
                                 value={String(data.budget_cycle_start_day)}
                                 onValueChange={(value) => setData('budget_cycle_start_day', parseInt(value))}
@@ -124,7 +124,7 @@ export default function Preferences({ settings, currencies, timezones }: Props) 
                                 </SelectContent>
                             </Select>
                             <p className="text-muted-foreground text-sm">
-                                El día del mes en que comienza tu ciclo de presupuesto mensual.
+                                Define el rango por defecto al ver tus transacciones: desde este día hasta el mismo día del mes siguiente.
                             </p>
                             <InputError message={errors.budget_cycle_start_day} />
                         </div>

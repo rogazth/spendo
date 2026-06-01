@@ -24,7 +24,7 @@ class UserSettingsController extends Controller
         ]);
 
         return Inertia::render('settings/preferences', [
-            'settings' => new UserSettingsResource($settings),
+            'settings' => (new UserSettingsResource($settings))->resolve(),
             'currencies' => Currency::query()
                 ->orderBy('code')
                 ->get(['code', 'name', 'locale'])
