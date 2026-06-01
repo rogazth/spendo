@@ -38,11 +38,6 @@ interface CategoryRow {
     color: string;
     emoji: string | null;
     transaction_count: number;
-    total_spent: number;
-    total_income: number;
-    net: number;
-    daily_usage: number[];
-    last_used_at: string | null;
 }
 
 interface ParentCategoryRow extends CategoryRow {
@@ -53,16 +48,10 @@ interface Totals {
     categories: number;
     in_use: number;
     idle: number;
-    total_spent: number;
-    total_income: number;
-    top_category: { name: string; total_spent: number } | null;
 }
 
 interface Period {
     start: string;
-    end: string;
-    days: number;
-    today: string;
 }
 
 interface ParentOption {
@@ -98,12 +87,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Categorías', href: '/categories' },
 ];
 
-const NUMBER_FMT = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 });
-
-function fmtAmount(n: number): string {
-    return NUMBER_FMT.format(Math.round(n));
-}
-
 function fmtMonthLabel(period: Period): string {
     const date = new Date(`${period.start}T00:00:00`);
     return date.toLocaleDateString('es-CL', {
@@ -111,29 +94,6 @@ function fmtMonthLabel(period: Period): string {
         year: 'numeric',
     });
 }
-
-type CategoryStatus = 'top' | 'active' | 'income' | 'idle';
-
-function categoryStatus(c: CategoryRow, topId: number | null): CategoryStatus {
-    if (c.transaction_count === 0) return 'idle';
-    if (topId !== null && c.id === topId) return 'top';
-    if (c.total_spent === 0 && c.total_income > 0) return 'income';
-    return 'active';
-}
-
-const STATUS_DOT: Record<CategoryStatus, string> = {
-    top: 'bg-amber-500',
-    active: 'bg-emerald-500',
-    income: 'bg-sky-500',
-    idle: 'bg-muted-foreground/40',
-};
-
-const STATUS_LABEL: Record<CategoryStatus, string> = {
-    top: 'top',
-    active: 'active',
-    income: 'income',
-    idle: 'idle',
-};
 
 export default function CategoriesIndex({
     categories,
@@ -194,7 +154,8 @@ export default function CategoriesIndex({
                             Categorías
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            Status board · uso del mes en curso ·{' '}
+                            Jerarquía de categorías · movimientos del mes en
+                            curso ·{' '}
                             <span className="font-mono">
                                 {fmtMonthLabel(period)}
                             </span>
@@ -272,12 +233,8 @@ export default function CategoriesIndex({
 }
 
 function GlobalKpiStrip({ totals }: { totals: Totals }) {
-    const topSpentLabel = totals.top_category
-        ? `$${fmtAmount(totals.top_category.total_spent)}`
-        : '—';
-
     return (
-        <div className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-2xl border shadow-sm md:grid-cols-4">
+        <div className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-2xl border shadow-sm md:grid-cols-3">
             <KpiCell
                 label="CATEGORIES"
                 value={String(totals.categories)}
@@ -294,12 +251,6 @@ function GlobalKpiStrip({ totals }: { totals: Totals }) {
                 note="sin movimiento este mes"
                 tone={totals.idle > 0 ? 'muted' : 'neutral'}
             />
-            <KpiCell
-                label="TOP SPEND"
-                value={totals.top_category?.name ?? '—'}
-                note={topSpentLabel}
-                small
-            />
         </div>
     );
 }
@@ -308,13 +259,11 @@ function KpiCell({
     label,
     value,
     note,
-    small,
     tone = 'neutral',
 }: {
     label: string;
     value: string;
     note: string;
-    small?: boolean;
     tone?: 'neutral' | 'muted';
 }) {
     return (
@@ -324,11 +273,10 @@ function KpiCell({
             </p>
             <p
                 className={cn(
-                    'font-mono font-bold tabular-nums',
+                    'font-mono text-2xl font-bold tabular-nums',
                     tone === 'muted'
                         ? 'text-muted-foreground'
                         : 'text-foreground',
-                    small ? 'truncate text-base' : 'text-2xl',
                 )}
                 title={value}
             >
@@ -350,13 +298,14 @@ function CategoriesBoard({
     onEdit: (row: CategoryRow) => void;
     onDelete: (row: CategoryRow) => void;
 }) {
-    const [expanded, setExpanded] = useState<Set<number>>(new Set());
-    const topId = totals.top_category
-        ? (categories.find((c) => c.name === totals.top_category!.name)?.id ??
-          null)
-        : null;
-
-    const denom = Math.max(totals.total_spent, 1);
+    const [expanded, setExpanded] = useState<Set<number>>(
+        () =>
+            new Set(
+                categories
+                    .filter((c) => c.children.length > 0)
+                    .map((c) => c.id),
+            ),
+    );
 
     const inUseCount = totals.in_use;
     const idleCount = totals.idle;
@@ -395,7 +344,7 @@ function CategoriesBoard({
                         Categories
                     </span>
                     <span className="text-muted-foreground text-[11px]">
-                        Usage breakdown · roll-up parent + children
+                        Jerarquía · roll-up padre + hijos
                     </span>
                 </div>
                 <div className="flex items-center gap-4">
@@ -418,8 +367,7 @@ function CategoriesBoard({
                         </span>
                     </div>
                     <div className="text-muted-foreground text-[11px]">
-                        share = % del gasto · sparkline = uso diario · sumas en
-                        major units
+                        transacciones del mes en curso
                     </div>
                 </div>
             </div>
@@ -432,26 +380,9 @@ function CategoriesBoard({
                                 name
                             </th>
                             <th className="px-3 py-2 text-right font-semibold">
-                                txns
+                                Transactions
                             </th>
-                            <th className="px-3 py-2 text-right font-semibold">
-                                spent
-                            </th>
-                            <th className="px-3 py-2 text-right font-semibold">
-                                income
-                            </th>
-                            <th className="px-3 py-2 text-right font-semibold">
-                                net
-                            </th>
-                            <th className="px-3 py-2 text-right font-semibold">
-                                share
-                            </th>
-                            <th className="px-6 py-2 text-center font-semibold">
-                                trend
-                            </th>
-                            <th className="px-3 py-2 text-center font-semibold">
-                                status
-                            </th>
+                            <th className="px-3 py-2" />
                         </tr>
                     </thead>
                     <tbody className="divide-border divide-y">
@@ -465,8 +396,6 @@ function CategoriesBoard({
                                     expanded={isExpanded}
                                     hasChildren={hasChildren}
                                     onToggle={() => toggleExpand(parent.id)}
-                                    denom={denom}
-                                    topId={topId}
                                     onEdit={onEdit}
                                     onDelete={onDelete}
                                 />
@@ -484,8 +413,6 @@ function CategoryRows({
     expanded,
     hasChildren,
     onToggle,
-    denom,
-    topId,
     onEdit,
     onDelete,
 }: {
@@ -493,8 +420,6 @@ function CategoryRows({
     expanded: boolean;
     hasChildren: boolean;
     onToggle: () => void;
-    denom: number;
-    topId: number | null;
     onEdit: (row: CategoryRow) => void;
     onDelete: (row: CategoryRow) => void;
 }) {
@@ -506,8 +431,6 @@ function CategoryRows({
                 hasChildren={hasChildren}
                 expanded={expanded}
                 onToggle={onToggle}
-                denom={denom}
-                topId={topId}
                 onEdit={onEdit}
                 onDelete={onDelete}
             />
@@ -520,8 +443,6 @@ function CategoryRows({
                         hasChildren={false}
                         expanded={false}
                         onToggle={() => undefined}
-                        denom={denom}
-                        topId={topId}
                         onEdit={onEdit}
                         onDelete={onDelete}
                     />
@@ -536,8 +457,6 @@ function CategoryRow({
     hasChildren,
     expanded,
     onToggle,
-    denom,
-    topId,
     onEdit,
     onDelete,
 }: {
@@ -546,14 +465,9 @@ function CategoryRow({
     hasChildren: boolean;
     expanded: boolean;
     onToggle: () => void;
-    denom: number;
-    topId: number | null;
     onEdit: (row: CategoryRow) => void;
     onDelete: (row: CategoryRow) => void;
 }) {
-    const status = categoryStatus(row, topId);
-    const share =
-        denom > 0 ? Math.round((row.total_spent / denom) * 100) : 0;
     const isChild = level === 1;
 
     return (
@@ -564,24 +478,25 @@ function CategoryRow({
                 row.transaction_count === 0 && 'opacity-70',
             )}
         >
-            <td className={cn('py-2.5 pr-3', isChild ? 'pl-14' : 'pl-6')}>
+            <td className={cn('py-2.5 pr-3', isChild ? 'pl-16' : 'pl-6')}>
                 <div className="flex items-center gap-2.5">
-                    {hasChildren ? (
-                        <button
-                            type="button"
-                            onClick={onToggle}
-                            className="hover:bg-muted text-muted-foreground -ml-1 flex size-5 items-center justify-center rounded-sm transition-colors"
-                            aria-label={expanded ? 'Colapsar' : 'Expandir'}
-                        >
-                            {expanded ? (
-                                <ChevronDownIcon className="size-3.5" />
-                            ) : (
-                                <ChevronRightIcon className="size-3.5" />
-                            )}
-                        </button>
-                    ) : !isChild ? (
-                        <span className="size-5" />
-                    ) : null}
+                    {!isChild &&
+                        (hasChildren ? (
+                            <button
+                                type="button"
+                                onClick={onToggle}
+                                className="hover:bg-muted text-muted-foreground -ml-1 flex size-5 items-center justify-center rounded-sm transition-colors"
+                                aria-label={expanded ? 'Colapsar' : 'Expandir'}
+                            >
+                                {expanded ? (
+                                    <ChevronDownIcon className="size-3.5" />
+                                ) : (
+                                    <ChevronRightIcon className="size-3.5" />
+                                )}
+                            </button>
+                        ) : (
+                            <span className="-ml-1 size-5" />
+                        ))}
 
                     <span
                         className="flex size-6 flex-shrink-0 items-center justify-center rounded-md border text-[11px]"
@@ -605,146 +520,33 @@ function CategoryRow({
             <td className="text-muted-foreground px-3 py-2.5 text-right font-mono tabular-nums">
                 {row.transaction_count > 0 ? row.transaction_count : '—'}
             </td>
-            <td
-                className={cn(
-                    'px-3 py-2.5 text-right font-mono font-semibold tabular-nums',
-                    row.total_spent > 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-muted-foreground',
-                )}
-            >
-                {row.total_spent > 0 ? fmtAmount(row.total_spent) : '—'}
-            </td>
-            <td
-                className={cn(
-                    'px-3 py-2.5 text-right font-mono font-semibold tabular-nums',
-                    row.total_income > 0
-                        ? 'text-emerald-700 dark:text-emerald-300'
-                        : 'text-muted-foreground',
-                )}
-            >
-                {row.total_income > 0 ? fmtAmount(row.total_income) : '—'}
-            </td>
-            <td
-                className={cn(
-                    'px-3 py-2.5 text-right font-mono tabular-nums',
-                    row.net > 0
-                        ? 'text-emerald-700 dark:text-emerald-300'
-                        : row.net < 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-muted-foreground',
-                )}
-            >
-                {row.net !== 0
-                    ? `${row.net > 0 ? '+' : '-'}${fmtAmount(Math.abs(row.net))}`
-                    : '—'}
-            </td>
             <td className="px-3 py-2.5 text-right">
-                <div className="flex items-center justify-end gap-2">
-                    <div className="bg-muted relative h-1.5 w-16 overflow-hidden rounded-full">
-                        <div
-                            className="h-full rounded-full bg-foreground/40"
-                            style={{ width: `${share}%` }}
-                        />
-                    </div>
-                    <span className="text-muted-foreground w-8 text-right font-mono tabular-nums">
-                        {share}%
-                    </span>
-                </div>
-            </td>
-            <td className="px-6 py-2.5">
-                <div className="flex items-center justify-center">
-                    <UsageSparkline data={row.daily_usage} />
-                </div>
-            </td>
-            <td className="px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                        <span
-                            className={cn(
-                                'size-1.5 rounded-full',
-                                STATUS_DOT[status],
-                            )}
-                        />
-                        <span className="text-muted-foreground font-mono text-[10px] uppercase">
-                            {STATUS_LABEL[status]}
-                        </span>
-                    </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:text-foreground size-7"
-                                aria-label="Acciones"
-                            >
-                                <MoreHorizontalIcon className="size-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onEdit(row)}>
-                                <PencilIcon />
-                                Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => onDelete(row)}
-                                variant="destructive"
-                            >
-                                <Trash2Icon />
-                                Eliminar
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-foreground size-7"
+                            aria-label="Acciones"
+                        >
+                            <MoreHorizontalIcon className="size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onEdit(row)}>
+                            <PencilIcon />
+                            Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => onDelete(row)}
+                            variant="destructive"
+                        >
+                            <Trash2Icon />
+                            Eliminar
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </td>
         </tr>
-    );
-}
-
-function UsageSparkline({ data }: { data: number[] }) {
-    const width = 96;
-    const height = 22;
-
-    if (data.length < 2 || data.every((v) => v === 0)) {
-        return (
-            <span className="text-muted-foreground font-mono text-[10px]">
-                —
-            </span>
-        );
-    }
-
-    const maxY = Math.max(...data, 1);
-    const stepX = width / (data.length - 1);
-    const toY = (v: number) => height - (v / maxY) * height;
-    const points = data
-        .map((v, i) => `${(i * stepX).toFixed(2)},${toY(v).toFixed(2)}`)
-        .join(' ');
-    const last = data[data.length - 1];
-    const areaPoints = `${points} ${width.toFixed(2)},${height} 0,${height}`;
-
-    return (
-        <svg
-            width={width}
-            height={height}
-            viewBox={`0 0 ${width} ${height}`}
-            className="overflow-visible"
-            aria-label="Uso diario"
-        >
-            <polygon points={areaPoints} className="fill-foreground/10" />
-            <polyline
-                fill="none"
-                points={points}
-                className="stroke-foreground/60"
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
-            <circle
-                cx={width}
-                cy={toY(last)}
-                r={1.75}
-                className="fill-foreground/70"
-            />
-        </svg>
     );
 }

@@ -38,7 +38,7 @@ test('index renders categories page', function () {
         );
 });
 
-test('index includes current-month aggregates per category', function () {
+test('index rolls up current-month transaction counts per category', function () {
     $user = User::factory()->create();
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
 
@@ -76,16 +76,19 @@ test('index includes current-month aggregates per category', function () {
     $this->actingAs($user)->get('/categories')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
+            ->where('totals.categories', 2)
             ->where('totals.in_use', 1)
             ->where('totals.idle', 1)
-            ->where('totals.total_spent', 80000)
-            ->where('totals.total_income', 5000)
-            ->where('totals.top_category.name', 'Comida')
-            ->where('totals.top_category.total_spent', 80000)
+            ->where('categories.0.name', 'Comida')
+            ->where('categories.0.transaction_count', 3)
+            ->where('categories.0.children.0.name', 'Supermercado')
+            ->where('categories.0.children.0.transaction_count', 2)
+            ->where('categories.1.name', 'Sin uso')
+            ->where('categories.1.transaction_count', 0)
         );
 });
 
-test('index excludes transfers and prior-month transactions from aggregates', function () {
+test('index excludes transfers and prior-month transactions from counts', function () {
     $user = User::factory()->create();
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $other = Account::factory()->for($user)->create(['currency' => 'CLP']);
@@ -119,7 +122,7 @@ test('index excludes transfers and prior-month transactions from aggregates', fu
 
     $this->actingAs($user)->get('/categories')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('totals.total_spent', 2500)
+            ->where('categories.0.transaction_count', 1)
             ->where('totals.in_use', 1)
         );
 });

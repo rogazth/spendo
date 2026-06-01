@@ -25,7 +25,6 @@ class CategoryController extends Controller
         $today = CarbonImmutable::now();
         $monthStart = $today->startOfMonth();
         $monthEnd = $today->endOfMonth();
-        $daysInMonth = $monthEnd->day;
 
         $categories = $user->categories()
             ->with(['children' => function ($query) {
@@ -36,97 +35,30 @@ class CategoryController extends Controller
             ->orderBy('name')
             ->get();
 
-        $byCategory = Transaction::query()
+        $countsByCategory = Transaction::query()
             ->where('user_id', $user->id)
             ->where('type', TransactionType::Regular)
             ->whereBetween('transaction_date', [$monthStart->startOfDay(), $monthEnd->endOfDay()])
-            ->get(['category_id', 'amount', 'transaction_date'])
-            ->groupBy('category_id');
-
-        $lastUsedByCategory = Transaction::query()
-            ->where('user_id', $user->id)
-            ->where('type', TransactionType::Regular)
-            ->whereNotNull('category_id')
-            ->selectRaw('category_id, MAX(transaction_date) as last_used_at')
+            ->selectRaw('category_id, COUNT(*) as cnt')
             ->groupBy('category_id')
-            ->pluck('last_used_at', 'category_id');
+            ->pluck('cnt', 'category_id');
 
-        $aggregateFor = function (?int $categoryId) use ($byCategory, $lastUsedByCategory, $daysInMonth): array {
-            $items = $categoryId !== null && $byCategory->has($categoryId)
-                ? $byCategory->get($categoryId)
-                : collect();
+        $countFor = fn (?int $categoryId): int => $categoryId !== null
+            ? (int) $countsByCategory->get($categoryId, 0)
+            : 0;
 
-            $spent = 0.0;
-            $income = 0.0;
-            $daily = array_fill(0, $daysInMonth, 0.0);
+        $list = $categories->map(function (Category $parent) use ($countFor): array {
+            $children = $parent->children->map(fn (Category $child): array => [
+                'id' => $child->id,
+                'uuid' => $child->uuid,
+                'parent_id' => $child->parent_id,
+                'name' => $child->name,
+                'color' => $child->color,
+                'emoji' => $child->emoji,
+                'transaction_count' => $countFor($child->id),
+            ])->values();
 
-            foreach ($items as $tx) {
-                $amount = (float) $tx->amount;
-                if ($amount < 0) {
-                    $spent += abs($amount);
-                } else {
-                    $income += $amount;
-                }
-                $day = (int) $tx->transaction_date->day;
-                $idx = max(0, min($daysInMonth - 1, $day - 1));
-                $daily[$idx] += abs($amount);
-            }
-
-            $lastUsed = $categoryId !== null
-                ? $lastUsedByCategory->get($categoryId)
-                : null;
-
-            return [
-                'transaction_count' => $items->count(),
-                'total_spent' => $spent,
-                'total_income' => $income,
-                'daily_usage' => $daily,
-                'last_used_at' => $lastUsed instanceof \DateTimeInterface
-                    ? CarbonImmutable::instance($lastUsed)->toDateString()
-                    : ($lastUsed ? CarbonImmutable::parse($lastUsed)->toDateString() : null),
-            ];
-        };
-
-        $list = $categories->map(function (Category $parent) use ($aggregateFor): array {
-            $own = $aggregateFor($parent->id);
-
-            $children = $parent->children->map(function (Category $child) use ($aggregateFor): array {
-                $agg = $aggregateFor($child->id);
-
-                return [
-                    'id' => $child->id,
-                    'uuid' => $child->uuid,
-                    'parent_id' => $child->parent_id,
-                    'name' => $child->name,
-                    'color' => $child->color,
-                    'emoji' => $child->emoji,
-                    'transaction_count' => $agg['transaction_count'],
-                    'total_spent' => $agg['total_spent'],
-                    'total_income' => $agg['total_income'],
-                    'net' => $agg['total_income'] - $agg['total_spent'],
-                    'daily_usage' => $agg['daily_usage'],
-                    'last_used_at' => $agg['last_used_at'],
-                ];
-            })->values();
-
-            $rolledSpent = $own['total_spent'] + (float) $children->sum('total_spent');
-            $rolledIncome = $own['total_income'] + (float) $children->sum('total_income');
-            $rolledCount = $own['transaction_count'] + (int) $children->sum('transaction_count');
-
-            $rolledDaily = $own['daily_usage'];
-            foreach ($children as $childRow) {
-                foreach ($childRow['daily_usage'] as $i => $value) {
-                    $rolledDaily[$i] += $value;
-                }
-            }
-
-            $lastUsed = $own['last_used_at'];
-            foreach ($children as $childRow) {
-                $childLast = $childRow['last_used_at'];
-                if ($childLast !== null && ($lastUsed === null || $childLast > $lastUsed)) {
-                    $lastUsed = $childLast;
-                }
-            }
+            $rolledCount = $countFor($parent->id) + (int) $children->sum('transaction_count');
 
             return [
                 'id' => $parent->id,
@@ -136,23 +68,12 @@ class CategoryController extends Controller
                 'color' => $parent->color,
                 'emoji' => $parent->emoji,
                 'transaction_count' => $rolledCount,
-                'total_spent' => $rolledSpent,
-                'total_income' => $rolledIncome,
-                'net' => $rolledIncome - $rolledSpent,
-                'daily_usage' => $rolledDaily,
-                'last_used_at' => $lastUsed,
                 'children' => $children->all(),
             ];
         });
 
-        $totalSpent = (float) $list->sum('total_spent');
-        $totalIncome = (float) $list->sum('total_income');
         $inUseCount = $list->filter(fn (array $c) => $c['transaction_count'] > 0)->count();
         $idleCount = $list->count() - $inUseCount;
-        $topCategory = $list
-            ->filter(fn (array $c) => $c['total_spent'] > 0)
-            ->sortByDesc('total_spent')
-            ->first();
 
         $parentOptions = $categories
             ->map(fn (Category $c) => [
@@ -171,18 +92,9 @@ class CategoryController extends Controller
                 'categories' => $list->count(),
                 'in_use' => $inUseCount,
                 'idle' => $idleCount,
-                'total_spent' => $totalSpent,
-                'total_income' => $totalIncome,
-                'top_category' => $topCategory !== null ? [
-                    'name' => $topCategory['name'],
-                    'total_spent' => $topCategory['total_spent'],
-                ] : null,
             ],
             'period' => [
                 'start' => $monthStart->toDateString(),
-                'end' => $monthEnd->toDateString(),
-                'days' => $daysInMonth,
-                'today' => $today->toDateString(),
             ],
         ]);
     }
