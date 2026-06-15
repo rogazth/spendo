@@ -10,6 +10,8 @@ interface TransactionDayGroupProps {
     date: string;
     transactions: Transaction[];
     onSelect?: (transaction: Transaction) => void;
+    onEdit?: (transaction: Transaction) => void;
+    onDelete?: (transaction: Transaction) => void;
 }
 
 function formatDayHeading(date: Date): string {
@@ -49,6 +51,8 @@ export function TransactionDayGroup({
     date,
     transactions,
     onSelect,
+    onEdit,
+    onDelete,
 }: TransactionDayGroupProps) {
     const dayDate = parseISO(date);
     const heading = formatDayHeading(dayDate);
@@ -56,10 +60,11 @@ export function TransactionDayGroup({
 
     return (
         <div>
-            <div className="bg-muted/40 border-border flex items-center justify-between rounded-t-lg border border-b-0 px-4 py-2">
-                <span className="text-foreground text-sm font-semibold capitalize">
+            <div className="flex items-center justify-between rounded-t-lg border border-b-0 border-border bg-muted/40 px-4 py-2">
+                <span className="text-sm font-semibold text-foreground capitalize">
                     {heading}
                 </span>
+
                 <div className="flex items-center gap-3">
                     {nets.map((net) => (
                         <span
@@ -79,12 +84,15 @@ export function TransactionDayGroup({
                     ))}
                 </div>
             </div>
-            <div className="bg-card border-border divide-border divide-y rounded-b-lg border">
+
+            <div className="divide-y divide-border rounded-b-lg border border-border bg-card">
                 {transactions.map((transaction) => (
                     <TransactionRow
                         key={transaction.uuid}
                         transaction={transaction}
                         onClick={onSelect}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
                     />
                 ))}
             </div>

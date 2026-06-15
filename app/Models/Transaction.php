@@ -43,7 +43,7 @@ class Transaction extends Model
             'amount' => 'integer',
             'type' => TransactionType::class,
             'exclude_from_budget' => 'boolean',
-            'transaction_date' => 'datetime',
+            'transaction_date' => 'date:Y-m-d',
         ];
     }
 

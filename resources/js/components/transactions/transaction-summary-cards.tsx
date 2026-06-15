@@ -27,7 +27,7 @@ export function TransactionSummaryCards({
     const negativeBalance = balance < 0;
 
     return (
-        <div className="-mx-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 pb-2 md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0">
+        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-pl-4 gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:scroll-pl-0 md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0">
             <StatCard
                 icon={<WalletIcon className="size-4" />}
                 iconClass={
@@ -38,7 +38,9 @@ export function TransactionSummaryCards({
                 label="Saldo"
                 value={formatCurrency(balance, currency, locale)}
                 valueClass={
-                    negativeBalance ? 'text-red-600 dark:text-red-400' : undefined
+                    negativeBalance
+                        ? 'text-red-600 dark:text-red-400'
+                        : undefined
                 }
                 sub={currency}
             />
@@ -76,7 +78,7 @@ function StatCard({
     sub,
 }: StatCardProps) {
     return (
-        <div className="bg-card border-border w-[72vw] shrink-0 snap-start rounded-xl border p-3 shadow-sm sm:w-[56vw] md:w-auto md:shrink md:p-3">
+        <div className="w-[72vw] shrink-0 snap-start rounded-xl border border-border bg-card p-3 shadow-sm sm:w-[56vw] md:w-auto md:shrink md:p-3">
             <div className="flex items-center gap-3">
                 <div
                     className={cn(
@@ -87,20 +89,20 @@ function StatCard({
                     {icon}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                    <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                         {label}
                     </p>
                     <div className="flex items-baseline gap-1.5">
                         <span
                             className={cn(
-                                'font-mono text-lg font-bold tabular-nums leading-tight',
+                                'font-mono text-lg leading-tight font-bold tabular-nums',
                                 valueClass,
                             )}
                         >
                             {value}
                         </span>
                         {sub && (
-                            <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                            <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
                                 {sub}
                             </span>
                         )}

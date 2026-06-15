@@ -19,11 +19,14 @@ import type { Transaction } from '@/types';
 import { isTransfer } from '@/types/models';
 
 function formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('es-CL', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
+    return new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString(
+        'es-CL',
+        {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        },
+    );
 }
 
 function getTransactionTypeLabel(tx: Transaction): string {

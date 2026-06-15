@@ -24,7 +24,7 @@ class TransactionResource extends JsonResource
             'description' => $this->description,
             'notes' => $this->notes,
             'exclude_from_budget' => $this->exclude_from_budget,
-            'transaction_date' => $this->transaction_date,
+            'transaction_date' => $this->transaction_date?->format('Y-m-d'),
             'account_id' => $this->account_id,
             'category_id' => $this->category_id,
             'linked_transaction_id' => $this->linked_transaction_id,

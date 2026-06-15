@@ -1,13 +1,19 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, StickyNoteIcon, WalletIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { CalendarIcon, StickyNoteIcon } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { AccountField } from '@/components/accounts/account-select';
 import { CategoryPicker } from '@/components/categories/category-picker';
 import { AmountDisplay } from '@/components/forms/transaction-form/amount-display';
 import { Numpad } from '@/components/forms/transaction-form/numpad';
 import InputError from '@/components/input-error';
+import {
+    ResponsivePopover,
+    ResponsivePopoverContent,
+    ResponsivePopoverTrigger,
+} from '@/components/responsive-popover';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -18,17 +24,13 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,6 +51,7 @@ interface TransactionFormDialogProps {
     transaction?: Transaction;
     accounts: Account[];
     categories: Category[];
+    loading?: boolean;
 }
 
 export function TransactionFormDialog({
@@ -57,6 +60,7 @@ export function TransactionFormDialog({
     transaction,
     accounts,
     categories,
+    loading = false,
 }: TransactionFormDialogProps) {
     const isEditing = !!transaction;
     const { currencies = [] } = usePage<{ currencies?: Currency[] }>().props;
@@ -120,9 +124,7 @@ export function TransactionFormDialog({
                 : 'income'
             : 'expense';
         const today = format(new Date(), 'yyyy-MM-dd');
-        const txDate = transaction?.transaction_date
-            ? format(new Date(transaction.transaction_date), 'yyyy-MM-dd')
-            : today;
+        const txDate = transaction?.transaction_date?.slice(0, 10) ?? today;
         const txAccountCurrency =
             (transaction?.account as Account | undefined)?.currency ??
             transaction?.currency ??
@@ -177,7 +179,7 @@ export function TransactionFormDialog({
         });
         transfer.clearErrors();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, transaction?.id]);
+    }, [open, transaction?.id, accounts.length]);
 
     const activeAccount =
         mode === 'transfer'
@@ -301,196 +303,244 @@ export function TransactionFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[95vh] gap-4 overflow-y-auto sm:max-w-[440px]">
+            <DialogContent className="gap-4 overflow-y-auto max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:rounded-none! max-sm:border-0 max-sm:px-4 sm:max-h-[95vh] sm:max-w-[440px]">
                 <DialogHeader className="space-y-0">
                     <DialogTitle>
                         {isEditing ? 'Editar transacción' : 'Nueva transacción'}
                     </DialogTitle>
                 </DialogHeader>
 
-                {!isEditing && (
-                    <Tabs
-                        value={mode}
-                        onValueChange={(value) => {
-                            if (value === 'movement' || value === 'transfer') {
-                                setMode(value);
-                            }
-                        }}
-                    >
-                        <TabsList className="w-full">
-                            <TabsTrigger value="movement" className="flex-1">
-                                Movimiento
-                            </TabsTrigger>
-                            <TabsTrigger value="transfer" className="flex-1">
-                                Transferencia
-                            </TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-                )}
-
-                <AmountDisplay
-                    magnitude={magnitude}
-                    currency={currency}
-                    locale={locale}
-                    sign={mode === 'transfer' ? 'neutral' : movementSign}
-                    fractionDigits={fractionDigits}
-                />
-
-                {mode === 'movement' ? (
-                    <MovementChips
-                        accounts={accounts}
-                        categories={categories}
-                        accountId={movement.data.account_id}
-                        categoryId={movement.data.category_id}
-                        description={movement.data.description}
-                        descriptionOpen={descriptionOpen}
-                        setDescriptionOpen={setDescriptionOpen}
-                        date={movement.data.transaction_date}
-                        dateOpen={dateOpen}
-                        setDateOpen={setDateOpen}
-                        excludeFromBudget={movement.data.exclude_from_budget}
-                        direction={direction}
-                        errors={
-                            movement.errors as Record<
-                                string,
-                                string | undefined
-                            >
-                        }
-                        onAccountChange={(id) =>
-                            movement.setData('account_id', id)
-                        }
-                        onCategoryChange={(id) =>
-                            movement.setData('category_id', id)
-                        }
-                        onDescriptionChange={(value) =>
-                            movement.setData('description', value)
-                        }
-                        onDateChange={(value) =>
-                            movement.setData('transaction_date', value)
-                        }
-                        onExcludeFromBudgetChange={(value) =>
-                            movement.setData('exclude_from_budget', value)
-                        }
-                    />
+                {loading ? (
+                    <TransactionFormSkeleton />
                 ) : (
-                    <TransferChips
-                        accounts={accounts}
-                        originId={transfer.data.origin_account_id}
-                        destinationId={transfer.data.destination_account_id}
-                        description={transfer.data.description}
-                        descriptionOpen={descriptionOpen}
-                        setDescriptionOpen={setDescriptionOpen}
-                        date={transfer.data.transaction_date}
-                        dateOpen={dateOpen}
-                        setDateOpen={setDateOpen}
-                        errors={
-                            transfer.errors as Record<
-                                string,
-                                string | undefined
+                    <>
+                        {!isEditing && (
+                            <Tabs
+                                value={mode}
+                                onValueChange={(value) => {
+                                    if (
+                                        value === 'movement' ||
+                                        value === 'transfer'
+                                    ) {
+                                        setMode(value);
+                                    }
+                                }}
                             >
-                        }
-                        onOriginChange={(id) => {
-                            transfer.setData('origin_account_id', id);
-                            const newOrigin = accounts.find(
-                                (account) => account.id === id,
-                            );
-                            const currentDestination = accounts.find(
-                                (account) =>
-                                    account.id ===
-                                    transfer.data.destination_account_id,
-                            );
-                            const destinationIsInvalid =
-                                !currentDestination ||
-                                currentDestination.id === id ||
-                                currentDestination.currency !==
-                                    newOrigin?.currency;
-                            if (id !== null && destinationIsInvalid) {
-                                const next = accounts.find(
-                                    (account) =>
-                                        account.id !== id &&
-                                        account.currency ===
-                                            newOrigin?.currency,
-                                );
-                                transfer.setData(
-                                    'destination_account_id',
-                                    next?.id ?? null,
-                                );
+                                <TabsList className="w-full">
+                                    <TabsTrigger
+                                        value="movement"
+                                        className="flex-1"
+                                    >
+                                        Movimiento
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="transfer"
+                                        className="flex-1"
+                                    >
+                                        Transferencia
+                                    </TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        )}
+
+                        <AmountDisplay
+                            magnitude={magnitude}
+                            currency={currency}
+                            locale={locale}
+                            sign={
+                                mode === 'transfer' ? 'neutral' : movementSign
                             }
-                        }}
-                        onDestinationChange={(id) =>
-                            transfer.setData('destination_account_id', id)
-                        }
-                        onDescriptionChange={(value) =>
-                            transfer.setData('description', value)
-                        }
-                        onDateChange={(value) =>
-                            transfer.setData('transaction_date', value)
-                        }
-                    />
-                )}
+                            fractionDigits={fractionDigits}
+                        />
 
-                {mode === 'movement' && (
-                    <Tabs
-                        value={direction}
-                        onValueChange={(value) => {
-                            if (value === 'expense' || value === 'income') {
-                                setDirection(value);
-                            }
-                        }}
-                    >
-                        <TabsList className="w-full">
-                            <TabsTrigger
-                                value="expense"
-                                className="flex-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-red-950/60 dark:data-[state=active]:text-red-400"
-                            >
-                                − Gasto
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="income"
-                                className="flex-1 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-950/60 dark:data-[state=active]:text-emerald-400"
-                            >
-                                + Ingreso
-                            </TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-                )}
-
-                <Numpad
-                    onDigit={handleDigit}
-                    onBackspace={handleBackspace}
-                    onSubmit={handleSubmit}
-                    disabled={transferEditBlocked}
-                    submitting={processing}
-                />
-
-                {transferEditBlocked && (
-                    <p className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-                        Las transferencias no se editan directamente. Elimínala
-                        y créala nuevamente si necesitas cambiar monto, cuentas
-                        o fecha.
-                    </p>
-                )}
-
-                {Object.values(movement.errors).map(
-                    (error) =>
-                        error && (
-                            <InputError
-                                key={error as string}
-                                message={error as string}
+                        {mode === 'movement' ? (
+                            <MovementChips
+                                accounts={accounts}
+                                categories={categories}
+                                accountId={movement.data.account_id}
+                                categoryId={movement.data.category_id}
+                                description={movement.data.description}
+                                descriptionOpen={descriptionOpen}
+                                setDescriptionOpen={setDescriptionOpen}
+                                date={movement.data.transaction_date}
+                                dateOpen={dateOpen}
+                                setDateOpen={setDateOpen}
+                                excludeFromBudget={
+                                    movement.data.exclude_from_budget
+                                }
+                                direction={direction}
+                                errors={
+                                    movement.errors as Record<
+                                        string,
+                                        string | undefined
+                                    >
+                                }
+                                onAccountChange={(id) =>
+                                    movement.setData('account_id', id)
+                                }
+                                onCategoryChange={(id) =>
+                                    movement.setData('category_id', id)
+                                }
+                                onDescriptionChange={(value) =>
+                                    movement.setData('description', value)
+                                }
+                                onDateChange={(value) =>
+                                    movement.setData('transaction_date', value)
+                                }
+                                onExcludeFromBudgetChange={(value) =>
+                                    movement.setData(
+                                        'exclude_from_budget',
+                                        value,
+                                    )
+                                }
                             />
-                        ),
-                )}
-                {Object.values(transfer.errors).map(
-                    (error) =>
-                        error && (
-                            <InputError
-                                key={error as string}
-                                message={error as string}
+                        ) : (
+                            <TransferChips
+                                accounts={accounts}
+                                originId={transfer.data.origin_account_id}
+                                destinationId={
+                                    transfer.data.destination_account_id
+                                }
+                                description={transfer.data.description}
+                                descriptionOpen={descriptionOpen}
+                                setDescriptionOpen={setDescriptionOpen}
+                                date={transfer.data.transaction_date}
+                                dateOpen={dateOpen}
+                                setDateOpen={setDateOpen}
+                                errors={
+                                    transfer.errors as Record<
+                                        string,
+                                        string | undefined
+                                    >
+                                }
+                                onOriginChange={(id) => {
+                                    transfer.setData('origin_account_id', id);
+                                    const newOrigin = accounts.find(
+                                        (account) => account.id === id,
+                                    );
+                                    const currentDestination = accounts.find(
+                                        (account) =>
+                                            account.id ===
+                                            transfer.data
+                                                .destination_account_id,
+                                    );
+                                    const destinationIsInvalid =
+                                        !currentDestination ||
+                                        currentDestination.id === id ||
+                                        currentDestination.currency !==
+                                            newOrigin?.currency;
+                                    if (id !== null && destinationIsInvalid) {
+                                        const next = accounts.find(
+                                            (account) =>
+                                                account.id !== id &&
+                                                account.currency ===
+                                                    newOrigin?.currency,
+                                        );
+                                        transfer.setData(
+                                            'destination_account_id',
+                                            next?.id ?? null,
+                                        );
+                                    }
+                                }}
+                                onDestinationChange={(id) =>
+                                    transfer.setData(
+                                        'destination_account_id',
+                                        id,
+                                    )
+                                }
+                                onDescriptionChange={(value) =>
+                                    transfer.setData('description', value)
+                                }
+                                onDateChange={(value) =>
+                                    transfer.setData('transaction_date', value)
+                                }
                             />
-                        ),
+                        )}
+
+                        {mode === 'movement' && (
+                            <Tabs
+                                value={direction}
+                                onValueChange={(value) => {
+                                    if (
+                                        value === 'expense' ||
+                                        value === 'income'
+                                    ) {
+                                        setDirection(value);
+                                    }
+                                }}
+                            >
+                                <TabsList className="w-full">
+                                    <TabsTrigger
+                                        value="expense"
+                                        className="flex-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-red-950/60 dark:data-[state=active]:text-red-400"
+                                    >
+                                        − Gasto
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="income"
+                                        className="flex-1 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-950/60 dark:data-[state=active]:text-emerald-400"
+                                    >
+                                        + Ingreso
+                                    </TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        )}
+
+                        <Numpad
+                            onDigit={handleDigit}
+                            onBackspace={handleBackspace}
+                            onSubmit={handleSubmit}
+                            disabled={transferEditBlocked}
+                            submitting={processing}
+                        />
+
+                        {transferEditBlocked && (
+                            <p className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+                                Las transferencias no se editan directamente.
+                                Elimínala y créala nuevamente si necesitas
+                                cambiar monto, cuentas o fecha.
+                            </p>
+                        )}
+
+                        {Object.values(movement.errors).map(
+                            (error) =>
+                                error && (
+                                    <InputError
+                                        key={error as string}
+                                        message={error as string}
+                                    />
+                                ),
+                        )}
+                        {Object.values(transfer.errors).map(
+                            (error) =>
+                                error && (
+                                    <InputError
+                                        key={error as string}
+                                        message={error as string}
+                                    />
+                                ),
+                        )}
+                    </>
                 )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+function TransactionFormSkeleton() {
+    return (
+        <div className="space-y-4">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="mx-auto h-10 w-44" />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-48 w-full" />
+        </div>
     );
 }
 
@@ -534,36 +584,44 @@ function MovementChips({
     onDateChange,
     onExcludeFromBudgetChange,
 }: MovementChipsProps) {
-    const account = accounts.find((a) => a.id === accountId);
-
     return (
-        <div className="grid grid-cols-2 gap-2">
-            <AccountChip
-                account={account}
-                onChange={onAccountChange}
-                accounts={accounts}
-            />
-            <CategoryPicker
-                categories={categories}
-                value={categoryId}
-                onChange={onCategoryChange}
-                placeholder="Categoría"
-                triggerClassName="h-10"
-            />
-            <DateChip
-                date={date}
-                onChange={onDateChange}
-                open={dateOpen}
-                onOpenChange={setDateOpen}
-            />
-            <DescriptionChip
-                value={description}
-                onChange={onDescriptionChange}
-                open={descriptionOpen}
-                onOpenChange={setDescriptionOpen}
-            />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Field label="Cuenta">
+                <AccountField
+                    accounts={accounts}
+                    value={accountId}
+                    onChange={onAccountChange}
+                    placeholder="Cuenta"
+                    triggerClassName="h-10"
+                />
+            </Field>
+            <Field label="Categoría">
+                <CategoryPicker
+                    categories={categories}
+                    value={categoryId}
+                    onChange={onCategoryChange}
+                    placeholder="Categoría"
+                    triggerClassName="h-10"
+                />
+            </Field>
+            <Field label="Fecha">
+                <DateChip
+                    date={date}
+                    onChange={onDateChange}
+                    open={dateOpen}
+                    onOpenChange={setDateOpen}
+                />
+            </Field>
+            <Field label="Notas">
+                <DescriptionChip
+                    value={description}
+                    onChange={onDescriptionChange}
+                    open={descriptionOpen}
+                    onOpenChange={setDescriptionOpen}
+                />
+            </Field>
             {direction === 'expense' && (
-                <div className="col-span-2 flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                <div className="mt-1 flex items-center justify-between rounded-lg border px-3 py-2 text-sm sm:col-span-2">
                     <Label
                         htmlFor="exclude_from_budget"
                         className="cursor-pointer text-sm font-medium"
@@ -691,20 +749,48 @@ function TransferChips({
                     </p>
                 )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                <DateChip
-                    date={date}
-                    onChange={onDateChange}
-                    open={dateOpen}
-                    onOpenChange={setDateOpen}
-                />
-                <DescriptionChip
-                    value={description}
-                    onChange={onDescriptionChange}
-                    open={descriptionOpen}
-                    onOpenChange={setDescriptionOpen}
-                />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Field label="Fecha">
+                    <DateChip
+                        date={date}
+                        onChange={onDateChange}
+                        open={dateOpen}
+                        onOpenChange={setDateOpen}
+                    />
+                </Field>
+                <Field label="Notas">
+                    <DescriptionChip
+                        value={description}
+                        onChange={onDescriptionChange}
+                        open={descriptionOpen}
+                        onOpenChange={setDescriptionOpen}
+                    />
+                </Field>
             </div>
+        </div>
+    );
+}
+
+function Field({
+    label,
+    htmlFor,
+    className,
+    children,
+}: {
+    label: string;
+    htmlFor?: string;
+    className?: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className={cn('space-y-1.5', className)}>
+            <Label
+                htmlFor={htmlFor}
+                className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase"
+            >
+                {label}
+            </Label>
+            {children}
         </div>
     );
 }
@@ -715,37 +801,6 @@ function AccountSummary({ account }: { account: Account }) {
             <span aria-hidden>{account.emoji ?? '💼'}</span>
             <span className="truncate">{account.name}</span>
         </span>
-    );
-}
-
-interface AccountChipProps {
-    account: Account | undefined;
-    onChange: (id: number | null) => void;
-    accounts: Account[];
-}
-
-function AccountChip({ account, onChange, accounts }: AccountChipProps) {
-    return (
-        <Select
-            value={account?.id?.toString() ?? ''}
-            onValueChange={(value) =>
-                onChange(value ? parseInt(value, 10) : null)
-            }
-        >
-            <SelectTrigger className="h-10 justify-start gap-2 text-left">
-                <WalletIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-medium">
-                    {account?.name ?? 'Cuenta'}
-                </span>
-            </SelectTrigger>
-            <SelectContent>
-                {accounts.map((option) => (
-                    <SelectItem key={option.id} value={option.id.toString()}>
-                        <AccountSummary account={option} />
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
     );
 }
 
@@ -760,19 +815,23 @@ function DateChip({ date, onChange, open, onOpenChange }: DateChipProps) {
     const parsedDate = useMemo(() => new Date(`${date}T12:00:00`), [date]);
 
     return (
-        <Popover open={open} onOpenChange={onOpenChange}>
-            <PopoverTrigger asChild>
+        <ResponsivePopover open={open} onOpenChange={onOpenChange}>
+            <ResponsivePopoverTrigger asChild>
                 <Button
                     variant="outline"
-                    className="h-10 justify-start gap-2 px-3 font-normal"
+                    className="h-10 w-full justify-start gap-2 px-3 font-normal"
                 >
                     <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
                     <span className="truncate text-sm font-medium">
                         {format(parsedDate, 'PPP', { locale: es })}
                     </span>
                 </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
+            </ResponsivePopoverTrigger>
+            <ResponsivePopoverContent
+                title="Fecha"
+                align="start"
+                className="w-auto p-0"
+            >
                 <Calendar
                     mode="single"
                     selected={parsedDate}
@@ -782,10 +841,12 @@ function DateChip({ date, onChange, open, onOpenChange }: DateChipProps) {
                             onOpenChange(false);
                         }
                     }}
+                    className="w-full sm:w-fit"
+                    classNames={{ root: 'w-full sm:w-fit' }}
                     initialFocus
                 />
-            </PopoverContent>
-        </Popover>
+            </ResponsivePopoverContent>
+        </ResponsivePopover>
     );
 }
 
@@ -806,12 +867,12 @@ function DescriptionChip({
     const display = trimmed.length > 0 ? trimmed : 'Notas / descripción';
 
     return (
-        <Popover open={open} onOpenChange={onOpenChange}>
-            <PopoverTrigger asChild>
+        <ResponsivePopover open={open} onOpenChange={onOpenChange}>
+            <ResponsivePopoverTrigger asChild>
                 <Button
                     variant="outline"
                     className={cn(
-                        'h-10 justify-start gap-2 px-3 font-normal',
+                        'h-10 w-full justify-start gap-2 px-3 font-normal',
                         trimmed.length === 0 && 'text-muted-foreground',
                     )}
                 >
@@ -820,28 +881,36 @@ function DescriptionChip({
                         {display}
                     </span>
                 </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-80 space-y-2">
-                <Label className="text-xs font-semibold tracking-wider uppercase">
-                    Notas
-                </Label>
-                <Textarea
-                    value={value}
-                    onChange={(event) => onChange(event.target.value)}
-                    placeholder="Ej: Supermercado Líder"
-                    rows={3}
-                    autoFocus
-                />
-                <div className="flex justify-end">
-                    <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Listo
-                    </Button>
+            </ResponsivePopoverTrigger>
+            <ResponsivePopoverContent
+                title="Notas"
+                align="start"
+                className="w-80"
+            >
+                <div className="space-y-2 max-sm:px-4">
+                    <Label className="text-xs font-semibold tracking-wider uppercase">
+                        Notas
+                    </Label>
+
+                    <Textarea
+                        value={value}
+                        onChange={(event) => onChange(event.target.value)}
+                        placeholder="Ej: Supermercado Líder"
+                        rows={3}
+                        autoFocus
+                    />
+
+                    <div className="flex justify-end">
+                        <Button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="max-sm:w-full"
+                        >
+                            Listo
+                        </Button>
+                    </div>
                 </div>
-            </PopoverContent>
-        </Popover>
+            </ResponsivePopoverContent>
+        </ResponsivePopover>
     );
 }

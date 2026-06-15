@@ -1,6 +1,10 @@
 import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
 import { Loader2Icon, PlusIcon, ReceiptIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { TransactionFormDialog } from '@/components/forms/transaction-form-dialog';
+import { useCreateTransaction } from '@/components/transactions/create-transaction-provider';
 import {
     TransactionDayGroup,
     groupTransactionsByDay,
@@ -14,7 +18,6 @@ import {
     TransactionsFilterBar,
     type TransactionFilters,
 } from '@/components/transactions/transactions-filter-bar';
-import { TransactionFormDialog } from '@/components/forms/transaction-form-dialog';
 import { Button } from '@/components/ui/button';
 import {
     Empty,
@@ -32,12 +35,13 @@ import type {
     PaginatedResponse,
     Transaction,
 } from '@/types';
+import { isTransfer } from '@/types/models';
 
 interface Props {
     transactions: PaginatedResponse<Transaction>;
     summary: Record<string, TransactionSummaryEntry>;
     accounts: Account[];
-    budgets: Pick<Budget, 'id' | 'uuid' | 'name'>[];
+    budgets: Pick<Budget, 'id' | 'uuid' | 'name' | 'color' | 'emoji'>[];
     categories: Category[];
     filters: {
         budget_id?: number | null;
@@ -62,7 +66,9 @@ function applyFilters(params: Record<string, string | string[]>) {
     });
 }
 
-function paramsFromFilters(next: TransactionFilters): Record<string, string | string[]> {
+function paramsFromFilters(
+    next: TransactionFilters,
+): Record<string, string | string[]> {
     const params: Record<string, string | string[]> = {};
     if (next.dates_all) {
         params.dates = 'all';
@@ -71,7 +77,8 @@ function paramsFromFilters(next: TransactionFilters): Record<string, string | st
         if (next.date_to) params.date_to = next.date_to;
     }
     if (next.budget_id !== ALL_FILTER) params.budget_id = next.budget_id;
-    if (next.account_id !== ALL_FILTER) params['account_ids[]'] = next.account_id;
+    if (next.account_id !== ALL_FILTER)
+        params['account_ids[]'] = next.account_id;
     if (next.category_ids.length > 0) params.category_ids = next.category_ids;
     return params;
 }
@@ -85,8 +92,10 @@ export default function TransactionsIndex({
     filters,
 }: Props) {
     const { url } = usePage();
-    const [createOpen, setCreateOpen] = useState(false);
+    const { open: openCreate } = useCreateTransaction();
     const [editing, setEditing] = useState<Transaction | null>(null);
+    const [deleting, setDeleting] = useState<Transaction | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     const hasUserFilters = useMemo(() => {
         const queryString = url.split('?')[1] ?? '';
@@ -106,7 +115,9 @@ export default function TransactionsIndex({
 
     const currentFilters: TransactionFilters = {
         budget_id: filters.budget_id ? String(filters.budget_id) : ALL_FILTER,
-        account_id: filters.account_ids?.[0] ? String(filters.account_ids[0]) : ALL_FILTER,
+        account_id: filters.account_ids?.[0]
+            ? String(filters.account_ids[0])
+            : ALL_FILTER,
         category_ids: filters.category_ids?.map(String) ?? [],
         date_from: filters.date_from ?? '',
         date_to: filters.date_to ?? '',
@@ -135,25 +146,47 @@ export default function TransactionsIndex({
         applyFilters({});
     };
 
+    const confirmDelete = () => {
+        if (!deleting) return;
+        setDeleteLoading(true);
+        router.delete(`/transactions/${deleting.uuid}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeleting(null);
+                toast.success('Transacción eliminada');
+            },
+            onError: () => toast.error('No se pudo eliminar la transacción'),
+            onFinish: () => setDeleteLoading(false),
+        });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Transacciones" />
 
-            <div className="flex flex-1 flex-col gap-6 p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1">
-                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+            <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
                             Transacciones
                         </h1>
-                        <p className="text-muted-foreground text-sm">
-                            Revisa y filtra tus movimientos por cuenta, presupuesto o fecha.
-                        </p>
+                        <Button onClick={openCreate} className="shrink-0">
+                            <PlusIcon />
+                            Añadir
+                        </Button>
                     </div>
-                    <Button onClick={() => setCreateOpen(true)}>
-                        <PlusIcon />
-                        Nueva transacción
-                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                        Revisa y filtra tus movimientos por cuenta, presupuesto
+                        o fecha.
+                    </p>
                 </div>
+
+                {selectedAccount && (
+                    <TransactionSummaryCards
+                        account={selectedAccount}
+                        entry={summary[selectedAccount.currency]}
+                    />
+                )}
 
                 <TransactionsFilterBar
                     filters={currentFilters}
@@ -165,54 +198,47 @@ export default function TransactionsIndex({
                     showClear={hasUserFilters}
                 />
 
-                {selectedAccount && (
-                    <TransactionSummaryCards
-                        account={selectedAccount}
-                        entry={summary[selectedAccount.currency]}
-                    />
-                )}
-
                 {transactions.data.length === 0 ? (
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia variant="icon">
                                 <ReceiptIcon />
                             </EmptyMedia>
-                            <EmptyTitle>No hay transacciones para mostrar</EmptyTitle>
+                            <EmptyTitle>
+                                No hay transacciones para mostrar
+                            </EmptyTitle>
                             <EmptyDescription>
-                                Crea una nueva o ajusta los filtros para ver más resultados.
+                                Crea una nueva o ajusta los filtros para ver más
+                                resultados.
                             </EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 ) : (
-                    <InfiniteScroll
-                        data="transactions"
-                        className="space-y-4"
-                        loading={
-                            <div className="text-muted-foreground flex items-center justify-center gap-2 py-4 text-xs">
-                                <Loader2Icon className="size-4 animate-spin" />
-                                Cargando más transacciones…
-                            </div>
-                        }
-                    >
-                        {groups.map((group) => (
-                            <TransactionDayGroup
-                                key={group.date}
-                                date={group.date}
-                                transactions={group.transactions}
-                                onSelect={(tx) => setEditing(tx)}
-                            />
-                        ))}
-                    </InfiniteScroll>
+                    <div>
+                        <InfiniteScroll
+                            data="transactions"
+                            className="space-y-4"
+                            loading={
+                                <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                                    <Loader2Icon className="size-4 animate-spin" />
+                                    Cargando más transacciones…
+                                </div>
+                            }
+                        >
+                            {groups.map((group) => (
+                                <TransactionDayGroup
+                                    key={group.date}
+                                    date={group.date}
+                                    transactions={group.transactions}
+                                    onSelect={(tx) => setEditing(tx)}
+                                    onEdit={(tx) => setEditing(tx)}
+                                    onDelete={(tx) => setDeleting(tx)}
+                                />
+                            ))}
+                        </InfiniteScroll>
+                    </div>
                 )}
             </div>
-
-            <TransactionFormDialog
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                accounts={accounts}
-                categories={categories}
-            />
 
             <TransactionFormDialog
                 open={editing !== null}
@@ -222,6 +248,33 @@ export default function TransactionsIndex({
                 transaction={editing ?? undefined}
                 accounts={accounts}
                 categories={categories}
+            />
+
+            <ConfirmDialog
+                open={deleting !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleting(null);
+                }}
+                title="Eliminar transacción"
+                description={
+                    deleting ? (
+                        <>
+                            ¿Seguro que quieres eliminar{' '}
+                            <span className="font-semibold text-foreground">
+                                {deleting.description ||
+                                    deleting.category?.name ||
+                                    'esta transacción'}
+                            </span>
+                            {isTransfer(deleting) &&
+                                ' y su transferencia vinculada'}
+                            ? Esta acción no se puede deshacer.
+                        </>
+                    ) : null
+                }
+                confirmLabel="Eliminar"
+                variant="destructive"
+                onConfirm={confirmDelete}
+                loading={deleteLoading}
             />
         </AppLayout>
     );
