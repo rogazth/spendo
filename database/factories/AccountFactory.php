@@ -20,7 +20,6 @@ class AccountFactory extends Factory
             'emoji' => null,
             'is_active' => true,
             'is_default' => false,
-            'include_in_budget' => true,
             'sort_order' => 0,
         ];
     }
@@ -43,13 +42,6 @@ class AccountFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'currency' => 'USD',
-        ]);
-    }
-
-    public function excludedFromBudget(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'include_in_budget' => false,
         ]);
     }
 }

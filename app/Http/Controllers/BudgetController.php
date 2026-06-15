@@ -27,7 +27,7 @@ class BudgetController extends Controller
 
         $budgets = Auth::user()
             ->budgets()
-            ->with(['items.category.children'])
+            ->with(['items.category.children', 'accounts'])
             ->latest()
             ->get();
 
@@ -89,6 +89,8 @@ class BudgetController extends Controller
                 'name' => $account->name,
                 'currency' => $account->currency,
                 'currency_locale' => Currency::localeFor($account->currency),
+                'color' => $account->color,
+                'emoji' => $account->emoji,
                 'is_active' => $account->is_active,
                 'is_default' => $account->is_default,
             ])->toArray(),
@@ -126,7 +128,7 @@ class BudgetController extends Controller
         $referenceDate = CarbonImmutable::now()->startOfDay();
         $cycleStartDay = (int) (Auth::user()->settings?->budget_cycle_start_day ?? 1);
 
-        $budget->load(['items.category.children']);
+        $budget->load(['items.category.children', 'accounts']);
         $categoryGroups = $budget->budgetCategoryGroups();
 
         [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate, $cycleStartDay);
@@ -184,6 +186,8 @@ class BudgetController extends Controller
                 'name' => $account->name,
                 'currency' => $account->currency,
                 'currency_locale' => Currency::localeFor($account->currency),
+                'color' => $account->color,
+                'emoji' => $account->emoji,
                 'is_active' => $account->is_active,
                 'is_default' => $account->is_default,
             ])->toArray(),

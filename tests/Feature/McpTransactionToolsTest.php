@@ -381,25 +381,26 @@ describe('GetTransactionsTool - Enhanced', function () {
             ->assertDontSee('Non-budget expense');
     });
 
-    it('budget filter excludes off-budget accounts', function () {
+    it('budget filter excludes accounts outside the budget', function () {
         $user = User::factory()->create();
-        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
-        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create();
+        $budgetAccount = Account::factory()->for($user)->create();
+        $otherAccount = Account::factory()->for($user)->create();
         $category = Category::factory()->expense()->for($user)->create();
 
         $budget = Budget::factory()->for($user)->create([
             'anchor_date' => now()->startOfMonth(),
         ]);
         $budget->items()->create(['category_id' => $category->id, 'amount' => 100000]);
+        $budget->accounts()->attach($budgetAccount->id);
 
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $includedAccount->id,
+            'account_id' => $budgetAccount->id,
             'category_id' => $category->id,
             'description' => 'Included budget expense',
             'transaction_date' => now(),
         ]);
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $excludedAccount->id,
+            'account_id' => $otherAccount->id,
             'category_id' => $category->id,
             'description' => 'Off-budget expense',
             'transaction_date' => now(),
@@ -529,7 +530,7 @@ describe('UpdateTransactionTool', function () {
         $this->assertDatabaseHas('transactions', [
             'id' => $transaction->id,
             'description' => 'New description',
-            'transaction_date' => '2026-03-01 00:00:00',
+            'transaction_date' => '2026-03-01',
         ]);
     });
 

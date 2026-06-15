@@ -6,6 +6,7 @@ use App\Concerns\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -21,7 +22,6 @@ class Account extends Model
         'emoji',
         'is_active',
         'is_default',
-        'include_in_budget',
         'sort_order',
     ];
 
@@ -30,7 +30,6 @@ class Account extends Model
         return [
             'is_active' => 'boolean',
             'is_default' => 'boolean',
-            'include_in_budget' => 'boolean',
             'sort_order' => 'integer',
         ];
     }
@@ -43,6 +42,11 @@ class Account extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function budgets(): BelongsToMany
+    {
+        return $this->belongsToMany(Budget::class);
     }
 
     /**

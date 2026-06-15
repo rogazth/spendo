@@ -20,7 +20,7 @@ class GetBudgetMetricsTool extends Tool
         - `custom`: Custom date range (provide start_date and end_date)
 
         Returns budget-level totals and category-level progress (budgeted, spent, remaining, percentages).
-        Spending excludes transactions with exclude_from_budget=true and accounts with include_in_budget=false.
+        Spending excludes transactions with exclude_from_budget=true and only counts transactions from the accounts associated with the budget.
     MARKDOWN;
 
     public function handle(Request $request): Response

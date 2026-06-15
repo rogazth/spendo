@@ -415,10 +415,10 @@ describe('GetBudgetsTool', function () {
         $response->assertOk()->assertSee('Inactive Budget');
     });
 
-    it('excludes off-budget account spending from current cycle progress', function () {
+    it('excludes spending from accounts outside the budget in current cycle progress', function () {
         $user = User::factory()->create();
-        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
-        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create();
+        $budgetAccount = Account::factory()->for($user)->create();
+        $otherAccount = Account::factory()->for($user)->create();
         $cat = Category::factory()->expense()->for($user)->create(['name' => 'Groceries']);
 
         $budget = Budget::factory()->for($user)->create([
@@ -426,15 +426,16 @@ describe('GetBudgetsTool', function () {
             'anchor_date' => now()->startOfMonth(),
         ]);
         $budget->items()->create(['category_id' => $cat->id, 'amount' => 100000]);
+        $budget->accounts()->attach($budgetAccount->id);
 
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $includedAccount->id,
+            'account_id' => $budgetAccount->id,
             'category_id' => $cat->id,
             'amount' => 10000,
             'transaction_date' => now(),
         ]);
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $excludedAccount->id,
+            'account_id' => $otherAccount->id,
             'category_id' => $cat->id,
             'amount' => 90000,
             'transaction_date' => now(),
@@ -510,10 +511,10 @@ describe('GetBudgetMetricsTool', function () {
         $response->assertHasErrors(['start_date and end_date are required']);
     });
 
-    it('excludes off-budget account spending from metrics', function () {
+    it('excludes spending from accounts outside the budget from metrics', function () {
         $user = User::factory()->create();
-        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
-        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create();
+        $budgetAccount = Account::factory()->for($user)->create();
+        $otherAccount = Account::factory()->for($user)->create();
         $cat = Category::factory()->expense()->for($user)->create(['name' => 'Groceries']);
 
         $budget = Budget::factory()->for($user)->create([
@@ -521,15 +522,16 @@ describe('GetBudgetMetricsTool', function () {
             'anchor_date' => now()->startOfMonth(),
         ]);
         $budget->items()->create(['category_id' => $cat->id, 'amount' => 100000]);
+        $budget->accounts()->attach($budgetAccount->id);
 
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $includedAccount->id,
+            'account_id' => $budgetAccount->id,
             'category_id' => $cat->id,
             'amount' => 10000,
             'transaction_date' => now(),
         ]);
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $excludedAccount->id,
+            'account_id' => $otherAccount->id,
             'category_id' => $cat->id,
             'amount' => 90000,
             'transaction_date' => now(),

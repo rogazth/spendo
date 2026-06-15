@@ -138,6 +138,8 @@ export interface Budget extends Model {
     total_spent?: number;
     // Relations
     items?: BudgetItem[];
+    account_ids?: number[];
+    accounts?: Pick<Account, 'id' | 'uuid' | 'name' | 'currency' | 'color' | 'emoji'>[];
 }
 
 // Budget Item model

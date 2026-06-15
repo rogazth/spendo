@@ -175,15 +175,18 @@ describe('GetAccountsTool', function () {
         $response->assertOk()->assertSee('"total_reserved": 0');
     });
 
-    it('currency_summaries does not reduce reserved amounts with off-budget account spending', function () {
+    it('currency_summaries does not reduce reserved amounts with spending from accounts outside the budget', function () {
         $user = User::factory()->create();
-        $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create(['currency' => 'CLP']);
+        $budgetAccount = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $otherAccount = Account::factory()->for($user)->create(['currency' => 'CLP']);
         $category = Category::factory()->for($user)->create();
         $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
+        $budget->accounts()->attach($budgetAccount->id);
 
+        // Spending happens on an account that is NOT part of the budget.
         Transaction::factory()->expense()->for($user)->create([
-            'account_id' => $excludedAccount->id,
+            'account_id' => $otherAccount->id,
             'category_id' => $category->id,
             'amount' => -100000,
             'currency' => 'CLP',
@@ -196,19 +199,26 @@ describe('GetAccountsTool', function () {
         $response->assertOk()->assertSee('"total_reserved": 100000');
     });
 
-    it('currency_summaries excludes include_in_budget=false accounts from budget_balance', function () {
+    it('currency_summaries sums all account balances into budget_balance', function () {
         $user = User::factory()->create();
-        $includedAccount = Account::factory()->for($user)->create(['include_in_budget' => true]);
-        Account::factory()->for($user)->excludedFromBudget()->create();
+        $accountA = Account::factory()->for($user)->create(['currency' => 'CLP']);
+        $accountB = Account::factory()->for($user)->create(['currency' => 'CLP']);
         $category = Category::factory()->for($user)->create();
         $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 50000]);
+        $budget->accounts()->attach($accountA->id);
 
-        // Income only on the included account → budget_balance = 200000
         Transaction::factory()->income()->for($user)->create([
-            'account_id' => $includedAccount->id,
+            'account_id' => $accountA->id,
             'category_id' => $category->id,
             'amount' => 200000,
+            'currency' => 'CLP',
+            'transaction_date' => now(),
+        ]);
+        Transaction::factory()->income()->for($user)->create([
+            'account_id' => $accountB->id,
+            'category_id' => $category->id,
+            'amount' => 100000,
             'currency' => 'CLP',
             'transaction_date' => now(),
         ]);
@@ -216,9 +226,9 @@ describe('GetAccountsTool', function () {
         $response = SpendoServer::actingAs($user)->tool(GetAccountsTool::class);
 
         $response->assertOk()
-            ->assertSee('"budget_balance": 200000')
+            ->assertSee('"budget_balance": 300000')
             ->assertSee('"total_reserved": 50000')
-            ->assertSee('"ready_to_assign": 150000');
+            ->assertSee('"ready_to_assign": 250000');
     });
 });
 

@@ -44,6 +44,8 @@ class StoreBudgetRequest extends FormRequest
             'frequency' => ['required', 'string', Rule::in(['weekly', 'biweekly', 'monthly', 'bimonthly'])],
             'anchor_date' => ['required_unless:frequency,monthly', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:anchor_date'],
+            'account_ids' => ['required', 'array', 'min:1'],
+            'account_ids.*' => ['integer'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.category_id' => ['required', 'integer', 'exists:categories,id', 'distinct'],
             'items.*.amount' => ['required', 'numeric', 'gt:0'],
@@ -63,6 +65,8 @@ class StoreBudgetRequest extends FormRequest
             'anchor_date.required' => 'La fecha de inicio es requerida.',
             'anchor_date.required_unless' => 'La fecha de inicio es requerida.',
             'ends_at.after_or_equal' => 'La fecha de finalización debe ser posterior o igual a la fecha de anclaje.',
+            'account_ids.required' => 'Debes asociar al menos una cuenta al budget.',
+            'account_ids.min' => 'Debes asociar al menos una cuenta al budget.',
             'items.required' => 'Debes agregar al menos una categoría al budget.',
             'items.min' => 'Debes agregar al menos una categoría al budget.',
             'items.*.category_id.required' => 'La categoría es requerida.',
@@ -79,6 +83,8 @@ class StoreBudgetRequest extends FormRequest
             if (! $user) {
                 return;
             }
+
+            $this->validateAccounts($validator, $user);
 
             $items = $this->input('items', []);
             if (! is_array($items) || $items === []) {
@@ -120,5 +126,54 @@ class StoreBudgetRequest extends FormRequest
                 }
             }
         });
+    }
+
+    /**
+     * Budgets draw spending from an explicit set of accounts. Every account must
+     * belong to the user, share the budget currency, and (for now) belong to at
+     * most one budget — enforced here so the pivot can later relax to many.
+     */
+    private function validateAccounts(Validator $validator, User $user): void
+    {
+        $accountIds = collect($this->input('account_ids', []))
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value) => (int) $value)
+            ->unique()
+            ->values();
+
+        if ($accountIds->isEmpty()) {
+            return;
+        }
+
+        $accounts = $user->accounts()
+            ->whereIn('id', $accountIds->all())
+            ->get(['id', 'currency']);
+
+        if ($accounts->count() !== $accountIds->count()) {
+            $validator->errors()->add('account_ids', 'Algunas cuentas no son válidas.');
+
+            return;
+        }
+
+        $currency = $this->input('currency');
+        if ($currency !== null && $accounts->contains(fn ($account) => $account->currency !== $currency)) {
+            $validator->errors()->add('account_ids', 'Todas las cuentas deben ser de la misma moneda que el budget.');
+
+            return;
+        }
+
+        $currentBudgetId = $this->route('budget')?->id;
+        $takenAccountIds = $user->accounts()
+            ->whereIn('accounts.id', $accountIds->all())
+            ->whereHas('budgets', function ($query) use ($currentBudgetId) {
+                if ($currentBudgetId !== null) {
+                    $query->where('budgets.id', '!=', $currentBudgetId);
+                }
+            })
+            ->pluck('accounts.id');
+
+        if ($takenAccountIds->isNotEmpty()) {
+            $validator->errors()->add('account_ids', 'Una o más cuentas ya pertenecen a otro budget.');
+        }
     }
 }

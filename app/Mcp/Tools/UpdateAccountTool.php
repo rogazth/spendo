@@ -31,7 +31,6 @@ class UpdateAccountTool extends Tool
             'emoji' => ['nullable', 'string', 'max:50'],
             'is_active' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
-            'include_in_budget' => ['nullable', 'boolean'],
         ], [
             'account_id.required' => 'Account ID is required. Use GetAccountsTool to find accounts.',
         ]);
@@ -54,7 +53,7 @@ class UpdateAccountTool extends Tool
         }
 
         $data = array_filter(
-            array_intersect_key($validated, array_flip(['name', 'color', 'emoji', 'is_active', 'is_default', 'include_in_budget'])),
+            array_intersect_key($validated, array_flip(['name', 'color', 'emoji', 'is_active', 'is_default'])),
             fn ($value) => $value !== null
         );
 
@@ -83,8 +82,6 @@ class UpdateAccountTool extends Tool
                 ->description('Set active/inactive status'),
             'is_default' => $schema->boolean()
                 ->description('Set as default account'),
-            'include_in_budget' => $schema->boolean()
-                ->description('Include this account balance in budget calculations. Set to false for savings or investment accounts'),
         ];
     }
 }

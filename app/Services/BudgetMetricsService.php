@@ -34,7 +34,7 @@ class BudgetMetricsService
             ->where(function ($q) use ($referenceDate) {
                 $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', $referenceDate->toDateString());
             })
-            ->with(['items.category.children'])
+            ->with(['items.category.children', 'accounts'])
             ->get();
 
         return $activeBudgets->map(fn (Budget $budget) => $this->compute($user, $budget, $referenceDate));
@@ -57,6 +57,10 @@ class BudgetMetricsService
     {
         if (! $budget->relationLoaded('items')) {
             $budget->load('items.category.children');
+        }
+
+        if (! $budget->relationLoaded('accounts')) {
+            $budget->load('accounts');
         }
 
         return $this->compute($user, $budget, $referenceDate);

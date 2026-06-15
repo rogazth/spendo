@@ -54,7 +54,7 @@ class SpendoServer extends Server
 
         - **Accounts**: Create, update, and list bank accounts (simple containers with balance)
         - **Categories**: Create, update, and list hierarchical categories. Transaction direction is determined by signed amounts, not category type.
-        - **Budgets**: Create, update, and list budgets (named groups with category-level caps). Budget spending is scoped by currency and only includes budget-eligible expenses: transactions with `exclude_from_budget=false` from accounts with `include_in_budget=true`.
+        - **Budgets**: Create, update, and list budgets (named groups with category-level caps). Budget spending is scoped by currency and the accounts associated with each budget; it only includes budget-eligible expenses: transactions with `exclude_from_budget=false` from one of the budget's accounts.
         - **Transactions**: Record expenses, income, and transfers. Tag transactions with user-defined labels.
         - **Tags**: Create, update, delete, and list tags. Attach tags to transactions for filtering.
         - **Metrics**: View budget progress, category-level spending, and financial summaries

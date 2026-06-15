@@ -42,26 +42,23 @@ test('index groups accounts by currency with summary aggregates', function () {
         'name' => 'Banco CLP',
         'currency' => 'CLP',
         'is_default' => true,
-        'include_in_budget' => true,
     ]);
-    $clpExcluded = Account::factory()->for($user)->create([
+    $clpSavings = Account::factory()->for($user)->create([
         'name' => 'Ahorro CLP',
         'currency' => 'CLP',
         'is_default' => false,
-        'include_in_budget' => false,
     ]);
     $usd = Account::factory()->for($user)->create([
         'name' => 'Cuenta USD',
         'currency' => 'USD',
         'is_default' => false,
-        'include_in_budget' => true,
     ]);
 
     \App\Models\Transaction::factory()->for($user)->for($clpDefault)->create([
         'amount' => 500000,
         'currency' => 'CLP',
     ]);
-    \App\Models\Transaction::factory()->for($user)->for($clpExcluded)->create([
+    \App\Models\Transaction::factory()->for($user)->for($clpSavings)->create([
         'amount' => 200000,
         'currency' => 'CLP',
     ]);
@@ -77,18 +74,66 @@ test('index groups accounts by currency with summary aggregates', function () {
             ->where('currencySummaries.0.currency', 'CLP')
             ->where('currencySummaries.0.accounts_count', 2)
             ->where('currencySummaries.0.total', 700000)
-            ->where('currencySummaries.0.budgeted_total', 500000)
-            ->where('currencySummaries.0.excluded_total', 200000)
-            ->where('currencySummaries.0.included_count', 1)
-            ->where('currencySummaries.0.excluded_count', 1)
-            ->where('currencySummaries.0.negative_count', 0)
+            ->where('currencySummaries.0.budgeted_total', 0)
+            ->where('currencySummaries.0.reserved_total', 0)
+            ->where('currencySummaries.0.available', 700000)
+            ->has('currencySummaries.0.budget_groups', 0)
+            ->has('currencySummaries.0.unbudgeted_accounts', 2)
             ->where('currencySummaries.1.currency', 'USD')
             ->where('currencySummaries.1.total', -15000)
-            ->where('currencySummaries.1.negative_count', 1)
             ->where('totals.accounts', 3)
             ->where('totals.currencies', 2)
-            ->where('totals.included', 2)
+            ->where('totals.budgeted', 0)
             ->where('totals.default_name', 'Banco CLP')
+        );
+});
+
+test('index reports reserved and available accounting for budgets', function () {
+    $user = User::factory()->create();
+    \App\Models\UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
+
+    $account = Account::factory()->for($user)->create([
+        'name' => 'Banco CLP',
+        'currency' => 'CLP',
+        'is_default' => true,
+    ]);
+    $category = \App\Models\Category::factory()->expense()->for($user)->create();
+
+    \App\Models\Transaction::factory()->for($user)->for($account)->create([
+        'amount' => 500000,
+        'currency' => 'CLP',
+    ]);
+
+    $budget = \App\Models\Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->startOfMonth()->toDateString(),
+    ]);
+    $budget->items()->create(['category_id' => $category->id, 'amount' => 120000]);
+    $budget->accounts()->attach($account->id);
+
+    \App\Models\Transaction::factory()->expense()->for($user)->for($account)->create([
+        'category_id' => $category->id,
+        'amount' => -50000,
+        'currency' => 'CLP',
+        'exclude_from_budget' => false,
+        'transaction_date' => now()->toDateString(),
+    ]);
+
+    // budgeted = 120000, spent = 50000 -> reserved = 70000.
+    // balance = 500000 - 50000 = 450000 -> available = 450000 - 70000 = 380000.
+    $this->actingAs($user)->get('/accounts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currencySummaries.0.budgeted_total', 120000)
+            ->where('currencySummaries.0.reserved_total', 70000)
+            ->where('currencySummaries.0.available', 380000)
+            ->has('currencySummaries.0.budget_groups', 1)
+            ->where('currencySummaries.0.budget_groups.0.budget.name', $budget->name)
+            ->where('currencySummaries.0.budget_groups.0.budgeted', 120000)
+            ->where('currencySummaries.0.budget_groups.0.reserved', 70000)
+            ->where('currencySummaries.0.budget_groups.0.available', 380000)
+            ->where('currencySummaries.0.budget_groups.0.accounts.0.current_balance', 450000)
         );
 });
 
@@ -110,8 +155,8 @@ test('index puts the default account first within its currency group', function 
 
     $this->actingAs($user)->get('/accounts')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('currencySummaries.0.accounts.0.uuid', $default->uuid)
-            ->where('currencySummaries.0.accounts.0.is_default', true)
+            ->where('currencySummaries.0.unbudgeted_accounts.0.uuid', $default->uuid)
+            ->where('currencySummaries.0.unbudgeted_accounts.0.is_default', true)
         );
 });
 

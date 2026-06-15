@@ -26,6 +26,20 @@ class BudgetResource extends JsonResource
             'ends_at' => $this->ends_at?->toDateString(),
             'is_active' => $this->is_active,
             'total_budgeted' => $this->total_budgeted,
+            'account_ids' => $this->whenLoaded(
+                'accounts',
+                fn () => $this->accounts->pluck('id')->values()
+            ),
+            'accounts' => $this->whenLoaded('accounts', function () {
+                return $this->accounts->map(fn ($account) => [
+                    'id' => $account->id,
+                    'uuid' => $account->uuid,
+                    'name' => $account->name,
+                    'currency' => $account->currency,
+                    'color' => $account->color,
+                    'emoji' => $account->emoji,
+                ])->values();
+            }),
             'current_cycle_spent' => $this->when(
                 isset($this->current_cycle_spent),
                 $this->current_cycle_spent

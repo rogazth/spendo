@@ -32,6 +32,10 @@ class UpdateBudgetAction
                 }
             }
 
+            if (array_key_exists('account_ids', $data)) {
+                $budget->accounts()->sync($data['account_ids']);
+            }
+
             return $budget;
         });
     }

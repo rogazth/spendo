@@ -46,11 +46,12 @@ test('dashboard renders for authenticated user', function () {
 // Currency summaries
 // ---------------------------------------------------------------------------
 
-test('cash_on_hand only includes accounts with include_in_budget=true', function () {
+test('cash_on_hand includes all active accounts', function () {
     $user = User::factory()->create();
 
     $main = Account::factory()->for($user)->create(['currency' => 'CLP']);
-    $excluded = Account::factory()->for($user)->excludedFromBudget()->create(['currency' => 'CLP']);
+    $savings = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $inactive = Account::factory()->for($user)->inactive()->create(['currency' => 'CLP']);
 
     Transaction::factory()->income()->for($user)->create([
         'account_id' => $main->id,
@@ -58,8 +59,13 @@ test('cash_on_hand only includes accounts with include_in_budget=true', function
         'currency' => 'CLP',
     ]);
     Transaction::factory()->income()->for($user)->create([
-        'account_id' => $excluded->id,
+        'account_id' => $savings->id,
         'amount' => 5000,
+        'currency' => 'CLP',
+    ]);
+    Transaction::factory()->income()->for($user)->create([
+        'account_id' => $inactive->id,
+        'amount' => 9000,
         'currency' => 'CLP',
     ]);
 
@@ -67,7 +73,7 @@ test('cash_on_hand only includes accounts with include_in_budget=true', function
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('currencySummaries.0.currency', 'CLP')
-            ->where('currencySummaries.0.cash_on_hand', 1000)
+            ->where('currencySummaries.0.cash_on_hand', 6000)
         );
 });
 
@@ -278,7 +284,7 @@ test('separate summary entries per currency', function () {
 
     $user = User::factory()->create();
     Account::factory()->for($user)->create(['currency' => 'CLP']);
-    Account::factory()->for($user)->usd()->create(['include_in_budget' => true]);
+    Account::factory()->for($user)->usd()->create();
 
     $catClp = Category::factory()->expense()->for($user)->create();
     $catUsd = Category::factory()->expense()->for($user)->create();

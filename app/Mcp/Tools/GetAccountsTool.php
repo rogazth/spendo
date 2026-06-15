@@ -22,7 +22,7 @@ class GetAccountsTool extends Tool
         Account balances are the signed sum of transactions, including transfer legs.
         Includes currency_summaries showing budget_balance, total_reserved, and ready_to_assign per currency.
         total_reserved = sum of unspent budget item amounts in the current cycle (max(0, budgeted - spent) per item).
-        Accounts with include_in_budget=false (e.g. savings) are excluded from the budget summary.
+        budget_balance is the sum of all account balances for the currency. Budget eligibility is now per-budget via the account_budget pivot, not a global account flag.
         Optionally filter by active status.
     MARKDOWN;
 
@@ -73,9 +73,7 @@ class GetAccountsTool extends Tool
 
         $summaries = [];
         foreach ($accounts->groupBy('currency') as $currency => $currencyAccounts) {
-            $budgetBalance = $currencyAccounts
-                ->where('include_in_budget', true)
-                ->sum('current_balance');
+            $budgetBalance = $currencyAccounts->sum('current_balance');
 
             $totalReserved = $reservedPerCurrency[$currency] ?? 0;
 

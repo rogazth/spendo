@@ -17,6 +17,7 @@ beforeEach(function () {
 
 test('creates a budget with multiple categories', function () {
     $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $categoryA = Category::factory()->expense()->for($user)->create();
     $categoryB = Category::factory()->expense()->for($user)->create();
 
@@ -27,6 +28,7 @@ test('creates a budget with multiple categories', function () {
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
         'ends_at' => null,
+        'account_ids' => [$account->id],
         'items' => [
             ['category_id' => $categoryA->id, 'amount' => 100000],
             ['category_id' => $categoryB->id, 'amount' => 60000],
@@ -44,10 +46,52 @@ test('creates a budget with multiple categories', function () {
         'budget_id' => $budget->id,
         'category_id' => $categoryB->id,
     ]);
+    $this->assertDatabaseHas('account_budget', [
+        'budget_id' => $budget->id,
+        'account_id' => $account->id,
+    ]);
+});
+
+test('rejects a budget whose account belongs to another budget', function () {
+    $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $existing = Budget::factory()->for($user)->create(['currency' => 'CLP']);
+    $existing->accounts()->attach($account->id);
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Otro budget',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'account_ids' => [$account->id],
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 1000],
+        ],
+    ])->assertSessionHasErrors('account_ids');
+});
+
+test('rejects a budget whose account currency differs', function () {
+    $user = User::factory()->create();
+    $usdAccount = Account::factory()->for($user)->usd()->create();
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Budget CLP',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'account_ids' => [$usdAccount->id],
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 1000],
+        ],
+    ])->assertSessionHasErrors('account_ids');
 });
 
 test('rejects overlapping parent and child categories in the same budget', function () {
     $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $parentCategory = Category::factory()->expense()->for($user)->create([
         'parent_id' => null,
         'name' => 'Comida',
@@ -62,6 +106,7 @@ test('rejects overlapping parent and child categories in the same budget', funct
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
+        'account_ids' => [$account->id],
         'items' => [
             ['category_id' => $parentCategory->id, 'amount' => 100000],
             ['category_id' => $childCategory->id, 'amount' => 50000],
@@ -200,15 +245,14 @@ test('budget spending excludes income and transfers (only expenses count)', func
     Carbon::setTestNow();
 });
 
-test('budget spending excludes transactions from accounts excluded from budget', function () {
+test('budget spending excludes transactions from accounts not associated with the budget', function () {
     Carbon::setTestNow('2026-02-20 10:00:00');
 
     $user = User::factory()->create();
     $includedAccount = Account::factory()->for($user)->create([
         'currency' => 'CLP',
-        'include_in_budget' => true,
     ]);
-    $excludedAccount = Account::factory()->for($user)->excludedFromBudget()->create([
+    $excludedAccount = Account::factory()->for($user)->create([
         'currency' => 'CLP',
     ]);
     $category = Category::factory()->expense()->for($user)->create();
@@ -219,6 +263,7 @@ test('budget spending excludes transactions from accounts excluded from budget',
         'anchor_date' => '2026-02-01',
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 1000]);
+    $budget->accounts()->attach($includedAccount->id);
 
     Transaction::factory()->expense()->for($user)->create([
         'account_id' => $includedAccount->id,

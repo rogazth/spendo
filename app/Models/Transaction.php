@@ -87,13 +87,13 @@ class Transaction extends Model
         return $query
             ->where('amount', '<', 0)
             ->where('type', TransactionType::Regular)
-            ->where('exclude_from_budget', false)
-            ->whereHas('account', fn (Builder $query) => $query->where('include_in_budget', true));
+            ->where('exclude_from_budget', false);
     }
 
     public function scopeForBudget(Builder $query, Budget $budget): Builder
     {
         $categoryIds = $budget->budgetCategoryIds();
+        $accountIds = $budget->accountIds();
 
         $query->where('currency', $budget->currency);
 
@@ -101,7 +101,16 @@ class Transaction extends Model
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereIn('category_id', $categoryIds);
+        $query->whereIn('category_id', $categoryIds);
+
+        // Budgets draw from an explicit set of accounts. A budget with no
+        // associated accounts falls back to all accounts in its currency, which
+        // preserves legacy behaviour for budgets created before account scoping.
+        if ($accountIds !== []) {
+            $query->whereIn('account_id', $accountIds);
+        }
+
+        return $query;
     }
 
     public function scopeWithinDateRange(

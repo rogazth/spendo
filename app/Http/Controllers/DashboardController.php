@@ -24,7 +24,6 @@ class DashboardController extends Controller
             ->get();
 
         $cashByCurrency = $accounts
-            ->where('include_in_budget', true)
             ->groupBy('currency')
             ->map(fn ($group) => (float) $group->sum('current_balance'));
 

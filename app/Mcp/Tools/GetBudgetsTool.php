@@ -18,7 +18,7 @@ class GetBudgetsTool extends Tool
     protected string $description = <<<'MARKDOWN'
         List all budgets with their current cycle progress.
         Returns budget details including total budgeted, spent amount, and remaining percentage.
-        Spending excludes transactions with exclude_from_budget=true and accounts with include_in_budget=false.
+        Spending excludes transactions with exclude_from_budget=true and only counts transactions from the accounts associated with each budget.
     MARKDOWN;
 
     public function handle(Request $request): Response

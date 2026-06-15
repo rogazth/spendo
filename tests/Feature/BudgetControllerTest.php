@@ -105,6 +105,7 @@ test('index includes active accounts only', function () {
 
 test('store creates a budget with items', function () {
     $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
     $categoryA = Category::factory()->expense()->for($user)->create();
     $categoryB = Category::factory()->expense()->for($user)->create();
 
@@ -113,6 +114,7 @@ test('store creates a budget with items', function () {
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
+        'account_ids' => [$account->id],
         'items' => [
             ['category_id' => $categoryA->id, 'amount' => 100000],
             ['category_id' => $categoryB->id, 'amount' => 50000],
@@ -127,6 +129,7 @@ test('store creates a budget with items', function () {
 
 test('store creates budget with correct currency', function () {
     $user = User::factory()->create();
+    $account = Account::factory()->for($user)->usd()->create();
     $category = Category::factory()->expense()->for($user)->create();
 
     $this->actingAs($user)->post('/budgets', [
@@ -134,6 +137,7 @@ test('store creates budget with correct currency', function () {
         'currency' => 'USD',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
+        'account_ids' => [$account->id],
         'items' => [['category_id' => $category->id, 'amount' => 80000]],
     ])->assertRedirect('/budgets');
 
@@ -302,12 +306,14 @@ test('update modifies the budget and replaces items', function () {
         'anchor_date' => '2026-02-01',
     ]);
     $budget->items()->create(['category_id' => $original->id, 'amount' => 100000]);
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
 
     $this->actingAs($user)->put("/budgets/{$budget->uuid}", [
         'name' => 'Editado',
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-01',
+        'account_ids' => [$account->id],
         'items' => [['category_id' => $replacement->id, 'amount' => 250000]],
     ])->assertRedirect("/budgets/{$budget->uuid}");
 
@@ -334,12 +340,14 @@ test('update returns 403 for another user budget', function () {
         'anchor_date' => now()->toDateString(),
     ]);
     $budget->items()->create(['category_id' => $ownerCategory->id, 'amount' => 10000]);
+    $otherAccount = Account::factory()->for($other)->create(['currency' => 'CLP']);
 
     $this->actingAs($other)->put("/budgets/{$budget->uuid}", [
         'name' => 'Hackeado',
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
+        'account_ids' => [$otherAccount->id],
         'items' => [['category_id' => $otherCategory->id, 'amount' => 1000]],
     ])->assertForbidden();
 });

@@ -28,6 +28,8 @@ class CreateBudgetAction
                 ]);
             }
 
+            $budget->accounts()->sync($data['account_ids'] ?? []);
+
             return $budget;
         });
     }
