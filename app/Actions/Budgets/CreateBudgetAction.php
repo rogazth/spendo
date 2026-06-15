@@ -13,6 +13,8 @@ class CreateBudgetAction
         return DB::transaction(function () use ($user, $data) {
             $budget = $user->budgets()->create([
                 'name' => $data['name'],
+                'color' => $data['color'] ?? '#6366F1',
+                'emoji' => $data['emoji'] ?? null,
                 'description' => $data['description'] ?? null,
                 'currency' => $data['currency'],
                 'frequency' => $data['frequency'],

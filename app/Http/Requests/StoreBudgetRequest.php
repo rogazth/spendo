@@ -39,6 +39,8 @@ class StoreBudgetRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'emoji' => ['nullable', 'string', 'max:16'],
             'description' => ['nullable', 'string', 'max:2000'],
             'currency' => ['required', 'string', 'size:3', Rule::in(Currency::codes())],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'biweekly', 'monthly', 'bimonthly'])],
@@ -59,6 +61,7 @@ class StoreBudgetRequest extends FormRequest
     {
         return [
             'name.required' => 'El nombre del budget es requerido.',
+            'color.regex' => 'El color debe ser un código hexadecimal válido (ej: #FF5733).',
             'currency.required' => 'La moneda del budget es requerida.',
             'frequency.required' => 'La frecuencia del budget es requerida.',
             'frequency.in' => 'La frecuencia seleccionada no es válida.',

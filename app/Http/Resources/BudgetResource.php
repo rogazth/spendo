@@ -19,6 +19,8 @@ class BudgetResource extends JsonResource
             'uuid' => $this->uuid,
             'user_id' => $this->user_id,
             'name' => $this->name,
+            'color' => $this->color,
+            'emoji' => $this->emoji,
             'description' => $this->description,
             'currency' => $this->currency,
             'frequency' => $this->frequency,

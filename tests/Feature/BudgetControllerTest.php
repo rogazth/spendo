@@ -127,6 +127,76 @@ test('store creates a budget with items', function () {
     $this->assertDatabaseHas('budget_items', ['budget_id' => $budget->id, 'category_id' => $categoryB->id]);
 });
 
+test('store persists color and emoji', function () {
+    $user = User::factory()->create();
+    $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Budget con estilo',
+        'color' => '#10B981',
+        'emoji' => '🏠',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'account_ids' => [$account->id],
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 100000],
+        ],
+    ])->assertRedirect('/budgets');
+
+    $this->assertDatabaseHas('budgets', [
+        'name' => 'Budget con estilo',
+        'color' => '#10B981',
+        'emoji' => '🏠',
+    ]);
+});
+
+test('store rejects invalid color', function () {
+    $user = User::factory()->create();
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->post('/budgets', [
+        'name' => 'Budget color malo',
+        'color' => 'not-a-color',
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->toDateString(),
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 100000],
+        ],
+    ])->assertSessionHasErrors('color');
+});
+
+test('update modifies color and emoji', function () {
+    $user = User::factory()->create();
+    $budget = Budget::factory()->for($user)->create([
+        'color' => '#6366F1',
+        'emoji' => '💰',
+    ]);
+    $account = Account::factory()->for($user)->create(['currency' => $budget->currency]);
+    $category = Category::factory()->expense()->for($user)->create();
+
+    $this->actingAs($user)->put("/budgets/{$budget->uuid}", [
+        'name' => $budget->name,
+        'color' => '#EF4444',
+        'emoji' => '✈️',
+        'currency' => $budget->currency,
+        'frequency' => $budget->frequency,
+        'anchor_date' => $budget->anchor_date->toDateString(),
+        'account_ids' => [$account->id],
+        'items' => [
+            ['category_id' => $category->id, 'amount' => 100000],
+        ],
+    ])->assertRedirect("/budgets/{$budget->uuid}");
+
+    $this->assertDatabaseHas('budgets', [
+        'id' => $budget->id,
+        'color' => '#EF4444',
+        'emoji' => '✈️',
+    ]);
+});
+
 test('store creates budget with correct currency', function () {
     $user = User::factory()->create();
     $account = Account::factory()->for($user)->usd()->create();

@@ -16,6 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/ui/money-input';
 import {
@@ -31,6 +32,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { DEFAULT_COLORS } from '@/constants/colors';
 import { cn } from '@/lib/utils';
 import {
     BUDGET_FREQUENCIES,
@@ -51,11 +53,14 @@ interface BudgetFormDialogProps {
 
 interface BudgetFormData {
     name: string;
+    color: string;
+    emoji: string | null;
     description: string;
     currency: string;
     frequency: BudgetFrequency;
     anchor_date: Date;
     ends_at: Date | null;
+    account_ids: number[];
     items: Array<{
         category_id: number | null;
         amount: number | null;
@@ -69,6 +74,8 @@ function buildInitialData(
     if (budget) {
         return {
             name: budget.name,
+            color: budget.color ?? '#6366F1',
+            emoji: budget.emoji ?? null,
             description: budget.description ?? '',
             currency: budget.currency,
             frequency: budget.frequency,
@@ -76,6 +83,9 @@ function buildInitialData(
             ends_at: budget.ends_at
                 ? new Date(`${budget.ends_at}T00:00:00`)
                 : null,
+            account_ids:
+                budget.account_ids ??
+                (budget.accounts ?? []).map((account) => account.id),
             items: (budget.items ?? []).map((item) => ({
                 category_id: item.category_id,
                 amount: item.amount,
@@ -85,11 +95,14 @@ function buildInitialData(
 
     return {
         name: '',
+        color: '#6366F1',
+        emoji: null,
         description: '',
         currency: defaultCurrency,
         frequency: 'monthly',
         anchor_date: new Date(),
         ends_at: null,
+        account_ids: [],
         items: [{ category_id: null, amount: null }],
     };
 }
@@ -139,6 +152,19 @@ export function BudgetFormDialog({
         );
     };
 
+    const currencyAccounts = accounts.filter(
+        (account) => account.currency === data.currency,
+    );
+
+    const toggleAccount = (accountId: number) => {
+        setData(
+            'account_ids',
+            data.account_ids.includes(accountId)
+                ? data.account_ids.filter((id) => id !== accountId)
+                : [...data.account_ids, accountId],
+        );
+    };
+
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
 
@@ -151,6 +177,7 @@ export function BudgetFormDialog({
                     ? format(formData.ends_at, 'yyyy-MM-dd')
                     : null,
                 description: formData.description || null,
+                account_ids: formData.account_ids,
                 items: formData.items
                     .filter(
                         (item) =>
@@ -193,9 +220,12 @@ export function BudgetFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[95vh] gap-4 overflow-y-auto sm:max-w-[680px]">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
+            <DialogContent className="grid-rows-1 overflow-hidden p-0! max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:rounded-none! max-sm:border-0 sm:max-h-[95vh] sm:max-w-[680px]">
+                <form
+                    onSubmit={handleSubmit}
+                    className="flex min-h-0 flex-col"
+                >
+                    <DialogHeader className="px-6 pt-6 max-sm:px-4">
                         <DialogTitle>
                             {isEdit ? 'Editar Budget' : 'Nuevo Budget'}
                         </DialogTitle>
@@ -206,19 +236,35 @@ export function BudgetFormDialog({
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-4 py-4">
+                    <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-6 py-4 max-sm:px-4">
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="budget_name">Nombre</Label>
-                                <input
-                                    id="budget_name"
-                                    value={data.name}
-                                    onChange={(event) =>
-                                        setData('name', event.target.value)
-                                    }
-                                    placeholder="Ej: Comida hogar"
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                />
+                                <div className="grid grid-cols-[3.5rem_1fr] gap-2">
+                                    <Input
+                                        id="budget_emoji"
+                                        aria-label="Emoji"
+                                        value={data.emoji ?? ''}
+                                        onChange={(event) =>
+                                            setData(
+                                                'emoji',
+                                                event.target.value || null,
+                                            )
+                                        }
+                                        placeholder="💰"
+                                        maxLength={8}
+                                        className="h-9 text-center text-lg"
+                                    />
+                                    <input
+                                        id="budget_name"
+                                        value={data.name}
+                                        onChange={(event) =>
+                                            setData('name', event.target.value)
+                                        }
+                                        placeholder="Ej: Comida hogar"
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                    />
+                                </div>
                                 <InputError message={errors.name} />
                             </div>
 
@@ -257,7 +303,19 @@ export function BudgetFormDialog({
                                 <Select
                                     value={data.currency}
                                     onValueChange={(value) => {
-                                        setData('currency', value);
+                                        setData((previous) => ({
+                                            ...previous,
+                                            currency: value,
+                                            account_ids:
+                                                previous.account_ids.filter(
+                                                    (id) =>
+                                                        accounts.find(
+                                                            (account) =>
+                                                                account.id ===
+                                                                id,
+                                                        )?.currency === value,
+                                                ),
+                                        }));
                                     }}
                                 >
                                     <SelectTrigger id="currency">
@@ -401,6 +459,67 @@ export function BudgetFormDialog({
                             <InputError message={errors.description} />
                         </div>
 
+                        <div className="space-y-2">
+                            <Label>Cuentas</Label>
+                            <p className="text-xs text-muted-foreground">
+                                El gasto de este budget se mide solo sobre las
+                                cuentas seleccionadas.
+                            </p>
+                            {currencyAccounts.length === 0 ? (
+                                <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                                    No hay cuentas en {data.currency}.
+                                </p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {currencyAccounts.map((account) => {
+                                        const selected =
+                                            data.account_ids.includes(
+                                                account.id,
+                                            );
+                                        return (
+                                            <button
+                                                key={account.id}
+                                                type="button"
+                                                onClick={() =>
+                                                    toggleAccount(account.id)
+                                                }
+                                                className={cn(
+                                                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
+                                                    selected
+                                                        ? 'border-foreground bg-foreground text-background'
+                                                        : 'border-input bg-background text-foreground hover:bg-muted',
+                                                )}
+                                            >
+                                                {account.emoji ?? '💳'}
+                                                {account.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <InputError message={errors.account_ids} />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Color</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {DEFAULT_COLORS.map((color) => (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        onClick={() => setData('color', color)}
+                                        className={`h-8 w-8 rounded-full border-2 ${
+                                            data.color === color
+                                                ? 'border-foreground'
+                                                : 'border-transparent'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                    />
+                                ))}
+                            </div>
+                            <InputError message={errors.color} />
+                        </div>
+
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <Label>Categorías y montos máximos</Label>
@@ -466,15 +585,20 @@ export function BudgetFormDialog({
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="border-t bg-background px-6 py-4 max-sm:flex-row max-sm:px-4">
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
+                            className="max-sm:flex-1"
                         >
                             Cancelar
                         </Button>
-                        <Button type="submit" disabled={processing}>
+                        <Button
+                            type="submit"
+                            disabled={processing}
+                            className="max-sm:flex-1"
+                        >
                             {processing
                                 ? 'Guardando...'
                                 : isEdit

@@ -58,9 +58,8 @@ export function BudgetCard({ budget }: BudgetCardProps) {
     const percentage = budget.current_cycle_percentage ?? 0;
     const tier = resolveTier(percentage);
 
-    const firstItem = budget.items?.[0];
-    const emoji = firstItem?.category?.emoji ?? '💰';
-    const color = firstItem?.category?.color ?? '#94a3b8';
+    const emoji = budget.emoji ?? budget.items?.[0]?.category?.emoji ?? '💰';
+    const color = budget.color ?? budget.items?.[0]?.category?.color ?? '#94a3b8';
 
     const overBudget = percentage >= 100;
     const nearLimit = percentage >= 80 && percentage < 100;

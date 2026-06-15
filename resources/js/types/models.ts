@@ -123,6 +123,8 @@ export function isIncome(tx: Pick<Transaction, 'amount' | 'type'>): boolean {
 export interface Budget extends Model {
     user_id: number;
     name: string;
+    color: string;
+    emoji: string | null;
     description: string | null;
     currency: string;
     frequency: BudgetFrequency;

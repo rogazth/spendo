@@ -17,6 +17,8 @@ class BudgetFactory extends Factory
         return [
             'user_id' => User::factory(),
             'name' => now()->format('F Y'),
+            'color' => fake()->randomElement(['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']),
+            'emoji' => fake()->optional()->randomElement(['💰', '🏠', '🍔', '✈️', '🎯']),
             'description' => fake()->optional()->sentence(),
             'currency' => 'CLP',
             'frequency' => 'monthly',

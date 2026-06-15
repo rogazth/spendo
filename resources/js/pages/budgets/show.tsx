@@ -95,7 +95,7 @@ export default function BudgetShow({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={budget.name} />
 
-            <div className="flex flex-1 flex-col gap-6 p-6">
+            <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <div className="flex items-center gap-1">
@@ -109,6 +109,16 @@ export default function BudgetShow({
                                     <ArrowLeftIcon />
                                 </Link>
                             </Button>
+                            <span
+                                className="flex size-8 flex-shrink-0 items-center justify-center rounded-full text-base"
+                                style={{
+                                    backgroundColor: `${budget.color ?? '#6366F1'}1A`,
+                                    color: budget.color ?? '#6366F1',
+                                }}
+                                aria-hidden
+                            >
+                                {budget.emoji ?? '💰'}
+                            </span>
                             <h1 className="text-foreground truncate text-2xl font-bold tracking-tight">
                                 {budget.name}
                             </h1>
