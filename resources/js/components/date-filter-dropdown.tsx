@@ -44,25 +44,16 @@ export function DateFilterDropdown({
             onChange({ dateFrom: '', dateTo: '' });
         }
     };
-    const [dateMode, setDateMode] = useState<'single' | 'range'>(
-        dateFrom && dateTo && dateFrom !== dateTo ? 'range' : 'single',
-    );
+    const [pendingStart, setPendingStart] = useState<Date | undefined>();
 
-    const singleDate = useMemo(
-        () =>
-            dateFrom && dateFrom === dateTo
-                ? parseLocalDate(dateFrom)
-                : undefined,
-        [dateFrom, dateTo],
-    );
-
-    const rangeDate = useMemo<DateRange | undefined>(() => {
-        if (!dateFrom || !dateTo || dateFrom === dateTo) return undefined;
+    const selectedRange = useMemo<DateRange | undefined>(() => {
+        if (pendingStart) return { from: pendingStart, to: undefined };
+        if (!dateFrom || !dateTo) return undefined;
         const from = parseLocalDate(dateFrom);
         const to = parseLocalDate(dateTo);
         if (!from || !to) return undefined;
         return { from, to };
-    }, [dateFrom, dateTo]);
+    }, [pendingStart, dateFrom, dateTo]);
 
     const dateValue = useMemo(() => {
         if (!dateFrom || !dateTo) return undefined;
@@ -127,100 +118,20 @@ export function DateFilterDropdown({
             label="Fecha"
             value={pillValue}
             onClear={clearDates}
-            contentClassName="w-[340px] max-w-[calc(100vw-2rem)] p-0 sm:w-[520px]"
+            contentClassName="w-[340px] max-w-[calc(100vw-2rem)] p-0 sm:w-[300px]"
         >
             {({ close }) => {
                 const applyQuickRange = (from: Date, to: Date) => {
                     const fromValue = format(from, 'yyyy-MM-dd');
                     const toValue = format(to, 'yyyy-MM-dd');
+                    setPendingStart(undefined);
                     onChange({ dateFrom: fromValue, dateTo: toValue });
-                    setDateMode(fromValue === toValue ? 'single' : 'range');
                     close();
                 };
 
                 return (
-                    <div className="flex flex-col gap-3 p-3 sm:flex-row">
-                        <div>
-                            <div className="mb-2 inline-flex rounded-md border p-1">
-                                <Button
-                                    type="button"
-                                    variant={
-                                        dateMode === 'single'
-                                            ? 'secondary'
-                                            : 'ghost'
-                                    }
-                                    size="sm"
-                                    onClick={() => setDateMode('single')}
-                                >
-                                    Día
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant={
-                                        dateMode === 'range'
-                                            ? 'secondary'
-                                            : 'ghost'
-                                    }
-                                    size="sm"
-                                    onClick={() => setDateMode('range')}
-                                >
-                                    Rango
-                                </Button>
-                            </div>
-                            {dateMode === 'single' ? (
-                                <Calendar
-                                    mode="single"
-                                    selected={singleDate}
-                                    onSelect={(date) => {
-                                        if (!date) {
-                                            clearDates();
-                                            return;
-                                        }
-                                        const formatted = format(
-                                            date,
-                                            'yyyy-MM-dd',
-                                        );
-                                        onChange({
-                                            dateFrom: formatted,
-                                            dateTo: formatted,
-                                        });
-                                        close();
-                                    }}
-                                    initialFocus
-                                />
-                            ) : (
-                                <Calendar
-                                    mode="range"
-                                    selected={rangeDate}
-                                    onSelect={(range) => {
-                                        if (!range?.from) {
-                                            clearDates();
-                                            return;
-                                        }
-                                        const fromValue = format(
-                                            range.from,
-                                            'yyyy-MM-dd',
-                                        );
-                                        const toValue = format(
-                                            range.to ?? range.from,
-                                            'yyyy-MM-dd',
-                                        );
-                                        onChange({
-                                            dateFrom: fromValue,
-                                            dateTo: toValue,
-                                        });
-                                        if (range.to) {
-                                            close();
-                                        }
-                                    }}
-                                    initialFocus
-                                />
-                            )}
-                        </div>
-                        <div className="flex min-w-[180px] flex-col gap-2 border-t pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-3">
-                            <span className="text-muted-foreground text-xs uppercase">
-                                Rápidos
-                            </span>
+                    <div className="flex flex-col gap-3 px-4 pt-4 sm:pb-4">
+                        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
                             {quickOptions.map((option) => (
                                 <Button
                                     key={option.key}
@@ -228,10 +139,10 @@ export function DateFilterDropdown({
                                     variant={
                                         selectedQuickKey === option.key
                                             ? 'secondary'
-                                            : 'ghost'
+                                            : 'outline'
                                     }
                                     size="sm"
-                                    className="justify-start"
+                                    className="h-8 shrink-0 rounded-full px-3"
                                     onClick={() =>
                                         applyQuickRange(option.from, option.to)
                                     }
@@ -239,19 +150,33 @@ export function DateFilterDropdown({
                                     {option.label}
                                 </Button>
                             ))}
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="justify-start"
-                                onClick={() => {
-                                    clearDates();
-                                    close();
-                                }}
-                            >
-                                Limpiar
-                            </Button>
                         </div>
+
+                        <Calendar
+                            mode="range"
+                            selected={selectedRange}
+                            onSelect={(_range, clickedDay) => {
+                                if (!clickedDay) return;
+                                if (!pendingStart) {
+                                    setPendingStart(clickedDay);
+                                    return;
+                                }
+                                let start = pendingStart;
+                                let end = clickedDay;
+                                if (end < start) {
+                                    [start, end] = [end, start];
+                                }
+                                setPendingStart(undefined);
+                                onChange({
+                                    dateFrom: format(start, 'yyyy-MM-dd'),
+                                    dateTo: format(end, 'yyyy-MM-dd'),
+                                });
+                                close();
+                            }}
+                            className="w-full !p-0"
+                            classNames={{ root: 'w-full' }}
+                            initialFocus
+                        />
                     </div>
                 );
             }}

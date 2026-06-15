@@ -1,22 +1,59 @@
-import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { CategoryAvatar } from '@/components/categories/category-avatar';
-import { Button } from '@/components/ui/button';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from '@/components/ui/command';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { SelectField } from '@/components/ui/select-field';
+import { SelectList, type SelectOption } from '@/components/ui/select-list';
 import type { Category } from '@/types';
+
+export function toCategoryOptions(
+    categories: Category[],
+    parentsOnly = false,
+): SelectOption[] {
+    return categories.map((parent) => ({
+        id: parent.id,
+        label: parent.name,
+        keywords: [parent.name],
+        leading: (
+            <CategoryAvatar
+                color={parent.color}
+                emoji={parent.emoji}
+                size="md"
+            />
+        ),
+        children: parentsOnly
+            ? undefined
+            : parent.children?.map((child) => ({
+                  id: child.id,
+                  label: child.name,
+                  keywords: [child.name, parent.name],
+                  leading: (
+                      <CategoryAvatar
+                          color={child.color}
+                          emoji={child.emoji}
+                          size="md"
+                      />
+                  ),
+              })),
+    }));
+}
+
+function findOption(
+    options: SelectOption[],
+    value: number | null,
+): SelectOption | null {
+    if (value === null) {
+        return null;
+    }
+    for (const option of options) {
+        if (option.id === value) {
+            return option;
+        }
+        const child = option.children?.find((c) => c.id === value);
+        if (child) {
+            return child;
+        }
+    }
+    return null;
+}
 
 interface CategoryPickerProps {
     categories: Category[];
@@ -33,43 +70,6 @@ interface CategoryPickerProps {
     clearLabel?: string;
 }
 
-interface SelectedCategory {
-    id: number;
-    name: string;
-    color: string;
-    emoji: string | null;
-    depth: 0 | 1;
-}
-
-function findCategory(
-    categories: Category[],
-    value: number | null,
-): SelectedCategory | null {
-    if (value === null) return null;
-    for (const parent of categories) {
-        if (parent.id === value) {
-            return {
-                id: parent.id,
-                name: parent.name,
-                color: parent.color,
-                emoji: parent.emoji,
-                depth: 0,
-            };
-        }
-        const child = parent.children?.find((c) => c.id === value);
-        if (child) {
-            return {
-                id: child.id,
-                name: child.name,
-                color: child.color,
-                emoji: child.emoji,
-                depth: 1,
-            };
-        }
-    }
-    return null;
-}
-
 export function CategoryPicker({
     categories,
     value,
@@ -84,128 +84,76 @@ export function CategoryPicker({
     allowClear = false,
     clearLabel = 'Sin categoría',
 }: CategoryPickerProps) {
-    const [open, setOpen] = useState(false);
-    const selected = useMemo(
-        () => findCategory(categories, value),
-        [categories, value],
+    const options = useMemo(
+        () => toCategoryOptions(categories, parentsOnly),
+        [categories, parentsOnly],
     );
+    const selected = useMemo(() => findOption(options, value), [options, value]);
 
     return (
-        <Popover open={open} onOpenChange={setOpen} modal>
-            <PopoverTrigger asChild>
-                <Button
-                    id={id}
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    disabled={disabled}
-                    className={cn(
-                        'w-full justify-between font-normal',
-                        !selected && 'text-muted-foreground',
-                        triggerClassName,
-                    )}
-                >
-                    {selected ? (
-                        <span className="flex min-w-0 items-center gap-2">
-                            <CategoryAvatar
-                                color={selected.color}
-                                emoji={selected.emoji}
-                            />
-                            <span className="truncate text-sm">
-                                {selected.name}
-                            </span>
+        <SelectField
+            id={id}
+            disabled={disabled}
+            placeholder={placeholder}
+            title={placeholder}
+            triggerClassName={triggerClassName}
+            value={
+                selected ? (
+                    <>
+                        {selected.leading}
+                        <span className="truncate text-sm">
+                            {selected.label}
                         </span>
-                    ) : (
-                        <span className="text-sm">{placeholder}</span>
-                    )}
-                    <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                className="w-[var(--radix-popover-trigger-width)] min-w-[260px] p-0"
-                align="start"
-            >
-                <Command>
-                    <CommandInput placeholder={searchPlaceholder} />
-                    <CommandList>
-                        <CommandEmpty>{emptyMessage}</CommandEmpty>
-                        <CommandGroup>
-                            {allowClear && (
-                                <CommandItem
-                                    value="category-none"
-                                    keywords={['ninguna', 'sin', clearLabel]}
-                                    onSelect={() => {
-                                        onChange(null);
-                                        setOpen(false);
-                                    }}
-                                    className="gap-2 text-muted-foreground"
-                                >
-                                    <span className="flex-1 truncate">
-                                        {clearLabel}
-                                    </span>
-                                    {value === null && (
-                                        <CheckIcon className="size-4 shrink-0 text-foreground" />
-                                    )}
-                                </CommandItem>
-                            )}
-                            {categories.map((parent) => (
-                                <Fragment key={parent.id}>
-                                    <CommandItem
-                                        value={`category-${parent.id}`}
-                                        keywords={[parent.name]}
-                                        onSelect={() => {
-                                            onChange(parent.id);
-                                            setOpen(false);
-                                        }}
-                                        className="gap-2"
-                                    >
-                                        <CategoryAvatar
-                                            color={parent.color}
-                                            emoji={parent.emoji}
-                                            size="md"
-                                        />
-                                        <span className="flex-1 truncate">
-                                            {parent.name}
-                                        </span>
-                                        {selected?.id === parent.id && (
-                                            <CheckIcon className="size-4 shrink-0 text-foreground" />
-                                        )}
-                                    </CommandItem>
-                                    {!parentsOnly &&
-                                        parent.children?.map((child) => (
-                                            <CommandItem
-                                                key={child.id}
-                                                value={`category-${child.id}`}
-                                                keywords={[
-                                                    child.name,
-                                                    parent.name,
-                                                ]}
-                                                onSelect={() => {
-                                                    onChange(child.id);
-                                                    setOpen(false);
-                                                }}
-                                                className="gap-2 pl-8"
-                                            >
-                                                <CategoryAvatar
-                                                    color={child.color}
-                                                    emoji={child.emoji}
-                                                    size="md"
-                                                />
-                                                <span className="flex-1 truncate">
-                                                    {child.name}
-                                                </span>
-                                                {selected?.id === child.id && (
-                                                    <CheckIcon className="size-4 shrink-0 text-foreground" />
-                                                )}
-                                            </CommandItem>
-                                        ))}
-                                </Fragment>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                    </>
+                ) : undefined
+            }
+        >
+            {({ close }) => (
+                <SelectList
+                    mode="single"
+                    options={options}
+                    value={value}
+                    onChange={onChange}
+                    onSelect={close}
+                    searchPlaceholder={searchPlaceholder}
+                    emptyMessage={emptyMessage}
+                    clearOption={
+                        allowClear
+                            ? { label: clearLabel, keywords: ['ninguna', 'sin'] }
+                            : undefined
+                    }
+                />
+            )}
+        </SelectField>
+    );
+}
+
+interface CategoryMultiSelectProps {
+    categories: Category[];
+    value: number[];
+    onChange: (ids: number[]) => void;
+    searchPlaceholder?: string;
+    emptyMessage?: string;
+}
+
+export function CategoryMultiSelect({
+    categories,
+    value,
+    onChange,
+    searchPlaceholder = 'Buscar categoría...',
+    emptyMessage = 'Sin categorías',
+}: CategoryMultiSelectProps) {
+    const options = useMemo(() => toCategoryOptions(categories), [categories]);
+
+    return (
+        <SelectList
+            mode="multiple"
+            cascadeChildren
+            options={options}
+            value={value}
+            onChange={onChange}
+            searchPlaceholder={searchPlaceholder}
+            emptyMessage={emptyMessage}
+        />
     );
 }

@@ -1,10 +1,9 @@
 "use client"
 
-import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { SearchIcon } from "lucide-react"
+import * as React from "react"
 
-import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -12,20 +11,68 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
+
+/**
+ * cmdk auto-highlights the first item on mount and on every search change. We
+ * only want a highlight while the user is actively searching (to highlight the
+ * first result), not a stale default selection when a popover/drawer reopens.
+ * This sentinel keeps cmdk's internal value pointing at a non-existent item, so
+ * nothing is highlighted until a search narrows the list.
+ */
+const NO_HIGHLIGHT = "__no_highlight__"
+
+const CommandSearchContext = React.createContext<
+  ((search: string) => void) | null
+>(null)
 
 function Command({
   className,
+  value,
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
+  const isControlled = value !== undefined
+  const [autoValue, setAutoValue] = React.useState(NO_HIGHLIGHT)
+  const searchRef = React.useRef("")
+
+  const handleValueChange = React.useCallback(
+    (next: string) => {
+      onValueChange?.(next)
+      if (isControlled) {
+        return
+      }
+      // Ignore cmdk's auto-highlight unless the user is actively searching.
+      if (searchRef.current) {
+        setAutoValue(next)
+      }
+    },
+    [isControlled, onValueChange]
+  )
+
+  const reportSearch = React.useCallback(
+    (search: string) => {
+      searchRef.current = search
+      if (!isControlled && !search) {
+        setAutoValue(NO_HIGHLIGHT)
+      }
+    },
+    [isControlled]
+  )
+
   return (
-    <CommandPrimitive
-      data-slot="command"
-      className={cn(
-        "bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md",
-        className
-      )}
-      {...props}
-    />
+    <CommandSearchContext.Provider value={reportSearch}>
+      <CommandPrimitive
+        data-slot="command"
+        value={isControlled ? value : autoValue}
+        onValueChange={handleValueChange}
+        className={cn(
+          "bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md",
+          className
+        )}
+        {...props}
+      />
+    </CommandSearchContext.Provider>
   )
 }
 
@@ -62,8 +109,10 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
+  const reportSearch = React.useContext(CommandSearchContext)
   return (
     <div
       data-slot="command-input-wrapper"
@@ -76,6 +125,10 @@ function CommandInput({
           "placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
+        onValueChange={(search) => {
+          reportSearch?.(search)
+          onValueChange?.(search)
+        }}
         {...props}
       />
     </div>

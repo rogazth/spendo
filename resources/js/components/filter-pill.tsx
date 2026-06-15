@@ -1,10 +1,10 @@
 import { PlusIcon, XIcon } from 'lucide-react';
 import * as React from 'react';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+    ResponsivePopover,
+    ResponsivePopoverContent,
+    ResponsivePopoverTrigger,
+} from '@/components/responsive-popover';
 import { cn } from '@/lib/utils';
 
 interface FilterPillRenderProps {
@@ -17,6 +17,8 @@ interface FilterPillProps {
     onClear?: () => void;
     align?: 'start' | 'center' | 'end';
     contentClassName?: string;
+    /** Let full-bleed list content reach the bottom edge of the mobile drawer. */
+    flushBottom?: boolean;
     children:
         | React.ReactNode
         | ((helpers: FilterPillRenderProps) => React.ReactNode);
@@ -28,46 +30,53 @@ export function FilterPill({
     onClear,
     align = 'start',
     contentClassName,
+    flushBottom,
     children,
 }: FilterPillProps) {
     const [open, setOpen] = React.useState(false);
     const isActive =
-        value !== undefined && value !== null && value !== '' && value !== false;
+        value !== undefined &&
+        value !== null &&
+        value !== '' &&
+        value !== false;
 
     const close = React.useCallback(() => setOpen(false), []);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <ResponsivePopover open={open} onOpenChange={setOpen}>
             <div
                 className={cn(
-                    'inline-flex h-8 items-center rounded-full border text-sm transition-colors',
+                    'inline-flex h-8 shrink-0 items-center rounded-full border text-sm transition-colors',
                     isActive
                         ? 'border-border bg-card shadow-xs'
                         : 'border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
                 )}
             >
-                <PopoverTrigger asChild>
+                <ResponsivePopoverTrigger asChild>
                     <button
                         type="button"
                         className={cn(
-                            'inline-flex h-full items-center gap-1.5 rounded-full px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer',
+                            'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-full px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             isActive && 'pr-2',
                         )}
                     >
                         {!isActive && <PlusIcon className="size-3.5" />}
-                        <span className={cn(isActive && 'text-muted-foreground')}>
+                        <span
+                            className={cn(isActive && 'text-muted-foreground')}
+                        >
                             {label}
                             {isActive && (
                                 <span className="text-muted-foreground">:</span>
                             )}
                         </span>
                         {isActive && (
-                            <span className="text-foreground inline-flex items-center gap-1.5 font-medium">
+                            <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
                                 {value}
                             </span>
                         )}
                     </button>
-                </PopoverTrigger>
+                </ResponsivePopoverTrigger>
+
                 {isActive && onClear && (
                     <button
                         type="button"
@@ -76,21 +85,24 @@ export function FilterPill({
                             event.stopPropagation();
                             onClear();
                         }}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground mr-1 inline-flex size-6 cursor-pointer items-center justify-center rounded-full transition-colors"
+                        className="mr-1 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         aria-label={`Limpiar ${label}`}
                     >
                         <XIcon className="size-3.5" />
                     </button>
                 )}
             </div>
-            <PopoverContent
+
+            <ResponsivePopoverContent
+                title={label}
                 align={align}
+                flushBottom={flushBottom}
                 className={cn('w-auto p-2', contentClassName)}
             >
                 {typeof children === 'function'
                     ? children({ close })
                     : children}
-            </PopoverContent>
-        </Popover>
+            </ResponsivePopoverContent>
+        </ResponsivePopover>
     );
 }
