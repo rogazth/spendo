@@ -11,10 +11,13 @@ use App\Http\Requests\StoreTransactionRequest;
 use App\Http\Requests\StoreTransferRequest;
 use App\Http\Requests\UpdateTransactionRequest;
 use App\Http\Resources\TransactionResource;
+use App\Models\Account;
 use App\Models\Category;
 use App\Models\Currency;
 use App\Models\Transaction;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -118,55 +121,23 @@ class TransactionController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $accounts = $user
-            ->accounts()
-            ->where('is_active', true)
-            ->get();
-
         $budgets = $user
             ->budgets()
             ->orderBy('name')
             ->get();
 
-        $categories = $user->categories()
-            ->whereNull('parent_id')
-            ->with('children')
-            ->get();
-
         return Inertia::render('transactions/index', [
             'transactions' => Inertia::scroll(TransactionResource::collection($transactions)),
             'summary' => $summary,
-            'accounts' => $accounts->map(fn ($account) => [
-                'id' => $account->id,
-                'uuid' => $account->uuid,
-                'name' => $account->name,
-                'currency' => $account->currency,
-                'currency_locale' => Currency::localeFor($account->currency),
-                'is_active' => $account->is_active,
-                'is_default' => $account->is_default,
-                'emoji' => $account->emoji,
-                'color' => $account->color,
-                'current_balance' => $account->current_balance,
-            ])->toArray(),
+            'accounts' => $this->transactionFormAccounts($user),
             'budgets' => $budgets->map(fn ($budget) => [
                 'id' => $budget->id,
                 'uuid' => $budget->uuid,
                 'name' => $budget->name,
+                'color' => $budget->color,
+                'emoji' => $budget->emoji,
             ])->toArray(),
-            'categories' => $categories->map(fn ($cat) => [
-                'id' => $cat->id,
-                'uuid' => $cat->uuid,
-                'name' => $cat->name,
-                'color' => $cat->color,
-                'emoji' => $cat->emoji,
-                'children' => $cat->children->map(fn ($child) => [
-                    'id' => $child->id,
-                    'uuid' => $child->uuid,
-                    'name' => $child->name,
-                    'color' => $child->color,
-                    'emoji' => $child->emoji,
-                ])->toArray(),
-            ])->toArray(),
+            'categories' => $this->transactionFormCategories($user),
             'filters' => [
                 'budget_id' => $budgetId,
                 'account_ids' => $accountIds,
@@ -176,6 +147,17 @@ class TransactionController extends Controller
                 'date_to' => $resolvedDateTo,
                 'dates' => $datesAll ? 'all' : null,
             ],
+        ]);
+    }
+
+    public function createData(): JsonResponse
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        return response()->json([
+            'accounts' => $this->transactionFormAccounts($user),
+            'categories' => $this->transactionFormCategories($user),
         ]);
     }
 
@@ -236,6 +218,57 @@ class TransactionController extends Controller
         if ($transaction->user_id !== Auth::id()) {
             abort(403);
         }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function transactionFormAccounts(User $user): array
+    {
+        return $user
+            ->accounts()
+            ->where('is_active', true)
+            ->get()
+            ->map(fn (Account $account) => [
+                'id' => $account->id,
+                'uuid' => $account->uuid,
+                'name' => $account->name,
+                'currency' => $account->currency,
+                'currency_locale' => Currency::localeFor($account->currency),
+                'is_active' => $account->is_active,
+                'is_default' => $account->is_default,
+                'emoji' => $account->emoji,
+                'color' => $account->color,
+                'current_balance' => $account->current_balance,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function transactionFormCategories(User $user): array
+    {
+        return $user
+            ->categories()
+            ->whereNull('parent_id')
+            ->with('children')
+            ->get()
+            ->map(fn (Category $cat) => [
+                'id' => $cat->id,
+                'uuid' => $cat->uuid,
+                'name' => $cat->name,
+                'color' => $cat->color,
+                'emoji' => $cat->emoji,
+                'children' => $cat->children->map(fn (Category $child) => [
+                    'id' => $child->id,
+                    'uuid' => $child->uuid,
+                    'name' => $child->name,
+                    'color' => $child->color,
+                    'emoji' => $child->emoji,
+                ])->toArray(),
+            ])
+            ->toArray();
     }
 
     /**

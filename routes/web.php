@@ -25,6 +25,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
     Route::resource('budgets', BudgetController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::post('transfers', [TransactionController::class, 'storeTransfer'])->name('transfers.store');
+    Route::get('transactions/create-data', [TransactionController::class, 'createData'])
+        ->name('transactions.create-data');
     Route::resource('transactions', TransactionController::class)->except(['show', 'create', 'edit']);
     Route::resource('tags', TagController::class)->except(['show', 'create', 'edit']);
 });

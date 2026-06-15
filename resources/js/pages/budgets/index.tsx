@@ -33,7 +33,7 @@ export default function BudgetsIndex({ budgets, summary, accounts, categories }:
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Budgets" />
 
-            <div className="flex flex-1 flex-col gap-6 p-6">
+            <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-foreground text-2xl font-bold tracking-tight">

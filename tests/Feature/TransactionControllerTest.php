@@ -118,6 +118,43 @@ test('index summary reports income and expenses per currency', function () {
 });
 
 // ---------------------------------------------------------------------------
+// Create data (lazy form payload)
+// ---------------------------------------------------------------------------
+
+test('create-data redirects guests to login', function () {
+    $this->get('/transactions/create-data')->assertRedirect('/login');
+});
+
+test('create-data returns the active accounts and category tree for the user', function () {
+    $user = User::factory()->create();
+    Account::factory()->for($user)->create(['name' => 'Personal']);
+    Account::factory()->for($user)->inactive()->create();
+
+    $parent = Category::factory()->for($user)->create([
+        'name' => 'Alimentación',
+        'parent_id' => null,
+    ]);
+    Category::factory()->for($user)->create([
+        'name' => 'Supermercado',
+        'parent_id' => $parent->id,
+    ]);
+
+    $other = User::factory()->create();
+    Account::factory()->for($other)->create();
+    Category::factory()->for($other)->create();
+
+    $this->actingAs($user)->getJson('/transactions/create-data')
+        ->assertOk()
+        ->assertJsonCount(1, 'accounts')
+        ->assertJsonPath('accounts.0.name', 'Personal')
+        ->assertJsonPath('accounts.0.currency_locale', 'es-CL')
+        ->assertJsonCount(1, 'categories')
+        ->assertJsonPath('categories.0.name', 'Alimentación')
+        ->assertJsonCount(1, 'categories.0.children')
+        ->assertJsonPath('categories.0.children.0.name', 'Supermercado');
+});
+
+// ---------------------------------------------------------------------------
 // Store — expense / income (signed amount)
 // ---------------------------------------------------------------------------
 

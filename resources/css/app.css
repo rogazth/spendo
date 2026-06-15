@@ -175,6 +175,15 @@
 }
 
 @layer utilities {
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
     .bg-halftone {
         background-image: radial-gradient(
             var(--halftone-color, oklch(0.922 0 0)) 1px,

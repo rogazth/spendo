@@ -48,7 +48,7 @@ export default function Dashboard({ currencySummaries }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
 
-            <div className="flex flex-1 flex-col gap-6 p-6">
+            <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div>
                     <h1 className="text-foreground text-2xl font-bold tracking-tight">
                         Dashboard
