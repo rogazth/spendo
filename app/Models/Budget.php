@@ -7,7 +7,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -17,6 +16,7 @@ class Budget extends Model
 
     protected $fillable = [
         'user_id',
+        'account_id',
         'name',
         'color',
         'emoji',
@@ -47,19 +47,9 @@ class Budget extends Model
         return $this->hasMany(BudgetItem::class);
     }
 
-    public function accounts(): BelongsToMany
+    public function account(): BelongsTo
     {
-        return $this->belongsToMany(Account::class);
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    public function accountIds(): array
-    {
-        return $this->relationLoaded('accounts')
-            ? $this->accounts->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : $this->accounts()->pluck('accounts.id')->map(fn ($id) => (int) $id)->all();
+        return $this->belongsTo(Account::class);
     }
 
     public function getTotalBudgetedAttribute(): float

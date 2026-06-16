@@ -1,5 +1,17 @@
-import { Link } from '@inertiajs/react';
-import { AlertTriangleIcon } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import {
+    AlertTriangleIcon,
+    MoreHorizontalIcon,
+    PencilIcon,
+    PowerIcon,
+    Trash2Icon,
+} from 'lucide-react';
+import {
+    ResponsiveActionMenu,
+    isActionMenuBusy,
+    type ResponsiveAction,
+} from '@/components/responsive-action-menu';
+import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import type { Budget, BudgetFrequency } from '@/types';
@@ -49,9 +61,17 @@ function resolveTier(percentage: number): Tier {
 
 export interface BudgetCardProps {
     budget: Budget;
+    onEdit?: (budget: Budget) => void;
+    onToggleActive?: (budget: Budget) => void;
+    onDelete?: (budget: Budget) => void;
 }
 
-export function BudgetCard({ budget }: BudgetCardProps) {
+export function BudgetCard({
+    budget,
+    onEdit,
+    onToggleActive,
+    onDelete,
+}: BudgetCardProps) {
     const spent = budget.current_cycle_spent ?? 0;
     const total = budget.total_budgeted ?? 0;
     const remaining = total - spent;
@@ -63,14 +83,78 @@ export function BudgetCard({ budget }: BudgetCardProps) {
 
     const overBudget = percentage >= 100;
     const nearLimit = percentage >= 80 && percentage < 100;
+    const isActive = budget.is_active;
+
+    const actions: ResponsiveAction[] = [];
+    if (onEdit) {
+        actions.push({
+            label: 'Editar',
+            icon: PencilIcon,
+            onSelect: () => onEdit(budget),
+        });
+    }
+    if (onToggleActive) {
+        actions.push({
+            label: isActive ? 'Desactivar' : 'Activar',
+            icon: PowerIcon,
+            onSelect: () => onToggleActive(budget),
+        });
+    }
+    if (onDelete) {
+        actions.push({
+            label: 'Eliminar',
+            icon: Trash2Icon,
+            variant: 'destructive',
+            onSelect: () => onDelete(budget),
+        });
+    }
+
+    const navigate = () => {
+        if (isActionMenuBusy()) return;
+        router.visit(`/budgets/${budget.uuid}`);
+    };
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (isActionMenuBusy()) return;
+            router.visit(`/budgets/${budget.uuid}`);
+        }
+    };
 
     return (
-        <Link
-            href={`/budgets/${budget.uuid}`}
-            className="group bg-card border-border hover:border-foreground/20 hover:shadow-md focus-visible:border-foreground/20 focus-visible:outline-hidden block overflow-hidden rounded-xl border shadow-sm transition-all"
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={navigate}
+            onKeyDown={handleKeyDown}
+            className={cn(
+                'group bg-card border-border hover:border-foreground/20 hover:shadow-md focus-visible:border-foreground/20 focus-visible:outline-hidden relative block cursor-pointer overflow-hidden rounded-xl border shadow-sm transition-all',
+                !isActive && 'opacity-65',
+            )}
         >
+            {actions.length > 0 && (
+                <div className="absolute top-3 right-3 z-10">
+                    <ResponsiveActionMenu
+                        title="Budget"
+                        actions={actions}
+                        trigger={
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground shrink-0"
+                                aria-label="Acciones del budget"
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()}
+                            >
+                                <MoreHorizontalIcon className="size-4" />
+                            </Button>
+                        }
+                    />
+                </div>
+            )}
+
             <div className="p-5">
-                <div className="mb-4 flex items-start gap-3">
+                <div className="mb-4 flex items-start gap-3 pr-9">
                     <div
                         className="flex size-10 flex-shrink-0 items-center justify-center rounded-full text-lg"
                         style={{ backgroundColor: `${color}1A`, color }}
@@ -78,9 +162,12 @@ export function BudgetCard({ budget }: BudgetCardProps) {
                         <span aria-hidden>{emoji}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                        <h3 className="text-foreground truncate font-semibold">
-                            {budget.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-foreground truncate font-semibold">
+                                {budget.name}
+                            </h3>
+                            {!isActive && <InactiveBadge />}
+                        </div>
                         <p className="text-muted-foreground text-xs">
                             {FREQUENCY_RESETS[budget.frequency] ?? 'Custom cycle'}
                         </p>
@@ -132,6 +219,14 @@ export function BudgetCard({ budget }: BudgetCardProps) {
                     </span>
                 </div>
             </div>
-        </Link>
+        </div>
+    );
+}
+
+function InactiveBadge() {
+    return (
+        <span className="text-muted-foreground bg-muted shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider uppercase">
+            inactivo
+        </span>
     );
 }

@@ -31,7 +31,6 @@ class AccountController extends Controller
                     ->whereColumn('transactions.account_id', 'accounts.id'),
                 'balance_cents',
             )
-            ->with(['budgets:id,uuid,name,color,emoji'])
             ->orderByDesc('is_default')
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -59,62 +58,48 @@ class AccountController extends Controller
         $currencySummaries = $accounts
             ->groupBy('currency')
             ->map(function ($group, string $currency) use ($metricsByBudgetId, $accountToArray) {
-                $budgetGroups = [];
-                $unbudgetedAccounts = [];
+                // Each account carries the budgets that draw from it as the
+                // segments of its bar. Reserved is the sum of those budgets'
+                // unspent caps; free cash is the balance left after them.
+                $accountRows = $group->map(function (Account $account) use ($metricsByBudgetId, $accountToArray) {
+                    $row = $accountToArray($account);
 
-                // An account belongs to at most one budget today. Accounts sharing a
-                // budget are grouped so the budget's caps are shown once, not duplicated.
-                foreach ($group->groupBy(fn (Account $a) => $a->budgets->first()?->id ?? 0) as $budgetId => $accountsInGroup) {
-                    if ($budgetId === 0) {
-                        foreach ($accountsInGroup as $account) {
-                            $row = $accountToArray($account);
-                            $row['available'] = $row['current_balance'];
-                            $unbudgetedAccounts[] = $row;
-                        }
+                    $budgets = $metricsByBudgetId
+                        ->filter(fn (array $entry): bool => $entry['budget']->account_id === $account->id)
+                        ->map(fn (array $entry): array => [
+                            'uuid' => $entry['budget']->uuid,
+                            'name' => $entry['budget']->name,
+                            'color' => $entry['budget']->color,
+                            'emoji' => $entry['budget']->emoji,
+                            'reserved' => (float) $entry['reserved'],
+                            'overspend' => (float) $entry['overspend_amount'],
+                        ])
+                        ->sortByDesc('reserved')
+                        ->values();
 
-                        continue;
-                    }
+                    $reserved = (float) $budgets->sum('reserved');
+                    $row['reserved'] = $reserved;
+                    $row['available'] = $row['current_balance'] - $reserved;
+                    $row['budgets'] = $budgets->all();
 
-                    $budget = $accountsInGroup->first()->budgets->first();
-                    $metrics = $metricsByBudgetId[$budgetId] ?? null;
+                    return $row;
+                })->values();
 
-                    $budgeted = $metrics ? (float) $metrics['budgeted'] : 0.0;
-                    $spent = $metrics ? (float) $metrics['spent'] : 0.0;
-                    $reserved = $metrics ? (float) $metrics['reserved'] : 0.0;
-                    $overspend = $metrics ? (float) $metrics['overspend_amount'] : 0.0;
+                $total = (float) $accountRows->sum('current_balance');
+                $boundReserved = (float) $accountRows->sum('reserved');
 
-                    $rows = $accountsInGroup->map($accountToArray)->values();
-                    $groupTotal = (float) $rows->sum('current_balance');
-
-                    $budgetGroups[] = [
-                        'budget' => [
-                            'uuid' => $budget->uuid,
-                            'name' => $budget->name,
-                            'color' => $budget->color,
-                            'emoji' => $budget->emoji,
-                        ],
-                        'budgeted' => $budgeted,
-                        'spent' => $spent,
-                        'reserved' => $reserved,
-                        'overspend' => $overspend,
-                        'percentage' => $budgeted > 0 ? min(100, round(($spent / $budgeted) * 100, 2)) : 0,
-                        'total' => $groupTotal,
-                        'available' => $groupTotal - $reserved,
-                        'accounts' => $rows->all(),
-                    ];
-                }
-
-                $total = (float) $group->sum(fn (Account $a) => ((int) ($a->getAttribute('balance_cents') ?? 0)) / 100);
-
-                // Source the currency totals from every active budget in this
-                // currency — the same basis the dashboard uses — so "available"
-                // matches READY even for budgets whose accounts aren't surfaced
-                // as a group here (e.g. budgets with no explicit accounts).
                 $currencyMetrics = $metricsByBudgetId->filter(
                     fn (array $entry): bool => $entry['budget']->currency === $currency,
                 );
-                $reservedTotal = (float) $currencyMetrics->sum('reserved');
-                $budgetedTotal = (float) $currencyMetrics->sum('budgeted');
+
+                // Active budgets in this currency with no account can't sit on any
+                // card, but their reserve still locks cash — so it keeps reducing the
+                // currency's free total, matching the dashboard. (Transient: assign
+                // each such budget an account and this drops to zero.)
+                $unassignedReserved = (float) $currencyMetrics
+                    ->filter(fn (array $entry): bool => $entry['budget']->account_id === null)
+                    ->sum('reserved');
+                $reservedTotal = $boundReserved + $unassignedReserved;
                 $overspendTotal = (float) $currencyMetrics->sum('overspend_amount');
 
                 return [
@@ -122,13 +107,12 @@ class AccountController extends Controller
                     'currency_locale' => Currency::localeFor($currency),
                     'accounts_count' => $group->count(),
                     'total' => $total,
-                    'budgeted_total' => $budgetedTotal,
                     'reserved_total' => $reservedTotal,
+                    'unassigned_reserved' => $unassignedReserved,
                     'overspend_total' => $overspendTotal,
                     // Free cash for the currency = balance not still reserved by budgets.
                     'available' => $total - $reservedTotal,
-                    'budget_groups' => $budgetGroups,
-                    'unbudgeted_accounts' => $unbudgetedAccounts,
+                    'accounts' => $accountRows->all(),
                 ];
             })
             ->sortKeys()
@@ -137,9 +121,14 @@ class AccountController extends Controller
 
         $defaultAccount = $accounts->firstWhere('is_default', true);
 
+        $budgetedAccountIds = $metricsByBudgetId
+            ->map(fn (array $entry) => $entry['budget']->account_id)
+            ->filter()
+            ->unique();
+
         $totals = [
             'accounts' => $accounts->count(),
-            'budgeted' => $accounts->filter(fn (Account $a) => $a->budgets->isNotEmpty())->count(),
+            'budgeted' => $accounts->whereIn('id', $budgetedAccountIds->all())->count(),
             'currencies' => count($currencySummaries),
             'default_name' => $defaultAccount?->name,
         ];

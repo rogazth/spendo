@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('accounts.make-default');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
     Route::resource('budgets', BudgetController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::patch('budgets/{budget}/toggle-active', [BudgetController::class, 'toggleActive'])
+        ->name('budgets.toggle-active');
     Route::post('transfers', [TransactionController::class, 'storeTransfer'])->name('transfers.store');
     Route::get('transactions/create-data', [TransactionController::class, 'createData'])
         ->name('transactions.create-data');

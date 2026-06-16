@@ -6,7 +6,6 @@ use App\Concerns\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -44,9 +43,9 @@ class Account extends Model
         return $this->hasMany(Transaction::class);
     }
 
-    public function budgets(): BelongsToMany
+    public function budgets(): HasMany
     {
-        return $this->belongsToMany(Budget::class);
+        return $this->hasMany(Budget::class);
     }
 
     /**

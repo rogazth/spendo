@@ -12,6 +12,7 @@ class UpdateBudgetAction
     {
         return DB::transaction(function () use ($budget, $data) {
             $budget->update(array_filter([
+                'account_id' => $data['account_id'] ?? null,
                 'name' => $data['name'] ?? null,
                 'color' => $data['color'] ?? null,
                 'description' => $data['description'] ?? null,
@@ -37,10 +38,6 @@ class UpdateBudgetAction
                         'amount' => $item['amount'],
                     ]);
                 }
-            }
-
-            if (array_key_exists('account_ids', $data)) {
-                $budget->accounts()->sync($data['account_ids']);
             }
 
             return $budget;

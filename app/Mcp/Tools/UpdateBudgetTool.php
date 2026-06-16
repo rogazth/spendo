@@ -29,6 +29,7 @@ class UpdateBudgetTool extends Tool
             'budget_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'account_id' => ['nullable', 'integer'],
             'is_active' => ['nullable', 'boolean'],
             'items' => ['nullable', 'array', 'min:1'],
             'items.*.category_id' => ['required_with:items', 'integer'],
@@ -41,6 +42,18 @@ class UpdateBudgetTool extends Tool
 
         if (! $budget) {
             return Response::error('Budget not found.');
+        }
+
+        if (! empty($validated['account_id'])) {
+            $account = $user->accounts()->whereKey($validated['account_id'])->first(['id', 'currency']);
+
+            if (! $account) {
+                return Response::error('Account not found. Use GetAccountsTool to find valid accounts.');
+            }
+
+            if ($account->currency !== $budget->currency) {
+                return Response::error('The account currency must match the budget currency.');
+            }
         }
 
         if (isset($validated['items'])) {
@@ -73,6 +86,7 @@ class UpdateBudgetTool extends Tool
         app(UpdateBudgetAction::class)->handle($budget, $user, array_filter([
             'name' => $validated['name'] ?? null,
             'description' => $validated['description'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
             'is_active' => $validated['is_active'] ?? null,
             'items' => $validated['items'] ?? null,
         ], fn ($value) => $value !== null));
@@ -99,6 +113,8 @@ class UpdateBudgetTool extends Tool
                 ->description('New budget name'),
             'description' => $schema->string()
                 ->description('New description'),
+            'account_id' => $schema->integer()
+                ->description('Account this budget draws from. Must match the budget currency.'),
             'is_active' => $schema->boolean()
                 ->description('Set active/inactive status'),
             'items' => $schema->array()

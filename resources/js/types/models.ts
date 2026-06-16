@@ -122,6 +122,7 @@ export function isIncome(tx: Pick<Transaction, 'amount' | 'type'>): boolean {
 // Budget model
 export interface Budget extends Model {
     user_id: number;
+    account_id: number | null;
     name: string;
     color: string;
     emoji: string | null;
@@ -140,8 +141,10 @@ export interface Budget extends Model {
     total_spent?: number;
     // Relations
     items?: BudgetItem[];
-    account_ids?: number[];
-    accounts?: Pick<Account, 'id' | 'uuid' | 'name' | 'currency' | 'color' | 'emoji'>[];
+    account?: Pick<
+        Account,
+        'id' | 'uuid' | 'name' | 'currency' | 'color' | 'emoji'
+    > | null;
 }
 
 // Budget Item model

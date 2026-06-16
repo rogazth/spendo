@@ -12,6 +12,7 @@ class CreateBudgetAction
     {
         return DB::transaction(function () use ($user, $data) {
             $budget = $user->budgets()->create([
+                'account_id' => $data['account_id'] ?? null,
                 'name' => $data['name'],
                 'color' => $data['color'] ?? '#6366F1',
                 'emoji' => $data['emoji'] ?? null,
@@ -29,8 +30,6 @@ class CreateBudgetAction
                     'amount' => $item['amount'],
                 ]);
             }
-
-            $budget->accounts()->sync($data['account_ids'] ?? []);
 
             return $budget;
         });

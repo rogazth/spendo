@@ -27,7 +27,7 @@ class BudgetController extends Controller
 
         $budgets = Auth::user()
             ->budgets()
-            ->with(['items.category.children', 'accounts'])
+            ->with(['items.category.children', 'account'])
             ->latest()
             ->get();
 
@@ -128,7 +128,7 @@ class BudgetController extends Controller
         $referenceDate = CarbonImmutable::now()->startOfDay();
         $cycleStartDay = (int) (Auth::user()->settings?->budget_cycle_start_day ?? 1);
 
-        $budget->load(['items.category.children', 'accounts']);
+        $budget->load(['items.category.children', 'account']);
         $categoryGroups = $budget->budgetCategoryGroups();
 
         [$cycleStart, $cycleEnd] = $budget->resolveCycleRange($referenceDate, $cycleStartDay);
@@ -215,8 +215,7 @@ class BudgetController extends Controller
 
         $action->handle($budget, Auth::user(), $request->validated());
 
-        return redirect()
-            ->route('budgets.show', $budget)
+        return back()
             ->with('success', 'Budget actualizado exitosamente.');
     }
 
@@ -229,6 +228,15 @@ class BudgetController extends Controller
         return redirect()
             ->route('budgets.index')
             ->with('success', 'Budget eliminado exitosamente.');
+    }
+
+    public function toggleActive(Budget $budget, UpdateBudgetAction $action): RedirectResponse
+    {
+        $this->authorizeBudget($budget);
+
+        $action->handle($budget, Auth::user(), ['is_active' => ! $budget->is_active]);
+
+        return back();
     }
 
     private function authorizeBudget(Budget $budget): void

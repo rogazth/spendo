@@ -182,7 +182,7 @@ describe('GetAccountsTool', function () {
         $category = Category::factory()->for($user)->create();
         $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 100000]);
-        $budget->accounts()->attach($budgetAccount->id);
+        $budget->update(['account_id' => $budgetAccount->id]);
 
         // Spending happens on an account that is NOT part of the budget.
         Transaction::factory()->expense()->for($user)->create([
@@ -206,7 +206,7 @@ describe('GetAccountsTool', function () {
         $category = Category::factory()->for($user)->create();
         $budget = Budget::factory()->for($user)->create(['currency' => 'CLP', 'anchor_date' => now()->startOfMonth()]);
         BudgetItem::factory()->for($budget)->for($category)->create(['amount' => 50000]);
-        $budget->accounts()->attach($accountA->id);
+        $budget->update(['account_id' => $accountA->id]);
 
         Transaction::factory()->income()->for($user)->create([
             'account_id' => $accountA->id,

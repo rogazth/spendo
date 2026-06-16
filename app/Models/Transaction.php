@@ -93,7 +93,6 @@ class Transaction extends Model
     public function scopeForBudget(Builder $query, Budget $budget): Builder
     {
         $categoryIds = $budget->budgetCategoryIds();
-        $accountIds = $budget->accountIds();
 
         $query->where('currency', $budget->currency);
 
@@ -103,11 +102,11 @@ class Transaction extends Model
 
         $query->whereIn('category_id', $categoryIds);
 
-        // Budgets draw from an explicit set of accounts. A budget with no
-        // associated accounts falls back to all accounts in its currency, which
-        // preserves legacy behaviour for budgets created before account scoping.
-        if ($accountIds !== []) {
-            $query->whereIn('account_id', $accountIds);
+        // A budget draws from a single account. A budget with no account falls
+        // back to all accounts in its currency, preserving legacy behaviour for
+        // budgets created before account scoping (e.g. via MCP).
+        if ($budget->account_id !== null) {
+            $query->where('account_id', $budget->account_id);
         }
 
         return $query;

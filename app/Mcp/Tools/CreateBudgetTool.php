@@ -22,7 +22,7 @@ class CreateBudgetTool extends Tool
         **Items**: Array of category_id + amount pairs defining spending caps per category
         **Amounts**: In major currency units (e.g., 572000 for 572,000 CLP)
         **Categories**: Must be non-system spending categories. Cannot mix a parent and its children in the same budget.
-        **Currency scope**: Budget spending is tracked across all transactions with the matching currency.
+        **Account**: Optional `account_id` scopes spending to a single account (must match the budget currency). Several budgets may share an account. When omitted, spending is tracked across every account in the budget currency.
     MARKDOWN;
 
     public function handle(Request $request): Response
@@ -37,6 +37,7 @@ class CreateBudgetTool extends Tool
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'currency' => ['required', 'string', 'size:3'],
+            'account_id' => ['nullable', 'integer'],
             'frequency' => ['required', 'string', 'in:weekly,biweekly,monthly,bimonthly'],
             'anchor_date' => ['required_unless:frequency,monthly', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:anchor_date'],
@@ -58,6 +59,18 @@ class CreateBudgetTool extends Tool
 
         if (! in_array($validated['currency'], Currency::codes())) {
             return Response::error('Invalid currency code.');
+        }
+
+        if (! empty($validated['account_id'])) {
+            $account = $user->accounts()->whereKey($validated['account_id'])->first(['id', 'currency']);
+
+            if (! $account) {
+                return Response::error('Account not found. Use GetAccountsTool to find valid accounts.');
+            }
+
+            if ($account->currency !== $validated['currency']) {
+                return Response::error('The account currency must match the budget currency.');
+            }
         }
 
         if ($validated['frequency'] === 'monthly' && empty($validated['anchor_date'])) {
@@ -114,6 +127,8 @@ class CreateBudgetTool extends Tool
             'currency' => $schema->string()
                 ->description('3-letter currency code (e.g., CLP)')
                 ->required(),
+            'account_id' => $schema->integer()
+                ->description('Optional account this budget draws from. Must match the budget currency. Omit to track every account in the currency.'),
             'frequency' => $schema->string()
                 ->description('Budget cycle frequency')
                 ->enum(['weekly', 'biweekly', 'monthly', 'bimonthly'])

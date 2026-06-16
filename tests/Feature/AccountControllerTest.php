@@ -74,11 +74,10 @@ test('index groups accounts by currency with summary aggregates', function () {
             ->where('currencySummaries.0.currency', 'CLP')
             ->where('currencySummaries.0.accounts_count', 2)
             ->where('currencySummaries.0.total', 700000)
-            ->where('currencySummaries.0.budgeted_total', 0)
             ->where('currencySummaries.0.reserved_total', 0)
             ->where('currencySummaries.0.available', 700000)
-            ->has('currencySummaries.0.budget_groups', 0)
-            ->has('currencySummaries.0.unbudgeted_accounts', 2)
+            ->has('currencySummaries.0.accounts', 2)
+            ->has('currencySummaries.0.accounts.0.budgets', 0)
             ->where('currencySummaries.1.currency', 'USD')
             ->where('currencySummaries.1.total', -15000)
             ->where('totals.accounts', 3)
@@ -110,7 +109,7 @@ test('index reports reserved and available accounting for budgets', function () 
         'anchor_date' => now()->startOfMonth()->toDateString(),
     ]);
     $budget->items()->create(['category_id' => $category->id, 'amount' => 120000]);
-    $budget->accounts()->attach($account->id);
+    $budget->update(['account_id' => $account->id]);
 
     \App\Models\Transaction::factory()->expense()->for($user)->for($account)->create([
         'category_id' => $category->id,
@@ -125,15 +124,14 @@ test('index reports reserved and available accounting for budgets', function () 
     $this->actingAs($user)->get('/accounts')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('currencySummaries.0.budgeted_total', 120000)
             ->where('currencySummaries.0.reserved_total', 70000)
             ->where('currencySummaries.0.available', 380000)
-            ->has('currencySummaries.0.budget_groups', 1)
-            ->where('currencySummaries.0.budget_groups.0.budget.name', $budget->name)
-            ->where('currencySummaries.0.budget_groups.0.budgeted', 120000)
-            ->where('currencySummaries.0.budget_groups.0.reserved', 70000)
-            ->where('currencySummaries.0.budget_groups.0.available', 380000)
-            ->where('currencySummaries.0.budget_groups.0.accounts.0.current_balance', 450000)
+            ->where('currencySummaries.0.accounts.0.current_balance', 450000)
+            ->where('currencySummaries.0.accounts.0.reserved', 70000)
+            ->where('currencySummaries.0.accounts.0.available', 380000)
+            ->has('currencySummaries.0.accounts.0.budgets', 1)
+            ->where('currencySummaries.0.accounts.0.budgets.0.name', $budget->name)
+            ->where('currencySummaries.0.accounts.0.budgets.0.reserved', 70000)
         );
 });
 
@@ -174,7 +172,7 @@ test('index surfaces overspend and reserves caps from every active budget, match
     ]);
     $hogar->items()->create(['category_id' => $catOver->id, 'amount' => 300000]);
     $hogar->items()->create(['category_id' => $catUnder->id, 'amount' => 300000]);
-    $hogar->accounts()->attach($budgeted->id);
+    $hogar->update(['account_id' => $budgeted->id]);
 
     \App\Models\Transaction::factory()->expense()->for($user)->for($budgeted)->create([
         'category_id' => $catOver->id,
@@ -209,10 +207,16 @@ test('index surfaces overspend and reserves caps from every active budget, match
         ->assertInertia(fn (Assert $page) => $page
             ->where('currencySummaries.0.currency', 'CLP')
             ->where('currencySummaries.0.total', 650000)
-            ->where('currencySummaries.0.budgeted_total', 750000)
             ->where('currencySummaries.0.reserved_total', 350000)
+            ->where('currencySummaries.0.unassigned_reserved', 150000)
             ->where('currencySummaries.0.overspend_total', 200000)
             ->where('currencySummaries.0.available', 300000)
+            ->where('currencySummaries.0.accounts.0.name', 'Banco CLP')
+            ->where('currencySummaries.0.accounts.0.reserved', 200000)
+            ->where('currencySummaries.0.accounts.0.available', 200000)
+            ->where('currencySummaries.0.accounts.0.budgets.0.name', $hogar->name)
+            ->where('currencySummaries.0.accounts.0.budgets.0.reserved', 200000)
+            ->where('currencySummaries.0.accounts.0.budgets.0.overspend', 200000)
         );
 });
 
@@ -234,8 +238,8 @@ test('index puts the default account first within its currency group', function 
 
     $this->actingAs($user)->get('/accounts')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('currencySummaries.0.unbudgeted_accounts.0.uuid', $default->uuid)
-            ->where('currencySummaries.0.unbudgeted_accounts.0.is_default', true)
+            ->where('currencySummaries.0.accounts.0.uuid', $default->uuid)
+            ->where('currencySummaries.0.accounts.0.is_default', true)
         );
 });
 

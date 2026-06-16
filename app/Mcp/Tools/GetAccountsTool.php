@@ -22,7 +22,7 @@ class GetAccountsTool extends Tool
         Account balances are the signed sum of transactions, including transfer legs.
         Includes currency_summaries showing budget_balance, total_reserved, and ready_to_assign per currency.
         total_reserved = sum of unspent budget item amounts in the current cycle (max(0, budgeted - spent) per item).
-        budget_balance is the sum of all account balances for the currency. Budget eligibility is now per-budget via the account_budget pivot, not a global account flag.
+        budget_balance is the sum of all account balances for the currency. Budget eligibility is per-budget: each budget draws from a single account (its account_id), several budgets may share one.
         Optionally filter by active status.
     MARKDOWN;
 

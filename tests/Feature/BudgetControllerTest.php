@@ -114,7 +114,7 @@ test('store creates a budget with items', function () {
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_ids' => [$account->id],
+        'account_id' => $account->id,
         'items' => [
             ['category_id' => $categoryA->id, 'amount' => 100000],
             ['category_id' => $categoryB->id, 'amount' => 50000],
@@ -139,7 +139,7 @@ test('store persists color and emoji', function () {
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_ids' => [$account->id],
+        'account_id' => $account->id,
         'items' => [
             ['category_id' => $category->id, 'amount' => 100000],
         ],
@@ -177,18 +177,18 @@ test('update modifies color and emoji', function () {
     $account = Account::factory()->for($user)->create(['currency' => $budget->currency]);
     $category = Category::factory()->expense()->for($user)->create();
 
-    $this->actingAs($user)->put("/budgets/{$budget->uuid}", [
+    $this->actingAs($user)->from('/budgets')->put("/budgets/{$budget->uuid}", [
         'name' => $budget->name,
         'color' => '#EF4444',
         'emoji' => '✈️',
         'currency' => $budget->currency,
         'frequency' => $budget->frequency,
         'anchor_date' => $budget->anchor_date->toDateString(),
-        'account_ids' => [$account->id],
+        'account_id' => $account->id,
         'items' => [
             ['category_id' => $category->id, 'amount' => 100000],
         ],
-    ])->assertRedirect("/budgets/{$budget->uuid}");
+    ])->assertRedirect('/budgets');
 
     $this->assertDatabaseHas('budgets', [
         'id' => $budget->id,
@@ -207,7 +207,7 @@ test('store creates budget with correct currency', function () {
         'currency' => 'USD',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_ids' => [$account->id],
+        'account_id' => $account->id,
         'items' => [['category_id' => $category->id, 'amount' => 80000]],
     ])->assertRedirect('/budgets');
 
@@ -378,12 +378,12 @@ test('update modifies the budget and replaces items', function () {
     $budget->items()->create(['category_id' => $original->id, 'amount' => 100000]);
     $account = Account::factory()->for($user)->create(['currency' => 'CLP']);
 
-    $this->actingAs($user)->put("/budgets/{$budget->uuid}", [
+    $this->actingAs($user)->from("/budgets/{$budget->uuid}")->put("/budgets/{$budget->uuid}", [
         'name' => 'Editado',
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => '2026-02-01',
-        'account_ids' => [$account->id],
+        'account_id' => $account->id,
         'items' => [['category_id' => $replacement->id, 'amount' => 250000]],
     ])->assertRedirect("/budgets/{$budget->uuid}");
 
@@ -417,7 +417,7 @@ test('update returns 403 for another user budget', function () {
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->toDateString(),
-        'account_ids' => [$otherAccount->id],
+        'account_id' => $otherAccount->id,
         'items' => [['category_id' => $otherCategory->id, 'amount' => 1000]],
     ])->assertForbidden();
 });
@@ -459,4 +459,38 @@ test('destroy returns 403 for another user budget', function () {
         ->assertForbidden();
 
     $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
+});
+
+// ---------------------------------------------------------------------------
+// Toggle active
+// ---------------------------------------------------------------------------
+
+test('toggle-active flips the budget active flag', function () {
+    $user = User::factory()->create();
+    $budget = Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($user)->patch("/budgets/{$budget->uuid}/toggle-active")
+        ->assertRedirect();
+    expect($budget->fresh()->is_active)->toBeFalse();
+
+    $this->actingAs($user)->patch("/budgets/{$budget->uuid}/toggle-active")
+        ->assertRedirect();
+    expect($budget->fresh()->is_active)->toBeTrue();
+});
+
+test('toggle-active returns 403 for another user budget', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $budget = Budget::factory()->for($owner)->create([
+        'currency' => 'CLP',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($other)->patch("/budgets/{$budget->uuid}/toggle-active")
+        ->assertForbidden();
+
+    expect($budget->fresh()->is_active)->toBeTrue();
 });

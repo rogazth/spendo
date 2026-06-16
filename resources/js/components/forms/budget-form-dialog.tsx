@@ -60,7 +60,7 @@ interface BudgetFormData {
     frequency: BudgetFrequency;
     anchor_date: Date;
     ends_at: Date | null;
-    account_ids: number[];
+    account_id: number | null;
     items: Array<{
         category_id: number | null;
         amount: number | null;
@@ -83,9 +83,7 @@ function buildInitialData(
             ends_at: budget.ends_at
                 ? new Date(`${budget.ends_at}T00:00:00`)
                 : null,
-            account_ids:
-                budget.account_ids ??
-                (budget.accounts ?? []).map((account) => account.id),
+            account_id: budget.account_id ?? budget.account?.id ?? null,
             items: (budget.items ?? []).map((item) => ({
                 category_id: item.category_id,
                 amount: item.amount,
@@ -102,7 +100,7 @@ function buildInitialData(
         frequency: 'monthly',
         anchor_date: new Date(),
         ends_at: null,
-        account_ids: [],
+        account_id: null,
         items: [{ category_id: null, amount: null }],
     };
 }
@@ -156,13 +154,8 @@ export function BudgetFormDialog({
         (account) => account.currency === data.currency,
     );
 
-    const toggleAccount = (accountId: number) => {
-        setData(
-            'account_ids',
-            data.account_ids.includes(accountId)
-                ? data.account_ids.filter((id) => id !== accountId)
-                : [...data.account_ids, accountId],
-        );
+    const selectAccount = (accountId: number) => {
+        setData('account_id', data.account_id === accountId ? null : accountId);
     };
 
     const handleSubmit = (event: React.FormEvent) => {
@@ -177,7 +170,7 @@ export function BudgetFormDialog({
                     ? format(formData.ends_at, 'yyyy-MM-dd')
                     : null,
                 description: formData.description || null,
-                account_ids: formData.account_ids,
+                account_id: formData.account_id,
                 items: formData.items
                     .filter(
                         (item) =>
@@ -306,15 +299,14 @@ export function BudgetFormDialog({
                                         setData((previous) => ({
                                             ...previous,
                                             currency: value,
-                                            account_ids:
-                                                previous.account_ids.filter(
-                                                    (id) =>
-                                                        accounts.find(
-                                                            (account) =>
-                                                                account.id ===
-                                                                id,
-                                                        )?.currency === value,
-                                                ),
+                                            account_id:
+                                                accounts.find(
+                                                    (account) =>
+                                                        account.id ===
+                                                        previous.account_id,
+                                                )?.currency === value
+                                                    ? previous.account_id
+                                                    : null,
                                         }));
                                     }}
                                 >
@@ -460,10 +452,10 @@ export function BudgetFormDialog({
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Cuentas</Label>
+                            <Label>Cuenta</Label>
                             <p className="text-xs text-muted-foreground">
-                                El gasto de este budget se mide solo sobre las
-                                cuentas seleccionadas.
+                                El gasto de este budget se mide solo sobre la
+                                cuenta seleccionada.
                             </p>
                             {currencyAccounts.length === 0 ? (
                                 <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
@@ -473,15 +465,14 @@ export function BudgetFormDialog({
                                 <div className="flex flex-wrap gap-2">
                                     {currencyAccounts.map((account) => {
                                         const selected =
-                                            data.account_ids.includes(
-                                                account.id,
-                                            );
+                                            data.account_id === account.id;
                                         return (
                                             <button
                                                 key={account.id}
                                                 type="button"
+                                                aria-pressed={selected}
                                                 onClick={() =>
-                                                    toggleAccount(account.id)
+                                                    selectAccount(account.id)
                                                 }
                                                 className={cn(
                                                     'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
@@ -497,7 +488,7 @@ export function BudgetFormDialog({
                                     })}
                                 </div>
                             )}
-                            <InputError message={errors.account_ids} />
+                            <InputError message={errors.account_id} />
                         </div>
 
                         <div className="space-y-2">

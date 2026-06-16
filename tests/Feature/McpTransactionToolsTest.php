@@ -391,7 +391,7 @@ describe('GetTransactionsTool - Enhanced', function () {
             'anchor_date' => now()->startOfMonth(),
         ]);
         $budget->items()->create(['category_id' => $category->id, 'amount' => 100000]);
-        $budget->accounts()->attach($budgetAccount->id);
+        $budget->update(['account_id' => $budgetAccount->id]);
 
         Transaction::factory()->expense()->for($user)->create([
             'account_id' => $budgetAccount->id,
