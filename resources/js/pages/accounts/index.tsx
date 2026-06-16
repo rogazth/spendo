@@ -75,6 +75,7 @@ interface CurrencySummary {
     total: number;
     budgeted_total: number;
     reserved_total: number;
+    overspend_total: number;
     available: number;
     budget_groups: BudgetGroup[];
     unbudgeted_accounts: AccountRow[];
@@ -300,7 +301,7 @@ function AvailableHero({
                         {fmt(summary.available)}
                     </p>
                 </div>
-                <div className="text-muted-foreground flex gap-5 font-mono text-[11px]">
+                <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 font-mono text-[11px]">
                     <span>
                         saldo{' '}
                         <span className="text-foreground font-semibold tabular-nums">
@@ -308,11 +309,19 @@ function AvailableHero({
                         </span>
                     </span>
                     <span>
-                        presupuestado{' '}
+                        reservado{' '}
                         <span className="text-foreground font-semibold tabular-nums">
-                            {fmt(summary.budgeted_total)}
+                            {fmt(summary.reserved_total)}
                         </span>
                     </span>
+                    {summary.overspend_total > 0 && (
+                        <span className="text-red-600 dark:text-red-400">
+                            sobregiro{' '}
+                            <span className="font-semibold tabular-nums">
+                                {fmt(summary.overspend_total)}
+                            </span>
+                        </span>
+                    )}
                 </div>
             </div>
         </div>

@@ -137,6 +137,85 @@ test('index reports reserved and available accounting for budgets', function () 
         );
 });
 
+test('index surfaces overspend and reserves caps from every active budget, matching the dashboard', function () {
+    $user = User::factory()->create();
+    \App\Models\UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
+
+    $budgeted = Account::factory()->for($user)->create([
+        'name' => 'Banco CLP',
+        'currency' => 'CLP',
+        'is_default' => true,
+    ]);
+    $free = Account::factory()->for($user)->create([
+        'name' => 'Efectivo',
+        'currency' => 'CLP',
+        'is_default' => false,
+    ]);
+
+    $catOver = \App\Models\Category::factory()->expense()->for($user)->create();
+    $catUnder = \App\Models\Category::factory()->expense()->for($user)->create();
+    $catGhost = \App\Models\Category::factory()->expense()->for($user)->create();
+
+    // Seed balances: budgeted account 1,000,000 income, free account 250,000.
+    \App\Models\Transaction::factory()->for($user)->for($budgeted)->create([
+        'amount' => 1000000,
+        'currency' => 'CLP',
+    ]);
+    \App\Models\Transaction::factory()->for($user)->for($free)->create([
+        'amount' => 250000,
+        'currency' => 'CLP',
+    ]);
+
+    // Hogar: scoped to the budgeted account. One item overspent, one under.
+    $hogar = \App\Models\Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->startOfMonth()->toDateString(),
+    ]);
+    $hogar->items()->create(['category_id' => $catOver->id, 'amount' => 300000]);
+    $hogar->items()->create(['category_id' => $catUnder->id, 'amount' => 300000]);
+    $hogar->accounts()->attach($budgeted->id);
+
+    \App\Models\Transaction::factory()->expense()->for($user)->for($budgeted)->create([
+        'category_id' => $catOver->id,
+        'amount' => -500000, // over its 300k cap by 200k
+        'currency' => 'CLP',
+        'exclude_from_budget' => false,
+        'transaction_date' => now()->toDateString(),
+    ]);
+    \App\Models\Transaction::factory()->expense()->for($user)->for($budgeted)->create([
+        'category_id' => $catUnder->id,
+        'amount' => -100000, // under its 300k cap by 200k
+        'currency' => 'CLP',
+        'exclude_from_budget' => false,
+        'transaction_date' => now()->toDateString(),
+    ]);
+
+    // Fantasma: active budget with NO accounts attached and no spending. Its cap
+    // is fully reserved. The dashboard counts it; the accounts page must too.
+    $fantasma = \App\Models\Budget::factory()->for($user)->create([
+        'currency' => 'CLP',
+        'frequency' => 'monthly',
+        'anchor_date' => now()->startOfMonth()->toDateString(),
+    ]);
+    $fantasma->items()->create(['category_id' => $catGhost->id, 'amount' => 150000]);
+
+    // total cash      = 400,000 (budgeted) + 250,000 (free) = 650,000
+    // reserved        = 200,000 (Hogar under-item) + 150,000 (Fantasma) = 350,000
+    // overspend       = 200,000 (Hogar over-item)
+    // available/ready = 650,000 - 350,000 = 300,000
+    $this->actingAs($user)->get('/accounts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currencySummaries.0.currency', 'CLP')
+            ->where('currencySummaries.0.total', 650000)
+            ->where('currencySummaries.0.budgeted_total', 750000)
+            ->where('currencySummaries.0.reserved_total', 350000)
+            ->where('currencySummaries.0.overspend_total', 200000)
+            ->where('currencySummaries.0.available', 300000)
+        );
+});
+
 test('index puts the default account first within its currency group', function () {
     $user = User::factory()->create();
 

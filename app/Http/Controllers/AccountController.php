@@ -105,8 +105,17 @@ class AccountController extends Controller
                 }
 
                 $total = (float) $group->sum(fn (Account $a) => ((int) ($a->getAttribute('balance_cents') ?? 0)) / 100);
-                $reservedTotal = (float) collect($budgetGroups)->sum('reserved');
-                $budgetedTotal = (float) collect($budgetGroups)->sum('budgeted');
+
+                // Source the currency totals from every active budget in this
+                // currency — the same basis the dashboard uses — so "available"
+                // matches READY even for budgets whose accounts aren't surfaced
+                // as a group here (e.g. budgets with no explicit accounts).
+                $currencyMetrics = $metricsByBudgetId->filter(
+                    fn (array $entry): bool => $entry['budget']->currency === $currency,
+                );
+                $reservedTotal = (float) $currencyMetrics->sum('reserved');
+                $budgetedTotal = (float) $currencyMetrics->sum('budgeted');
+                $overspendTotal = (float) $currencyMetrics->sum('overspend_amount');
 
                 return [
                     'currency' => $currency,
@@ -115,6 +124,7 @@ class AccountController extends Controller
                     'total' => $total,
                     'budgeted_total' => $budgetedTotal,
                     'reserved_total' => $reservedTotal,
+                    'overspend_total' => $overspendTotal,
                     // Free cash for the currency = balance not still reserved by budgets.
                     'available' => $total - $reservedTotal,
                     'budget_groups' => $budgetGroups,
