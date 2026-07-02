@@ -354,12 +354,16 @@ test('update modifies an expense transaction', function () {
         'transaction_date' => '2026-01-10',
     ]);
 
-    $this->actingAs($user)->put("/transactions/{$transaction->uuid}", [
-        'account_id' => $account->id,
-        'amount' => -2000,
-        'currency' => 'CLP',
-        'transaction_date' => '2026-01-15',
-    ])->assertRedirect('/transactions');
+    $filteredUrl = '/transactions?account_ids[]='.$account->id.'&date_from=2026-01-01';
+
+    $this->actingAs($user)
+        ->from($filteredUrl)
+        ->put("/transactions/{$transaction->uuid}", [
+            'account_id' => $account->id,
+            'amount' => -2000,
+            'currency' => 'CLP',
+            'transaction_date' => '2026-01-15',
+        ])->assertRedirect($filteredUrl);
 
     expect($transaction->fresh()->amount)->toEqual(-2000);
 });
@@ -414,8 +418,12 @@ test('destroy soft-deletes a transaction', function () {
         'account_id' => $account->id,
     ]);
 
-    $this->actingAs($user)->delete("/transactions/{$transaction->uuid}")
-        ->assertRedirect('/transactions');
+    $filteredUrl = '/transactions?account_ids[]='.$account->id.'&date_from=2026-01-01';
+
+    $this->actingAs($user)
+        ->from($filteredUrl)
+        ->delete("/transactions/{$transaction->uuid}")
+        ->assertRedirect($filteredUrl);
 
     $this->assertSoftDeleted('transactions', ['id' => $transaction->id]);
 });
@@ -441,7 +449,9 @@ test('destroy a transfer leg soft-deletes the linked leg', function () {
         ->whereNotNull('linked_transaction_id')
         ->firstOrFail();
 
-    $this->actingAs($user)->delete("/transactions/{$out->uuid}")
+    $this->actingAs($user)
+        ->from('/transactions')
+        ->delete("/transactions/{$out->uuid}")
         ->assertRedirect('/transactions');
 
     $this->assertSoftDeleted('transactions', ['id' => $out->id]);

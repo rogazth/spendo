@@ -198,7 +198,7 @@ class TransactionController extends Controller
         $this->storeAttachments($transaction, $validated['attachments'] ?? []);
 
         return redirect()
-            ->route('transactions.index')
+            ->back()
             ->with('success', 'Transaccion actualizada exitosamente.');
     }
 
@@ -209,7 +209,7 @@ class TransactionController extends Controller
         app(DeleteTransactionAction::class)->handle($transaction);
 
         return redirect()
-            ->route('transactions.index')
+            ->back()
             ->with('success', 'Transaccion eliminada exitosamente.');
     }
 
