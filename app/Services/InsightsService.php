@@ -14,56 +14,83 @@ class InsightsService
     public function __construct(private readonly BudgetCycleService $budgetCycles) {}
 
     /**
-     * Income, expense and net per month for the last $months months, keyed by
-     * currency. Aggregated in PHP so the query stays portable across drivers.
+     * The user's own cycle periods, oldest first, ending with the one that
+     * contains $now. Driven by budget_cycle_start_day, never by calendar months:
+     * with a cut-off on the 28th, July 31 belongs to the cycle that opened Jul 28.
      *
-     * @return array<string, list<array{month: string, income: float, expense: float, net: float}>>
+     * @return list<array{start: CarbonImmutable, end: CarbonImmutable}>
      */
-    public function monthlyCashFlow(User $user, CarbonImmutable $now, int $months = 12): array
+    public function cyclePeriods(User $user, CarbonImmutable $now, int $count): array
     {
-        $firstMonth = $now->startOfMonth()->subMonths($months - 1);
+        $day = (int) ($user->settings?->budget_cycle_start_day ?? 1);
+        $periods = [];
+        $cursor = $now;
+
+        for ($i = 0; $i < $count; $i++) {
+            [$start, $end] = User::resolveMonthlyCycleForDay($cursor, $day);
+            array_unshift($periods, ['start' => $start, 'end' => $end]);
+            $cursor = $start->subDay();
+        }
+
+        return $periods;
+    }
+
+    /**
+     * Income, expense and net per cycle period, keyed by currency. Aggregated in
+     * PHP so the query stays portable across drivers.
+     *
+     * @param  list<array{start: CarbonImmutable, end: CarbonImmutable}>  $periods
+     * @return array<string, list<array{start: string, end: string, income: float, expense: float, net: float}>>
+     */
+    public function cashFlowByPeriod(User $user, array $periods): array
+    {
+        if ($periods === []) {
+            return [];
+        }
+
+        $firstStart = $periods[0]['start'];
+        $lastEnd = $periods[count($periods) - 1]['end'];
 
         $transactions = $user->transactions()
             ->where('type', TransactionType::Regular)
-            ->whereDate('transaction_date', '>=', $firstMonth->toDateString())
-            ->whereDate('transaction_date', '<=', $now->endOfMonth()->toDateString())
+            ->whereDate('transaction_date', '>=', $firstStart->toDateString())
+            ->whereDate('transaction_date', '<=', $lastEnd->toDateString())
             ->get(['currency', 'amount', 'transaction_date']);
 
         $buckets = [];
         foreach ($transactions as $transaction) {
-            $month = $transaction->transaction_date->format('Y-m');
+            $key = $this->periodKeyFor($periods, $transaction->transaction_date->toDateString());
+
+            if ($key === null) {
+                continue;
+            }
+
             $currency = $transaction->currency;
-            $buckets[$currency][$month]['income'] ??= 0.0;
-            $buckets[$currency][$month]['expense'] ??= 0.0;
+            $buckets[$currency][$key]['income'] ??= 0.0;
+            $buckets[$currency][$key]['expense'] ??= 0.0;
 
             if ($transaction->amount >= 0) {
-                $buckets[$currency][$month]['income'] += $transaction->amount;
+                $buckets[$currency][$key]['income'] += $transaction->amount;
             } else {
-                $buckets[$currency][$month]['expense'] += abs($transaction->amount);
+                $buckets[$currency][$key]['expense'] += abs($transaction->amount);
             }
         }
 
         $series = [];
-        foreach ($buckets as $currency => $months_) {
-            $cursor = $firstMonth;
-            $rows = [];
+        foreach ($buckets as $currency => $periodTotals) {
+            $series[$currency] = array_map(function (array $period) use ($periodTotals) {
+                $key = $period['start']->toDateString();
+                $income = round($periodTotals[$key]['income'] ?? 0, 2);
+                $expense = round($periodTotals[$key]['expense'] ?? 0, 2);
 
-            while ($cursor->lessThanOrEqualTo($now)) {
-                $key = $cursor->format('Y-m');
-                $income = round($months_[$key]['income'] ?? 0, 2);
-                $expense = round($months_[$key]['expense'] ?? 0, 2);
-
-                $rows[] = [
-                    'month' => $key,
+                return [
+                    'start' => $period['start']->toDateString(),
+                    'end' => $period['end']->toDateString(),
                     'income' => $income,
                     'expense' => $expense,
                     'net' => round($income - $expense, 2),
                 ];
-
-                $cursor = $cursor->addMonth();
-            }
-
-            $series[$currency] = $rows;
+            }, $periods);
         }
 
         return $series;
@@ -123,34 +150,41 @@ class InsightsService
     }
 
     /**
-     * Expense per category over the last $months months, ranked by how much the
-     * latest month deviates from the earlier average.
+     * Expense per category across cycle periods, ranked by how far the last
+     * *closed* period sits from the average of the ones before it. The period in
+     * progress is excluded: three days into a cycle is not a trend.
      *
+     * @param  list<array{start: CarbonImmutable, end: CarbonImmutable}>  $periods
      * @return array<string, list<array<string, mixed>>>
      */
-    public function categoryTrends(User $user, CarbonImmutable $now, int $months = 6, int $limit = 6): array
+    public function categoryTrends(User $user, CarbonImmutable $now, array $periods, int $limit = 6): array
     {
-        $firstMonth = $now->startOfMonth()->subMonths($months - 1);
+        $closedPeriods = array_values(array_filter(
+            $periods,
+            fn (array $period) => $period['end']->lessThan($now),
+        ));
+
+        if (count($closedPeriods) < 2) {
+            return [];
+        }
+
+        $firstStart = $closedPeriods[0]['start'];
+        $lastEnd = $closedPeriods[count($closedPeriods) - 1]['end'];
 
         $transactions = $user->transactions()
             ->where('type', TransactionType::Regular)
             ->where('amount', '<', 0)
-            ->whereDate('transaction_date', '>=', $firstMonth->toDateString())
+            ->whereDate('transaction_date', '>=', $firstStart->toDateString())
+            ->whereDate('transaction_date', '<=', $lastEnd->toDateString())
             ->with('category')
             ->get(['category_id', 'currency', 'amount', 'transaction_date']);
-
-        $monthKeys = [];
-        $cursor = $firstMonth;
-        while ($cursor->lessThanOrEqualTo($now)) {
-            $monthKeys[] = $cursor->format('Y-m');
-            $cursor = $cursor->addMonth();
-        }
 
         $buckets = [];
         foreach ($transactions as $transaction) {
             $category = $transaction->category;
+            $periodKey = $this->periodKeyFor($closedPeriods, $transaction->transaction_date->toDateString());
 
-            if ($category === null) {
+            if ($category === null || $periodKey === null) {
                 continue;
             }
 
@@ -158,15 +192,15 @@ class InsightsService
             $buckets[$key]['currency'] = $transaction->currency;
             $buckets[$key]['name'] = $category->name;
             $buckets[$key]['emoji'] = $category->emoji ?? '💰';
-            $month = $transaction->transaction_date->format('Y-m');
-            $buckets[$key]['months'][$month] = ($buckets[$key]['months'][$month] ?? 0) + abs($transaction->amount);
+            $buckets[$key]['periods'][$periodKey] =
+                ($buckets[$key]['periods'][$periodKey] ?? 0) + abs($transaction->amount);
         }
 
         $trends = [];
         foreach ($buckets as $bucket) {
             $points = array_map(
-                fn (string $month) => round($bucket['months'][$month] ?? 0, 2),
-                $monthKeys,
+                fn (array $period) => round($bucket['periods'][$period['start']->toDateString()] ?? 0, 2),
+                $closedPeriods,
             );
             $latest = end($points);
             $earlier = array_slice($points, 0, -1);
@@ -180,6 +214,8 @@ class InsightsService
                 'baseline' => round($baseline, 2),
                 'delta' => round($latest - $baseline, 2),
                 'total' => round(array_sum($points), 2),
+                'period_start' => $closedPeriods[count($closedPeriods) - 1]['start']->toDateString(),
+                'period_end' => $lastEnd->toDateString(),
             ];
         }
 
@@ -190,6 +226,22 @@ class InsightsService
                 ->values()
                 ->all())
             ->all();
+    }
+
+    /**
+     * The start date of the period containing $date, used as its bucket key.
+     *
+     * @param  list<array{start: CarbonImmutable, end: CarbonImmutable}>  $periods
+     */
+    private function periodKeyFor(array $periods, string $date): ?string
+    {
+        foreach ($periods as $period) {
+            if ($date >= $period['start']->toDateString() && $date <= $period['end']->toDateString()) {
+                return $period['start']->toDateString();
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -21,7 +21,8 @@ import { cn } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
 
 interface CashFlowPoint {
-    month: string;
+    start: string;
+    end: string;
     income: number;
     expense: number;
     net: number;
@@ -54,6 +55,8 @@ interface CategoryTrend {
     baseline: number;
     delta: number;
     total: number;
+    period_start: string;
+    period_end: string;
 }
 
 interface CapSuggestion {
@@ -78,6 +81,7 @@ interface Section {
 
 interface Props {
     sections: Section[];
+    currentPeriodStart: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -105,7 +109,7 @@ const STATUS_LABELS: Record<ComplianceCycle['status'], string> = {
     empty: 'Sin límites',
 };
 
-export default function Insights({ sections }: Props) {
+export default function Insights({ sections, currentPeriodStart }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Insights" />
@@ -135,6 +139,7 @@ export default function Insights({ sections }: Props) {
                         <CurrencyInsights
                             key={section.currency}
                             section={section}
+                            currentPeriodStart={currentPeriodStart}
                         />
                     ))
                 )}
@@ -143,7 +148,13 @@ export default function Insights({ sections }: Props) {
     );
 }
 
-function CurrencyInsights({ section }: { section: Section }) {
+function CurrencyInsights({
+    section,
+    currentPeriodStart,
+}: {
+    section: Section;
+    currentPeriodStart: string;
+}) {
     const locale = section.currency_locale ?? 'es-CL';
     const money = (value: number) =>
         formatCurrency(value, section.currency, locale);
@@ -151,13 +162,17 @@ function CurrencyInsights({ section }: { section: Section }) {
     return (
         <div className="space-y-8">
             {section.cash_flow.length > 0 && (
-                <CashFlow section={section} locale={locale} />
+                <CashFlow
+                    section={section}
+                    locale={locale}
+                    currentPeriodStart={currentPeriodStart}
+                />
             )}
             {section.budgets.length > 0 && (
                 <Compliance section={section} locale={locale} money={money} />
             )}
             {section.trends.length > 0 && (
-                <Trends section={section} money={money} />
+                <Trends section={section} locale={locale} money={money} />
             )}
             {section.cap_suggestions.length > 0 && (
                 <CapSuggestions section={section} money={money} />
@@ -166,18 +181,39 @@ function CurrencyInsights({ section }: { section: Section }) {
     );
 }
 
-function monthLabel(month: string, locale: string): string {
-    return new Date(`${month}-01T00:00:00`).toLocaleDateString(locale, {
+/** A cycle is named after the month it ends in: 29 jun–28 jul reads as "jul". */
+function periodLabel(end: string, locale: string): string {
+    return new Date(`${end}T00:00:00`).toLocaleDateString(locale, {
         month: 'short',
         year: '2-digit',
     });
 }
 
-function CashFlow({ section, locale }: { section: Section; locale: string }) {
+function periodRange(start: string, end: string, locale: string): string {
+    const options: Intl.DateTimeFormatOptions = {
+        day: 'numeric',
+        month: 'short',
+    };
+    return `${new Date(`${start}T00:00:00`).toLocaleDateString(locale, options)} — ${new Date(`${end}T00:00:00`).toLocaleDateString(locale, options)}`;
+}
+
+function CashFlow({
+    section,
+    locale,
+    currentPeriodStart,
+}: {
+    section: Section;
+    locale: string;
+    currentPeriodStart: string;
+}) {
     const data = section.cash_flow.map((point) => ({
         ...point,
-        label: monthLabel(point.month, locale),
+        label: periodLabel(point.end, locale),
+        isCurrent: point.start === currentPeriodStart,
     }));
+    const currentRange = section.cash_flow.find(
+        (point) => point.start === currentPeriodStart,
+    );
 
     return (
         <section className="space-y-3">
@@ -186,7 +222,20 @@ function CashFlow({ section, locale }: { section: Section; locale: string }) {
                     Ingreso vs gasto ({section.currency})
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Últimos 12 meses. La línea es lo que quedó.
+                    Últimos 12 ciclos según tu fecha de corte. La línea es lo
+                    que quedó.
+                    {currentRange && (
+                        <>
+                            {' '}
+                            El último (
+                            {periodRange(
+                                currentRange.start,
+                                currentRange.end,
+                                locale,
+                            )}
+                            ) está en curso.
+                        </>
+                    )}
                 </p>
             </div>
 
@@ -219,6 +268,19 @@ function CashFlow({ section, locale }: { section: Section; locale: string }) {
                         <ChartTooltip
                             content={
                                 <ChartTooltipContent
+                                    labelFormatter={(_label, payload) => {
+                                        const point = payload?.[0]?.payload as
+                                            | (CashFlowPoint & {
+                                                  isCurrent: boolean;
+                                              })
+                                            | undefined;
+
+                                        if (!point) {
+                                            return null;
+                                        }
+
+                                        return `${periodRange(point.start, point.end, locale)}${point.isCurrent ? ' · en curso' : ''}`;
+                                    }}
                                     formatter={(value, name) => (
                                         <span className="flex w-full justify-between gap-3">
                                             <span className="text-muted-foreground">
@@ -305,8 +367,8 @@ function Compliance({
                                 <Link
                                     key={cycle.start}
                                     href={`/budgets/${budget.uuid}?cycle=${cycle.start}`}
-                                    title={`${monthLabel(cycle.start.slice(0, 7), locale)} · ${STATUS_LABELS[cycle.status]} · ${money(cycle.spent)} de ${money(cycle.budgeted)}`}
-                                    aria-label={`${monthLabel(cycle.start.slice(0, 7), locale)}: ${STATUS_LABELS[cycle.status]}`}
+                                    title={`${periodRange(cycle.start, cycle.end, locale)} · ${STATUS_LABELS[cycle.status]} · ${money(cycle.spent)} de ${money(cycle.budgeted)}`}
+                                    aria-label={`${periodRange(cycle.start, cycle.end, locale)}: ${STATUS_LABELS[cycle.status]}`}
                                     className={cn(
                                         'size-6 rounded-sm transition-transform hover:scale-110',
                                         STATUS_STYLES[cycle.status],
@@ -359,11 +421,15 @@ function Sparkline({ points }: { points: number[] }) {
 
 function Trends({
     section,
+    locale,
     money,
 }: {
     section: Section;
+    locale: string;
     money: (value: number) => string;
 }) {
+    const lastClosed = section.trends[0];
+
     return (
         <section className="space-y-3">
             <div>
@@ -371,8 +437,19 @@ function Trends({
                     Categorías que se están moviendo
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Gasto de los últimos 6 meses y desvío del último mes contra
-                    su promedio.
+                    Gasto por ciclo y desvío del último ciclo cerrado
+                    {lastClosed && (
+                        <>
+                            {' ('}
+                            {periodRange(
+                                lastClosed.period_start,
+                                lastClosed.period_end,
+                                locale,
+                            )}
+                            {')'}
+                        </>
+                    )}{' '}
+                    contra su promedio. El ciclo en curso no entra.
                 </p>
             </div>
 
@@ -388,7 +465,7 @@ function Trends({
                                 {trend.name}
                             </p>
                             <p className="text-xs text-muted-foreground tabular-nums">
-                                {money(trend.latest)} este mes · promedio{' '}
+                                {money(trend.latest)} el último ciclo · promedio{' '}
                                 {money(trend.baseline)}
                             </p>
                         </div>

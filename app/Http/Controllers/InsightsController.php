@@ -18,10 +18,16 @@ class InsightsController extends Controller
         $user = Auth::user();
         $now = CarbonImmutable::now()->startOfDay();
 
-        $cashFlow = $this->insights->monthlyCashFlow($user, $now);
+        $periods = $this->insights->cyclePeriods($user, $now, 12);
+        $cashFlow = $this->insights->cashFlowByPeriod($user, $periods);
         $compliance = $this->insights->complianceGrid($user, $now);
-        $trends = $this->insights->categoryTrends($user, $now);
+        $trends = $this->insights->categoryTrends(
+            $user,
+            $now,
+            array_slice($periods, -7),
+        );
         $capSuggestions = $this->insights->capSuggestions($user, $now);
+        $currentPeriodStart = $periods[count($periods) - 1]['start']->toDateString();
 
         $currencies = collect(array_keys($cashFlow))
             ->merge(array_keys($compliance))
@@ -31,6 +37,7 @@ class InsightsController extends Controller
             ->values();
 
         return Inertia::render('insights', [
+            'currentPeriodStart' => $currentPeriodStart,
             'sections' => $currencies->map(fn (string $currency) => [
                 'currency' => $currency,
                 'currency_locale' => Currency::localeFor($currency),
