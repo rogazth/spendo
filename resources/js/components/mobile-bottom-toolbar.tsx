@@ -3,8 +3,8 @@ import {
     ArrowLeftRightIcon,
     LayoutGridIcon,
     MenuIcon,
-    PiggyBankIcon,
     PlusIcon,
+    WalletIcon,
     type LucideIcon,
 } from 'lucide-react';
 import { useCreateTransaction } from '@/components/transactions/create-transaction-provider';
@@ -55,10 +55,10 @@ export function MobileBottomToolbar() {
                     </button>
                 </div>
                 <ToolbarLink
-                    href="/budgets"
-                    icon={PiggyBankIcon}
-                    label="Budgets"
-                    active={isActive('/budgets')}
+                    href="/accounts"
+                    icon={WalletIcon}
+                    label="Cuentas"
+                    active={isActive('/accounts')}
                 />
                 <ToolbarButton
                     icon={MenuIcon}

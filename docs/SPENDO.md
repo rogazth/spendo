@@ -44,6 +44,7 @@ Para más detalle, revisar:
 - `docs/DATABASE.md` - Schema completo y migraciones
 - `docs/FEATURES.md` - Funcionalidades detalladas
 - `docs/UI.md` - Flujos de interfaz
+- `docs/BUDGET_CYCLES.md` - Cierre de ciclos, post-mortem, insights y dashboard
 
 ## Project Structure
 

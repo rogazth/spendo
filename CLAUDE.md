@@ -10,6 +10,7 @@ All product decisions, requirements, and specifications must be documented in th
 | [docs/DATABASE.md](docs/DATABASE.md) | Database schema, migrations, calculated fields, seeds |
 | [docs/FEATURES.md](docs/FEATURES.md) | Detailed feature specifications, CRUD operations, business rules |
 | [docs/UI.md](docs/UI.md) | UI patterns, component conventions, dialog-based CRUD, form patterns |
+| [docs/BUDGET_CYCLES.md](docs/BUDGET_CYCLES.md) | Budget cycle snapshots, closed-cycle post-mortem, insights, dashboard scope |
 
 **Important:** When making product decisions or changes:
 - Update the relevant documentation file(s) in `docs/`
