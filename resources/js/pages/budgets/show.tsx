@@ -1,5 +1,10 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeftIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import {
+    ArrowLeftIcon,
+    MoreHorizontalIcon,
+    PencilIcon,
+    Trash2Icon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -10,6 +15,14 @@ import {
     BudgetSummaryCards,
     type BudgetSummaryEntry,
 } from '@/components/budgets/budget-summary-cards';
+import {
+    CycleReview,
+    type CycleReviewData,
+} from '@/components/budgets/cycle-review';
+import {
+    CycleSelector,
+    type CycleOption,
+} from '@/components/budgets/cycle-selector';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { BudgetFormDialog } from '@/components/forms/budget-form-dialog';
 import { Button } from '@/components/ui/button';
@@ -34,6 +47,8 @@ interface Props {
     categoryProgress: BudgetItemCardEntry[];
     accounts: Account[];
     categories: Category[];
+    cycleOptions: CycleOption[];
+    cycleReview: CycleReviewData | null;
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -60,6 +75,8 @@ export default function BudgetShow({
     categoryProgress,
     accounts,
     categories,
+    cycleOptions,
+    cycleReview,
 }: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -103,9 +120,12 @@ export default function BudgetShow({
                                 variant="ghost"
                                 size="icon"
                                 asChild
-                                className="text-muted-foreground -ml-2 size-8"
+                                className="-ml-2 size-8 text-muted-foreground"
                             >
-                                <Link href="/budgets" aria-label="Volver a budgets">
+                                <Link
+                                    href="/budgets"
+                                    aria-label="Volver a budgets"
+                                >
                                     <ArrowLeftIcon />
                                 </Link>
                             </Button>
@@ -119,21 +139,24 @@ export default function BudgetShow({
                             >
                                 {budget.emoji ?? '💰'}
                             </span>
-                            <h1 className="text-foreground truncate text-2xl font-bold tracking-tight">
+                            <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">
                                 {budget.name}
                             </h1>
                         </div>
-                        <p className="text-muted-foreground text-sm">
-                            {FREQUENCY_LABELS[budget.frequency] ?? budget.frequency}
+                        <p className="text-sm text-muted-foreground">
+                            {FREQUENCY_LABELS[budget.frequency] ??
+                                budget.frequency}
                             {' · '}
-                            {formatDateRange(
-                                summary.current_cycle_start,
-                                summary.current_cycle_end,
-                                locale,
-                            )}
+                            {cycleReview
+                                ? 'Ciclo cerrado'
+                                : formatDateRange(
+                                      summary.current_cycle_start,
+                                      summary.current_cycle_end,
+                                      locale,
+                                  )}
                         </p>
                         {budget.description && (
-                            <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
+                            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                                 {budget.description}
                             </p>
                         )}
@@ -162,30 +185,48 @@ export default function BudgetShow({
                     </DropdownMenu>
                 </div>
 
-                <BudgetSummaryCards summary={summaryByCurrency} />
+                {cycleOptions.length > 1 && (
+                    <CycleSelector
+                        budgetUuid={budget.uuid}
+                        options={cycleOptions}
+                        selectedStart={cycleReview?.start ?? null}
+                        locale={locale}
+                    />
+                )}
 
-                <div className="space-y-3">
-                    <h2 className="text-foreground text-lg font-semibold">
-                        Categorías presupuestadas
-                    </h2>
+                {cycleReview ? (
+                    <CycleReview
+                        review={cycleReview}
+                        currency={budget.currency}
+                    />
+                ) : (
+                    <>
+                        <BudgetSummaryCards summary={summaryByCurrency} />
 
-                    {categoryProgress.length === 0 ? (
-                        <div className="bg-card border-border text-muted-foreground rounded-xl border p-6 text-center text-sm">
-                            Este budget no tiene categorías.
+                        <div className="space-y-3">
+                            <h2 className="text-lg font-semibold text-foreground">
+                                Categorías presupuestadas
+                            </h2>
+
+                            {categoryProgress.length === 0 ? (
+                                <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                                    Este budget no tiene categorías.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                                    {categoryProgress.map((item) => (
+                                        <BudgetItemCard
+                                            key={item.id}
+                                            item={item}
+                                            currency={budget.currency}
+                                            locale={locale}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-                            {categoryProgress.map((item) => (
-                                <BudgetItemCard
-                                    key={item.id}
-                                    item={item}
-                                    currency={budget.currency}
-                                    locale={locale}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
+                    </>
+                )}
             </div>
 
             <BudgetFormDialog

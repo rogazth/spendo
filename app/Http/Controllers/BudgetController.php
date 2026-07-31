@@ -10,6 +10,7 @@ use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
 use App\Models\BudgetItem;
 use App\Models\Currency;
+use App\Services\BudgetCycleService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,8 @@ use Inertia\Response;
 
 class BudgetController extends Controller
 {
+    public function __construct(private readonly BudgetCycleService $budgetCycles) {}
+
     public function index(Request $request): Response
     {
         $referenceDate = CarbonImmutable::now()->startOfDay();
@@ -121,7 +124,7 @@ class BudgetController extends Controller
             ->with('success', 'Budget creado exitosamente.');
     }
 
-    public function show(Budget $budget): Response
+    public function show(Budget $budget, Request $request): Response
     {
         $this->authorizeBudget($budget);
 
@@ -168,8 +171,21 @@ class BudgetController extends Controller
             ->orderBy('name')
             ->get();
 
+        $closedRanges = $this->budgetCycles->closedCycleRanges($budget, $referenceDate);
+        $cycleOptions = collect([[
+            'start' => $cycleStart->toDateString(),
+            'end' => $cycleEnd->toDateString(),
+            'is_current' => true,
+        ]])->concat($closedRanges->map(fn (array $range) => [
+            'start' => $range['start']->toDateString(),
+            'end' => $range['end']->toDateString(),
+            'is_current' => false,
+        ]))->all();
+
         return Inertia::render('budgets/show', [
             'budget' => (new BudgetResource($budget))->resolve(),
+            'cycleOptions' => $cycleOptions,
+            'cycleReview' => $this->buildCycleReview($budget, $request->query('cycle'), $referenceDate),
             'summary' => [
                 'budgeted' => $totalBudgeted,
                 'spent' => $totalSpent,
@@ -237,6 +253,86 @@ class BudgetController extends Controller
         $action->handle($budget, Auth::user(), ['is_active' => ! $budget->is_active]);
 
         return back();
+    }
+
+    /**
+     * Post-mortem for a closed cycle: frozen caps, spending recomputed live, and
+     * the per-category delta against the previous cycle.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buildCycleReview(Budget $budget, ?string $cycleStartInput, CarbonImmutable $referenceDate): ?array
+    {
+        if ($cycleStartInput === null) {
+            return null;
+        }
+
+        try {
+            $requestedStart = CarbonImmutable::parse($cycleStartInput)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $cycle = $this->budgetCycles->ensureMaterialized($budget, $requestedStart, $referenceDate);
+
+        if ($cycle === null) {
+            return null;
+        }
+
+        $review = $this->budgetCycles->review($cycle);
+
+        $previousCycle = $this->budgetCycles->ensureMaterialized(
+            $budget,
+            CarbonImmutable::parse($cycle->starts_at)->subDay(),
+            $referenceDate,
+        );
+
+        $deltas = [];
+        if ($previousCycle !== null) {
+            $previousSpentByCategory = collect($this->budgetCycles->review($previousCycle)['items'])
+                ->keyBy('category_id');
+
+            $deltas = collect($review['items'])
+                ->map(function (array $item) use ($previousSpentByCategory) {
+                    $previous = $previousSpentByCategory->get($item['category_id']);
+
+                    if ($previous === null) {
+                        return null;
+                    }
+
+                    return [
+                        'category_id' => $item['category_id'],
+                        'category_name' => $item['category_name'],
+                        'category_emoji' => $item['category_emoji'],
+                        'spent' => $item['spent'],
+                        'previous_spent' => $previous['spent'],
+                        'delta' => round($item['spent'] - $previous['spent'], 2),
+                    ];
+                })
+                ->filter()
+                ->filter(fn (array $entry) => abs($entry['delta']) > 0)
+                ->sortByDesc(fn (array $entry) => abs($entry['delta']))
+                ->take(5)
+                ->values()
+                ->all();
+        }
+
+        return [
+            'start' => CarbonImmutable::parse($cycle->starts_at)->toDateString(),
+            'end' => CarbonImmutable::parse($cycle->ends_at)->toDateString(),
+            'is_backfilled' => $cycle->is_backfilled,
+            'currency_locale' => Currency::localeFor($cycle->currency),
+            'budgeted' => $review['budgeted'],
+            'spent' => $review['spent'],
+            'leftover' => $review['leftover'],
+            'overspend' => $review['overspend'],
+            'over_items' => $review['over_items'],
+            'item_count' => count($review['items']),
+            'items' => $review['items'],
+            'burn' => $review['burn'],
+            'top_transactions' => $review['top_transactions'],
+            'deltas' => $deltas,
+        ];
     }
 
     private function authorizeBudget(Budget $budget): void
