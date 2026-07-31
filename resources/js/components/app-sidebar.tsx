@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { ArrowLeftRight, LayoutGrid, PiggyBank, Tag, Wallet } from 'lucide-react';
+import {
+    ArrowLeftRight,
+    ChartLine,
+    LayoutGrid,
+    PiggyBank,
+    Tag,
+    Wallet,
+} from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -41,6 +48,11 @@ const mainNavItems: NavItem[] = [
         href: '/budgets',
         icon: PiggyBank,
     },
+    {
+        title: 'Insights',
+        href: '/insights',
+        icon: ChartLine,
+    },
 ];
 
 export function AppSidebar() {
@@ -65,7 +77,7 @@ export function AppSidebar() {
             <div
                 role="separator"
                 aria-orientation="horizontal"
-                className="bg-sidebar-border -mx-2 h-px shrink-0"
+                className="-mx-2 h-px shrink-0 bg-sidebar-border"
             />
             <SidebarFooter className="pb-0">
                 <NavUser />

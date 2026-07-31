@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\InsightsController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('insights', [InsightsController::class, 'index'])->name('insights');
 
     Route::resource('accounts', AccountController::class)->except(['create', 'edit', 'show']);
     Route::patch('accounts/{account}/make-default', [AccountController::class, 'makeDefault'])
