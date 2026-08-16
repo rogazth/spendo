@@ -44,18 +44,38 @@ El selector de ciclo es un `FilterPill` + `SelectList` y navega por querystring.
 
 ## Insights (`/insights`)
 
-Sección por currency, alimentada por `InsightsService`:
+Insights responde una sola pregunta: **en qué se fue la plata**. Dos bloques, cada uno
+con sección por currency, alimentados por `InsightsService`. Nada de cumplimiento de
+budgets: eso vive en `/budgets`.
 
-1. **Ingreso vs gasto** — 12 **ciclos** (nunca meses calendario): los buckets salen de
-   `budget_cycle_start_day` vía `InsightsService::cyclePeriods()`. Con corte el 28, el 31 de
-   julio cae en el ciclo que abrió el 28. El ciclo en curso se marca como tal en el tooltip.
-2. **Racha de cumplimiento** — un cuadro por ciclo cerrado (cumplido / al límite /
-   excedido); cada cuadro linkea a su post-mortem.
-3. **Categorías que se están moviendo** — sparkline por ciclo y desvío del último ciclo
-   **cerrado** contra el promedio de los anteriores. El ciclo en curso se excluye: tres días
-   de ciclo no son una tendencia.
-4. **Límites que no cuadran** — promedio gastado por ciclo vs. el cap actual, cuando la
-   brecha supera el 15%.
+### Bloque 1 — El año (`?year=YYYY`)
+
+1. KPIs: gastado, ingresado, ahorro neto y promedio por ciclo del año.
+2. Barras ingreso/gasto + línea de neto, **un punto por ciclo, nunca por mes calendario**.
+   `InsightsService::yearPeriods()` toma los ciclos que *cierran* dentro del año, así que
+   con corte el 28 "enero" corre del 28-dic al 27-ene. El año en curso llega hasta el ciclo
+   en progreso.
+3. Gasto por categoría del año, con delta contra el año anterior **a la misma altura**
+   (mismo número de ciclos), para que un año en curso no compita contra uno completo.
+
+### Bloque 2 — El ciclo (`?cycle=YYYY-MM-DD`)
+
+4. Por defecto el ciclo en curso; el selector ofrece los últimos 24 con flechas ‹ › para
+   saltar de a uno.
+5. Gastado / ingresado / neto del ciclo, y días restantes si está abierto.
+6. Gasto por categoría con delta contra el ciclo anterior, más los 5 gastos más grandes.
+
+### Reglas del desglose por categoría
+
+- Agrupa por **categoría raíz**; las subcategorías se despliegan dentro. El gasto cargado
+  directo a la raíz aparece como "Sin subcategoría" para que las partes sumen el total.
+- Cuenta **todo el gasto**, incluido `exclude_from_budget`: la pregunta es dónde se fue la
+  plata, no si el cap aguantó. Los números pueden no coincidir con los de un budget.
+- Transferencias y saldos iniciales quedan fuera (solo `type = regular` con monto negativo).
+- Cada fila linkea a `/transactions` con la categoría y el rango ya filtrados.
+
+Los dos bloques son props lazy: cambiar de ciclo recarga solo `cycle` y cambiar de año
+solo `year`.
 
 ## Dashboard
 

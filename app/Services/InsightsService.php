@@ -3,16 +3,14 @@
 namespace App\Services;
 
 use App\Enums\TransactionType;
-use App\Models\Budget;
-use App\Models\BudgetCycle;
+use App\Models\Category;
+use App\Models\Transaction;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 class InsightsService
 {
-    public function __construct(private readonly BudgetCycleService $budgetCycles) {}
-
     /**
      * The user's own cycle periods, oldest first, ending with the one that
      * contains $now. Driven by budget_cycle_start_day, never by calendar months:
@@ -22,7 +20,7 @@ class InsightsService
      */
     public function cyclePeriods(User $user, CarbonImmutable $now, int $count): array
     {
-        $day = (int) ($user->settings?->budget_cycle_start_day ?? 1);
+        $day = $this->cycleStartDay($user);
         $periods = [];
         $cursor = $now;
 
@@ -33,6 +31,49 @@ class InsightsService
         }
 
         return $periods;
+    }
+
+    /**
+     * The cycles that close inside $year, oldest first, stopping at the one in
+     * progress. A cycle belongs to the month it ends in, so with a cut-off on
+     * the 28th "enero" runs Dec 28 – Jan 27.
+     *
+     * @return list<array{start: CarbonImmutable, end: CarbonImmutable}>
+     */
+    public function yearPeriods(User $user, int $year, CarbonImmutable $now): array
+    {
+        $day = $this->cycleStartDay($user);
+        [$start, $end] = User::resolveMonthlyCycleForDay(
+            CarbonImmutable::create($year, 1, 1)->startOfDay(),
+            $day,
+        );
+
+        $periods = [];
+
+        while ($end->year === $year && $start->lessThanOrEqualTo($now)) {
+            $periods[] = ['start' => $start, 'end' => $end];
+            [$start, $end] = User::resolveMonthlyCycleForDay($end->addDay(), $day);
+        }
+
+        return $periods;
+    }
+
+    /**
+     * Years with something to show, newest first. The current one is always
+     * offered, even on an empty account.
+     *
+     * @return list<int>
+     */
+    public function availableYears(User $user, CarbonImmutable $now): array
+    {
+        $earliest = $user->transactions()->min('transaction_date');
+        $firstYear = $earliest === null
+            ? $now->year
+            : CarbonImmutable::parse($earliest)->year;
+
+        return collect(range($now->year, min($firstYear, $now->year)))
+            ->values()
+            ->all();
     }
 
     /**
@@ -97,132 +138,242 @@ class InsightsService
     }
 
     /**
-     * One row per budget with the outcome of each closed cycle, oldest first.
+     * Income, expense and net for a single date range, keyed by currency.
      *
-     * @return array<string, list<array<string, mixed>>>
+     * @return array<string, array{income: float, expense: float, net: float}>
      */
-    public function complianceGrid(User $user, CarbonImmutable $now, int $cycles = 12): array
+    public function totalsFor(User $user, CarbonImmutable $start, CarbonImmutable $end): array
     {
-        $grid = [];
+        $series = $this->cashFlowByPeriod($user, [['start' => $start, 'end' => $end]]);
 
-        foreach ($user->budgets()->with('items.category.children')->get() as $budget) {
-            $rows = $this->budgetCycles->closedCycleRanges($budget, $now, $cycles)
-                ->map(function (array $range) use ($budget, $now) {
-                    $cycle = $this->budgetCycles->ensureMaterialized($budget, $range['start'], $now);
-
-                    if ($cycle === null) {
-                        return null;
-                    }
-
-                    $budgeted = (float) $cycle->total_budgeted;
-                    $spent = $this->budgetCycles->spentFor($cycle);
-
-                    return [
-                        'start' => $range['start']->toDateString(),
-                        'end' => $range['end']->toDateString(),
-                        'budgeted' => $budgeted,
-                        'spent' => $spent,
-                        'status' => $this->statusFor($budgeted, $spent),
-                        'percentage' => $budgeted > 0 ? round(($spent / $budgeted) * 100, 1) : 0,
-                    ];
-                })
-                ->filter()
-                ->reverse()
-                ->values()
-                ->all();
-
-            if ($rows === []) {
-                continue;
-            }
-
-            $grid[$budget->currency][] = [
-                'id' => $budget->id,
-                'uuid' => $budget->uuid,
-                'name' => $budget->name,
-                'emoji' => $budget->emoji ?? '💰',
-                'cycles' => $rows,
-                'kept' => collect($rows)->where('status', '!=', 'over')->count(),
-                'total' => count($rows),
-            ];
-        }
-
-        return $grid;
+        return collect($series)
+            ->map(fn (array $points) => [
+                'income' => $points[0]['income'],
+                'expense' => $points[0]['expense'],
+                'net' => $points[0]['net'],
+            ])
+            ->all();
     }
 
     /**
-     * Expense per category across cycle periods, ranked by how far the last
-     * *closed* period sits from the average of the ones before it. The period in
-     * progress is excluded: three days into a cycle is not a trend.
+     * Expense per category for a date range, keyed by currency: root categories
+     * ranked by amount, each with its subcategories. Spending excluded from
+     * budgets still counts — this answers where the money went, not whether a
+     * cap held. When a comparison range is given, every row carries its delta.
      *
-     * @param  list<array{start: CarbonImmutable, end: CarbonImmutable}>  $periods
-     * @return array<string, list<array<string, mixed>>>
+     * @return array<string, array{total: float, rows: list<array<string, mixed>>}>
      */
-    public function categoryTrends(User $user, CarbonImmutable $now, array $periods, int $limit = 6): array
-    {
-        $closedPeriods = array_values(array_filter(
-            $periods,
-            fn (array $period) => $period['end']->lessThan($now),
-        ));
+    public function categoryBreakdown(
+        User $user,
+        CarbonImmutable $start,
+        CarbonImmutable $end,
+        ?CarbonImmutable $compareStart = null,
+        ?CarbonImmutable $compareEnd = null,
+    ): array {
+        $current = $this->expenseByCategory($user, $start, $end);
+        $previous = $compareStart !== null && $compareEnd !== null
+            ? $this->expenseByCategory($user, $compareStart, $compareEnd)
+            : [];
 
-        if (count($closedPeriods) < 2) {
-            return [];
-        }
+        $categories = $this->categoriesFor($current, $previous);
 
-        $firstStart = $closedPeriods[0]['start'];
-        $lastEnd = $closedPeriods[count($closedPeriods) - 1]['end'];
+        $breakdown = [];
+        foreach ($current as $currency => $byCategory) {
+            $rows = $this->groupByRoot($byCategory, $categories);
+            $previousRows = $this->groupByRoot($previous[$currency] ?? [], $categories);
+            $total = array_sum(array_column($rows, 'amount'));
 
-        $transactions = $user->transactions()
-            ->where('type', TransactionType::Regular)
-            ->where('amount', '<', 0)
-            ->whereDate('transaction_date', '>=', $firstStart->toDateString())
-            ->whereDate('transaction_date', '<=', $lastEnd->toDateString())
-            ->with('category')
-            ->get(['category_id', 'currency', 'amount', 'transaction_date']);
-
-        $buckets = [];
-        foreach ($transactions as $transaction) {
-            $category = $transaction->category;
-            $periodKey = $this->periodKeyFor($closedPeriods, $transaction->transaction_date->toDateString());
-
-            if ($category === null || $periodKey === null) {
-                continue;
-            }
-
-            $key = $transaction->currency.'|'.$category->id;
-            $buckets[$key]['currency'] = $transaction->currency;
-            $buckets[$key]['name'] = $category->name;
-            $buckets[$key]['emoji'] = $category->emoji ?? '💰';
-            $buckets[$key]['periods'][$periodKey] =
-                ($buckets[$key]['periods'][$periodKey] ?? 0) + abs($transaction->amount);
-        }
-
-        $trends = [];
-        foreach ($buckets as $bucket) {
-            $points = array_map(
-                fn (array $period) => round($bucket['periods'][$period['start']->toDateString()] ?? 0, 2),
-                $closedPeriods,
-            );
-            $latest = end($points);
-            $earlier = array_slice($points, 0, -1);
-            $baseline = $earlier === [] ? 0.0 : array_sum($earlier) / count($earlier);
-
-            $trends[$bucket['currency']][] = [
-                'name' => $bucket['name'],
-                'emoji' => $bucket['emoji'],
-                'points' => $points,
-                'latest' => $latest,
-                'baseline' => round($baseline, 2),
-                'delta' => round($latest - $baseline, 2),
-                'total' => round(array_sum($points), 2),
-                'period_start' => $closedPeriods[count($closedPeriods) - 1]['start']->toDateString(),
-                'period_end' => $lastEnd->toDateString(),
+            $breakdown[$currency] = [
+                'total' => round($total, 2),
+                'rows' => collect($rows)
+                    ->sortByDesc('amount')
+                    ->map(fn (array $row, string|int $key) => [
+                        'key' => (string) $key,
+                        'id' => $row['id'],
+                        'name' => $row['name'],
+                        'emoji' => $row['emoji'],
+                        'amount' => round($row['amount'], 2),
+                        'count' => $row['count'],
+                        'share' => $total > 0 ? round($row['amount'] / $total * 100, 1) : 0.0,
+                        'delta' => $compareStart === null
+                            ? null
+                            : round($row['amount'] - ($previousRows[$key]['amount'] ?? 0), 2),
+                        'children' => $this->childRows(
+                            $row,
+                            $previousRows[$key]['children'] ?? [],
+                            $compareStart !== null,
+                        ),
+                    ])
+                    ->values()
+                    ->all(),
             ];
         }
 
-        return collect($trends)
-            ->map(fn (array $rows) => collect($rows)
-                ->sortByDesc(fn (array $row) => $row['delta'])
+        return $breakdown;
+    }
+
+    /**
+     * Subcategory rows for a root, ranked by amount. A root that was also
+     * charged directly only shows that slice when there is something to
+     * compare it against.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, array{amount: float, count: int}>  $previousChildren
+     * @return list<array<string, mixed>>
+     */
+    private function childRows(array $row, array $previousChildren, bool $withDelta): array
+    {
+        $children = $row['children'];
+
+        if (count($children) === 1 && array_key_first($children) === 'direct') {
+            return [];
+        }
+
+        return collect($children)
+            ->sortByDesc('amount')
+            ->map(fn (array $child, string|int $key) => [
+                'key' => (string) $key,
+                'name' => $child['name'],
+                'emoji' => $child['emoji'],
+                'amount' => round($child['amount'], 2),
+                'count' => $child['count'],
+                'share' => $row['amount'] > 0
+                    ? round($child['amount'] / $row['amount'] * 100, 1)
+                    : 0.0,
+                'delta' => $withDelta
+                    ? round($child['amount'] - ($previousChildren[$key]['amount'] ?? 0), 2)
+                    : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Expense totals per currency and category id ('none' for uncategorised).
+     *
+     * @return array<string, array<string, array{amount: float, count: int}>>
+     */
+    private function expenseByCategory(User $user, CarbonImmutable $start, CarbonImmutable $end): array
+    {
+        $transactions = $user->transactions()
+            ->where('type', TransactionType::Regular)
+            ->where('amount', '<', 0)
+            ->withinDateRange($start, $end)
+            ->get(['category_id', 'currency', 'amount']);
+
+        $totals = [];
+        foreach ($transactions as $transaction) {
+            $key = (string) ($transaction->category_id ?? 'none');
+            $currency = $transaction->currency;
+
+            $totals[$currency][$key]['amount'] = ($totals[$currency][$key]['amount'] ?? 0) + abs($transaction->amount);
+            $totals[$currency][$key]['count'] = ($totals[$currency][$key]['count'] ?? 0) + 1;
+        }
+
+        return $totals;
+    }
+
+    /**
+     * Every category touched by either range, plus their parents. Trashed ones
+     * are included so old transactions keep their name.
+     *
+     * @param  array<string, array<string, array{amount: float, count: int}>>  $current
+     * @param  array<string, array<string, array{amount: float, count: int}>>  $previous
+     * @return Collection<int, Category>
+     */
+    private function categoriesFor(array $current, array $previous): Collection
+    {
+        $ids = collect([$current, $previous])
+            ->flatMap(fn (array $byCurrency) => collect($byCurrency)->flatMap(fn (array $rows) => array_keys($rows)))
+            ->filter(fn (string|int $key) => $key !== 'none')
+            ->map(fn (string|int $key) => (int) $key)
+            ->unique();
+
+        $categories = Category::withTrashed()->whereIn('id', $ids)->get()->keyBy('id');
+
+        $missingParents = $categories
+            ->pluck('parent_id')
+            ->filter()
+            ->reject(fn (int $id) => $categories->has($id))
+            ->unique();
+
+        if ($missingParents->isNotEmpty()) {
+            $categories = $categories->merge(
+                Category::withTrashed()->whereIn('id', $missingParents)->get()->keyBy('id'),
+            );
+        }
+
+        return $categories;
+    }
+
+    /**
+     * Fold per-category totals into their root category, keeping each
+     * subcategory as a child. Spending charged straight to a root lands in a
+     * 'direct' child so the parts always add up to the whole.
+     *
+     * @param  array<string, array{amount: float, count: int}>  $byCategory
+     * @param  Collection<int, Category>  $categories
+     * @return array<string, array<string, mixed>>
+     */
+    private function groupByRoot(array $byCategory, Collection $categories): array
+    {
+        $rows = [];
+
+        foreach ($byCategory as $key => $totals) {
+            $category = $key === 'none' ? null : $categories->get((int) $key);
+            $root = $category?->parent_id !== null
+                ? $categories->get($category->parent_id) ?? $category
+                : $category;
+
+            $rootKey = $root === null ? 'none' : (string) $root->id;
+            $childKey = $category === null || $root === null || $category->id === $root->id
+                ? 'direct'
+                : (string) $category->id;
+
+            $rows[$rootKey]['id'] ??= $root?->id;
+            $rows[$rootKey]['name'] ??= $root?->name ?? 'Sin categoría';
+            $rows[$rootKey]['emoji'] ??= $root?->emoji ?? '💸';
+            $rows[$rootKey]['amount'] = ($rows[$rootKey]['amount'] ?? 0) + $totals['amount'];
+            $rows[$rootKey]['count'] = ($rows[$rootKey]['count'] ?? 0) + $totals['count'];
+
+            $rows[$rootKey]['children'][$childKey]['name'] ??= $childKey === 'direct'
+                ? 'Sin subcategoría'
+                : $category->name;
+            $rows[$rootKey]['children'][$childKey]['emoji'] ??= $childKey === 'direct'
+                ? ($root?->emoji ?? '💸')
+                : ($category->emoji ?? '💸');
+            $rows[$rootKey]['children'][$childKey]['amount'] = ($rows[$rootKey]['children'][$childKey]['amount'] ?? 0) + $totals['amount'];
+            $rows[$rootKey]['children'][$childKey]['count'] = ($rows[$rootKey]['children'][$childKey]['count'] ?? 0) + $totals['count'];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The biggest single expenses of a range, per currency.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    public function largestExpenses(User $user, CarbonImmutable $start, CarbonImmutable $end, int $limit = 5): array
+    {
+        return $user->transactions()
+            ->where('type', TransactionType::Regular)
+            ->where('amount', '<', 0)
+            ->withinDateRange($start, $end)
+            ->with('category:id,name,emoji')
+            ->orderBy('amount')
+            ->get()
+            ->groupBy('currency')
+            ->map(fn (Collection $transactions) => $transactions
                 ->take($limit)
+                ->map(fn (Transaction $transaction) => [
+                    'uuid' => $transaction->uuid,
+                    'description' => $transaction->description,
+                    'category' => $transaction->category?->name ?? 'Sin categoría',
+                    'emoji' => $transaction->category?->emoji ?? '💸',
+                    'amount' => round(abs($transaction->amount), 2),
+                    'date' => $transaction->transaction_date->toDateString(),
+                ])
                 ->values()
                 ->all())
             ->all();
@@ -244,118 +395,8 @@ class InsightsService
         return null;
     }
 
-    /**
-     * Per budget item, the average spend across closed cycles next to the cap in
-     * force today, so out-of-touch caps surface.
-     *
-     * @return array<string, list<array<string, mixed>>>
-     */
-    public function capSuggestions(User $user, CarbonImmutable $now, int $minCycles = 2): array
+    private function cycleStartDay(User $user): int
     {
-        $suggestions = [];
-
-        $cycles = BudgetCycle::query()
-            ->where('user_id', $user->id)
-            ->with('items')
-            ->orderByDesc('starts_at')
-            ->get()
-            ->groupBy('budget_id');
-
-        $budgets = Budget::query()
-            ->whereIn('id', $cycles->keys())
-            ->with('items.category')
-            ->get()
-            ->keyBy('id');
-
-        foreach ($cycles as $budgetId => $budgetCycles) {
-            $budget = $budgets->get($budgetId);
-
-            if ($budget === null || $budgetCycles->count() < $minCycles) {
-                continue;
-            }
-
-            $spentByCategory = $this->spentByCategoryAcross($budgetCycles);
-
-            foreach ($budget->items as $item) {
-                $samples = $spentByCategory[$item->category_id] ?? [];
-
-                if (count($samples) < $minCycles) {
-                    continue;
-                }
-
-                $average = array_sum($samples) / count($samples);
-                $cap = (float) $item->amount;
-                $gap = $average - $cap;
-
-                if ($cap <= 0 || abs($gap) < $cap * 0.15) {
-                    continue;
-                }
-
-                $suggestions[$budget->currency][] = [
-                    'budget_name' => $budget->name,
-                    'budget_uuid' => $budget->uuid,
-                    'category_name' => $item->category?->name ?? 'Sin categoría',
-                    'category_emoji' => $item->category?->emoji ?? '💰',
-                    'cap' => $cap,
-                    'average' => round($average, 2),
-                    'gap' => round($gap, 2),
-                    'cycles' => count($samples),
-                ];
-            }
-        }
-
-        return collect($suggestions)
-            ->map(fn (array $rows) => collect($rows)
-                ->sortByDesc(fn (array $row) => abs($row['gap']))
-                ->values()
-                ->all())
-            ->all();
-    }
-
-    /**
-     * @param  Collection<int, BudgetCycle>  $cycles
-     * @return array<int, list<float>>
-     */
-    private function spentByCategoryAcross(Collection $cycles): array
-    {
-        $samples = [];
-
-        foreach ($cycles as $cycle) {
-            $transactions = $this->budgetCycles->transactionsQuery($cycle)
-                ->get(['category_id', 'amount']);
-
-            $spentByCategory = [];
-            foreach ($transactions as $transaction) {
-                $spentByCategory[$transaction->category_id] =
-                    ($spentByCategory[$transaction->category_id] ?? 0) + abs($transaction->amount);
-            }
-
-            foreach ($cycle->items as $item) {
-                $spent = collect($item->category_ids)
-                    ->sum(fn ($categoryId) => $spentByCategory[(int) $categoryId] ?? 0);
-                $samples[$item->category_id][] = (float) $spent;
-            }
-        }
-
-        return $samples;
-    }
-
-    private function statusFor(float $budgeted, float $spent): string
-    {
-        if ($budgeted <= 0) {
-            return 'empty';
-        }
-
-        $ratio = $spent / $budgeted;
-
-        if ($ratio > 1) {
-            return 'over';
-        }
-
-        if ($ratio >= 0.9) {
-            return 'tight';
-        }
-
-        return 'kept';
+        return (int) ($user->settings?->budget_cycle_start_day ?? 1);
     }
 }

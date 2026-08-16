@@ -1,87 +1,66 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { FilterPill } from '@/components/filter-pill';
 import {
-    Bar,
-    CartesianGrid,
-    ComposedChart,
-    Line,
-    XAxis,
-    YAxis,
-} from 'recharts';
+    CategoryBreakdown,
+    type Breakdown,
+} from '@/components/insights/category-breakdown';
 import {
-    ChartContainer,
-    ChartLegend,
-    ChartLegendContent,
-    ChartTooltip,
-    ChartTooltipContent,
-    type ChartConfig,
-} from '@/components/ui/chart';
+    CyclePicker,
+    formatCycleRange,
+    type CycleOption,
+} from '@/components/insights/cycle-picker';
+import {
+    YearChart,
+    type CashFlowPoint,
+} from '@/components/insights/year-chart';
+import { SelectList } from '@/components/ui/select-list';
 import AppLayout from '@/layouts/app-layout';
-import { formatCurrency, formatCurrencyValue } from '@/lib/currency';
+import { formatCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
 
-interface CashFlowPoint {
-    start: string;
-    end: string;
-    income: number;
-    expense: number;
-    net: number;
-}
-
-interface ComplianceCycle {
-    start: string;
-    end: string;
-    budgeted: number;
-    spent: number;
-    status: 'kept' | 'tight' | 'over' | 'empty';
-    percentage: number;
-}
-
-interface ComplianceBudget {
-    id: number;
-    uuid: string;
-    name: string;
-    emoji: string;
-    cycles: ComplianceCycle[];
-    kept: number;
-    total: number;
-}
-
-interface CategoryTrend {
-    name: string;
-    emoji: string;
-    points: number[];
-    latest: number;
-    baseline: number;
-    delta: number;
-    total: number;
-    period_start: string;
-    period_end: string;
-}
-
-interface CapSuggestion {
-    budget_name: string;
-    budget_uuid: string;
-    category_name: string;
-    category_emoji: string;
-    cap: number;
-    average: number;
-    gap: number;
-    cycles: number;
-}
-
-interface Section {
+interface YearSection {
     currency: string;
     currency_locale: string;
     cash_flow: CashFlowPoint[];
-    budgets: ComplianceBudget[];
-    trends: CategoryTrend[];
-    cap_suggestions: CapSuggestion[];
+    income: number;
+    expense: number;
+    net: number;
+    average_expense: number;
+    start: string;
+    end: string;
+    categories: Breakdown;
+}
+
+interface CycleSection {
+    currency: string;
+    currency_locale: string;
+    income: number;
+    expense: number;
+    net: number;
+    categories: Breakdown;
+    largest_expenses: {
+        uuid: string;
+        description: string;
+        category: string;
+        emoji: string;
+        amount: number;
+        date: string;
+    }[];
 }
 
 interface Props {
-    sections: Section[];
-    currentPeriodStart: string;
+    years: number[];
+    selectedYear: number;
+    year: YearSection[];
+    cycleOptions: CycleOption[];
+    selectedCycle: {
+        start: string;
+        end: string;
+        is_current: boolean;
+        days_left: number;
+    };
+    cycle: CycleSection[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -89,456 +68,343 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Insights', href: '/insights' },
 ];
 
-const cashFlowConfig = {
-    income: { label: 'Ingreso', color: 'var(--chart-2)' },
-    expense: { label: 'Gasto', color: 'var(--chart-1)' },
-    net: { label: 'Ahorro neto', color: 'var(--muted-foreground)' },
-} satisfies ChartConfig;
+export default function Insights({
+    years,
+    selectedYear,
+    year,
+    cycleOptions,
+    selectedCycle,
+    cycle,
+}: Props) {
+    const goToYear = (next: number) =>
+        router.get(
+            '/insights',
+            { year: next, cycle: selectedCycle.start },
+            {
+                only: ['year', 'selectedYear'],
+                preserveScroll: true,
+                preserveState: true,
+            },
+        );
 
-const STATUS_STYLES: Record<ComplianceCycle['status'], string> = {
-    kept: 'bg-teal-500',
-    tight: 'bg-amber-500',
-    over: 'bg-rose-600 dark:bg-rose-500',
-    empty: 'bg-muted',
-};
+    const goToCycle = (start: string) =>
+        router.get(
+            '/insights',
+            { year: selectedYear, cycle: start },
+            {
+                only: ['cycle', 'selectedCycle', 'cycleOptions'],
+                preserveScroll: true,
+                preserveState: true,
+            },
+        );
 
-const STATUS_LABELS: Record<ComplianceCycle['status'], string> = {
-    kept: 'Cumplido',
-    tight: 'Al límite',
-    over: 'Excedido',
-    empty: 'Sin límites',
-};
+    const isEmpty = year.length === 0 && cycle.length === 0;
 
-export default function Insights({ sections, currentPeriodStart }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Insights" />
 
-            <div className="flex flex-1 flex-col gap-8 px-4 py-6 md:px-6">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                        Insights
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Cómo se comportaron tus finanzas en el tiempo.
-                    </p>
+            <div className="flex flex-1 flex-col gap-10 px-4 py-6 md:px-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                            Insights
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            En qué se te fue la plata, en el año y en el ciclo.
+                        </p>
+                    </div>
+
+                    {years.length > 1 && (
+                        <FilterPill
+                            label="Año"
+                            value={String(selectedYear)}
+                            align="end"
+                            contentClassName="w-44"
+                            flushBottom
+                        >
+                            {({ close }) => (
+                                <SelectList
+                                    mode="single"
+                                    value={selectedYear}
+                                    onChange={(next) =>
+                                        next !== null && goToYear(Number(next))
+                                    }
+                                    onSelect={close}
+                                    emptyMessage="Sin años"
+                                    options={years.map((option) => ({
+                                        id: option,
+                                        label: String(option),
+                                    }))}
+                                />
+                            )}
+                        </FilterPill>
+                    )}
                 </div>
 
-                {sections.length === 0 ? (
+                {isEmpty ? (
                     <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-12 text-center">
                         <p className="font-medium text-foreground">
-                            Todavía no hay historia que mostrar
+                            Todavía no hay nada que mostrar
                         </p>
                         <p className="text-sm text-muted-foreground">
-                            Registrá transacciones y dejá cerrar un ciclo de
-                            budget para ver tendencias acá.
+                            Registrá transacciones y acá vas a ver cuánto
+                            gastaste por mes y por categoría.
                         </p>
                     </div>
                 ) : (
-                    sections.map((section) => (
-                        <CurrencyInsights
-                            key={section.currency}
-                            section={section}
-                            currentPeriodStart={currentPeriodStart}
+                    <>
+                        <YearBlock sections={year} year={selectedYear} />
+                        <CycleBlock
+                            sections={cycle}
+                            options={cycleOptions}
+                            selected={selectedCycle}
+                            onSelect={goToCycle}
                         />
-                    ))
+                    </>
                 )}
             </div>
         </AppLayout>
     );
 }
 
-function CurrencyInsights({
-    section,
-    currentPeriodStart,
+function YearBlock({
+    sections,
+    year,
 }: {
-    section: Section;
-    currentPeriodStart: string;
+    sections: YearSection[];
+    year: number;
 }) {
-    const locale = section.currency_locale ?? 'es-CL';
-    const money = (value: number) =>
-        formatCurrency(value, section.currency, locale);
-
     return (
-        <div className="space-y-8">
-            {section.cash_flow.length > 0 && (
-                <CashFlow
-                    section={section}
-                    locale={locale}
-                    currentPeriodStart={currentPeriodStart}
-                />
+        <section className="space-y-4">
+            <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                    El año {year}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                    Un punto por ciclo, nombrado según el mes en que cierra.
+                </p>
+            </div>
+
+            {sections.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                    Sin movimientos en {year}.
+                </p>
+            ) : (
+                sections.map((section) => {
+                    const locale = section.currency_locale ?? 'es-CL';
+                    const money = (value: number) =>
+                        formatCurrency(value, section.currency, locale);
+
+                    return (
+                        <div key={section.currency} className="space-y-4">
+                            {sections.length > 1 && (
+                                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                    {section.currency}
+                                </p>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                                <Stat
+                                    label="Gastado"
+                                    value={money(section.expense)}
+                                />
+                                <Stat
+                                    label="Ingresado"
+                                    value={money(section.income)}
+                                />
+                                <Stat
+                                    label="Ahorro neto"
+                                    value={money(section.net)}
+                                    tone={section.net < 0 ? 'bad' : 'good'}
+                                />
+                                <Stat
+                                    label="Promedio por ciclo"
+                                    value={money(section.average_expense)}
+                                />
+                            </div>
+
+                            <YearChart
+                                points={section.cash_flow}
+                                currency={section.currency}
+                                locale={locale}
+                            />
+
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold text-foreground">
+                                    Gasto por categoría en {year}
+                                </h3>
+                                <CategoryBreakdown
+                                    breakdown={section.categories}
+                                    currency={section.currency}
+                                    locale={locale}
+                                    range={{
+                                        start: section.start,
+                                        end: section.end,
+                                    }}
+                                    compareLabel={`${year - 1} a la misma altura`}
+                                />
+                            </div>
+                        </div>
+                    );
+                })
             )}
-            {section.budgets.length > 0 && (
-                <Compliance section={section} locale={locale} money={money} />
-            )}
-            {section.trends.length > 0 && (
-                <Trends section={section} locale={locale} money={money} />
-            )}
-            {section.cap_suggestions.length > 0 && (
-                <CapSuggestions section={section} money={money} />
-            )}
-        </div>
+        </section>
     );
 }
 
-/** A cycle is named after the month it ends in: 29 jun–28 jul reads as "jul". */
-function periodLabel(end: string, locale: string): string {
-    return new Date(`${end}T00:00:00`).toLocaleDateString(locale, {
+function CycleBlock({
+    sections,
+    options,
+    selected,
+    onSelect,
+}: {
+    sections: CycleSection[];
+    options: CycleOption[];
+    selected: Props['selectedCycle'];
+    onSelect: (start: string) => void;
+}) {
+    const locale = sections[0]?.currency_locale ?? 'es-CL';
+
+    return (
+        <section className="space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 className="text-lg font-semibold text-foreground">
+                        {selected.is_current ? 'Ciclo actual' : 'Ciclo cerrado'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        {formatCycleRange(selected.start, selected.end, locale)}
+                        {selected.is_current &&
+                            ` · quedan ${selected.days_left} días`}
+                    </p>
+                </div>
+
+                <CyclePicker
+                    options={options}
+                    selectedStart={selected.start}
+                    locale={locale}
+                    onSelect={onSelect}
+                />
+            </div>
+
+            {sections.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                    Sin movimientos en este ciclo.
+                </p>
+            ) : (
+                sections.map((section) => {
+                    const sectionLocale = section.currency_locale ?? 'es-CL';
+                    const money = (value: number) =>
+                        formatCurrency(value, section.currency, sectionLocale);
+
+                    return (
+                        <div key={section.currency} className="space-y-4">
+                            {sections.length > 1 && (
+                                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                    {section.currency}
+                                </p>
+                            )}
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <Stat
+                                    label="Gastado"
+                                    value={money(section.expense)}
+                                />
+                                <Stat
+                                    label="Ingresado"
+                                    value={money(section.income)}
+                                />
+                                <Stat
+                                    label="Neto"
+                                    value={money(section.net)}
+                                    tone={section.net < 0 ? 'bad' : 'good'}
+                                />
+                            </div>
+
+                            <CategoryBreakdown
+                                breakdown={section.categories}
+                                currency={section.currency}
+                                locale={sectionLocale}
+                                range={{
+                                    start: selected.start,
+                                    end: selected.end,
+                                }}
+                                compareLabel="el ciclo anterior"
+                            />
+
+                            {section.largest_expenses.length > 0 && (
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-semibold text-foreground">
+                                        Los gastos más grandes
+                                    </h3>
+                                    <div className="divide-y divide-border rounded-xl border border-border bg-card">
+                                        {section.largest_expenses.map(
+                                            (expense) => (
+                                                <div
+                                                    key={expense.uuid}
+                                                    className="flex items-center justify-between gap-3 px-4 py-2.5"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm text-foreground">
+                                                            <span aria-hidden>
+                                                                {expense.emoji}
+                                                            </span>{' '}
+                                                            {expense.description ||
+                                                                expense.category}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {expense.category} ·{' '}
+                                                            {dayLabel(
+                                                                expense.date,
+                                                                sectionLocale,
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    <span className="shrink-0 text-sm font-medium text-foreground tabular-nums">
+                                                        {money(expense.amount)}
+                                                    </span>
+                                                </div>
+                                            ),
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+        </section>
+    );
+}
+
+function dayLabel(date: string, locale: string): string {
+    return new Date(`${date}T00:00:00`).toLocaleDateString(locale, {
+        day: 'numeric',
         month: 'short',
-        year: '2-digit',
     });
 }
 
-function periodRange(start: string, end: string, locale: string): string {
-    const options: Intl.DateTimeFormatOptions = {
-        day: 'numeric',
-        month: 'short',
-    };
-    return `${new Date(`${start}T00:00:00`).toLocaleDateString(locale, options)} — ${new Date(`${end}T00:00:00`).toLocaleDateString(locale, options)}`;
-}
-
-function CashFlow({
-    section,
-    locale,
-    currentPeriodStart,
+function Stat({
+    label,
+    value,
+    tone,
 }: {
-    section: Section;
-    locale: string;
-    currentPeriodStart: string;
-}) {
-    const data = section.cash_flow.map((point) => ({
-        ...point,
-        label: periodLabel(point.end, locale),
-        isCurrent: point.start === currentPeriodStart,
-    }));
-    const currentRange = section.cash_flow.find(
-        (point) => point.start === currentPeriodStart,
-    );
-
-    return (
-        <section className="space-y-3">
-            <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                    Ingreso vs gasto ({section.currency})
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    Últimos 12 ciclos según tu fecha de corte. La línea es lo
-                    que quedó.
-                    {currentRange && (
-                        <>
-                            {' '}
-                            El último (
-                            {periodRange(
-                                currentRange.start,
-                                currentRange.end,
-                                locale,
-                            )}
-                            ) está en curso.
-                        </>
-                    )}
-                </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4">
-                <ChartContainer config={cashFlowConfig} className="h-64 w-full">
-                    <ComposedChart
-                        data={data}
-                        margin={{ left: 4, right: 12, top: 8 }}
-                    >
-                        <CartesianGrid vertical={false} strokeOpacity={0.4} />
-                        <XAxis
-                            dataKey="label"
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={8}
-                            minTickGap={16}
-                        />
-                        <YAxis
-                            tickLine={false}
-                            axisLine={false}
-                            width={56}
-                            tickFormatter={(value: number) =>
-                                formatCurrencyValue(
-                                    value,
-                                    section.currency,
-                                    locale,
-                                )
-                            }
-                        />
-                        <ChartTooltip
-                            content={
-                                <ChartTooltipContent
-                                    labelFormatter={(_label, payload) => {
-                                        const point = payload?.[0]?.payload as
-                                            | (CashFlowPoint & {
-                                                  isCurrent: boolean;
-                                              })
-                                            | undefined;
-
-                                        if (!point) {
-                                            return null;
-                                        }
-
-                                        return `${periodRange(point.start, point.end, locale)}${point.isCurrent ? ' · en curso' : ''}`;
-                                    }}
-                                    formatter={(value, name) => (
-                                        <span className="flex w-full justify-between gap-3">
-                                            <span className="text-muted-foreground">
-                                                {cashFlowConfig[
-                                                    name as keyof typeof cashFlowConfig
-                                                ]?.label ?? name}
-                                            </span>
-                                            <span className="tabular-nums">
-                                                {formatCurrency(
-                                                    Number(value),
-                                                    section.currency,
-                                                    locale,
-                                                )}
-                                            </span>
-                                        </span>
-                                    )}
-                                />
-                            }
-                        />
-                        <ChartLegend content={<ChartLegendContent />} />
-                        <Bar
-                            dataKey="income"
-                            fill="var(--color-income)"
-                            radius={[4, 4, 0, 0]}
-                        />
-                        <Bar
-                            dataKey="expense"
-                            fill="var(--color-expense)"
-                            radius={[4, 4, 0, 0]}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="net"
-                            stroke="var(--color-net)"
-                            strokeWidth={2}
-                            dot={false}
-                        />
-                    </ComposedChart>
-                </ChartContainer>
-            </div>
-        </section>
-    );
-}
-
-function Compliance({
-    section,
-    locale,
-    money,
-}: {
-    section: Section;
-    locale: string;
-    money: (value: number) => string;
+    label: string;
+    value: string;
+    tone?: 'good' | 'bad';
 }) {
     return (
-        <section className="space-y-3">
-            <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                    Racha de cumplimiento
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    Un cuadro por ciclo cerrado, del más antiguo al más
-                    reciente.
-                </p>
-            </div>
-
-            <div className="space-y-4 rounded-xl border border-border bg-card p-4">
-                {section.budgets.map((budget) => (
-                    <div key={budget.id} className="space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                            <Link
-                                href={`/budgets/${budget.uuid}`}
-                                className="truncate text-sm font-medium text-foreground hover:underline"
-                            >
-                                <span aria-hidden>{budget.emoji}</span>{' '}
-                                {budget.name}
-                            </Link>
-                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                {budget.kept}/{budget.total} ciclos cumplidos
-                            </span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1">
-                            {budget.cycles.map((cycle) => (
-                                <Link
-                                    key={cycle.start}
-                                    href={`/budgets/${budget.uuid}?cycle=${cycle.start}`}
-                                    title={`${periodRange(cycle.start, cycle.end, locale)} · ${STATUS_LABELS[cycle.status]} · ${money(cycle.spent)} de ${money(cycle.budgeted)}`}
-                                    aria-label={`${periodRange(cycle.start, cycle.end, locale)}: ${STATUS_LABELS[cycle.status]}`}
-                                    className={cn(
-                                        'size-6 rounded-sm transition-transform hover:scale-110',
-                                        STATUS_STYLES[cycle.status],
-                                    )}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                ))}
-
-                <div className="flex flex-wrap gap-4 pt-1 text-xs text-muted-foreground">
-                    {(
-                        ['kept', 'tight', 'over'] as ComplianceCycle['status'][]
-                    ).map((status) => (
-                        <span
-                            key={status}
-                            className="flex items-center gap-1.5"
-                        >
-                            <span
-                                className={cn(
-                                    'size-3 rounded-sm',
-                                    STATUS_STYLES[status],
-                                )}
-                                aria-hidden
-                            />
-                            {STATUS_LABELS[status]}
-                        </span>
-                    ))}
-                </div>
-            </div>
-        </section>
-    );
-}
-
-function Sparkline({ points }: { points: number[] }) {
-    const max = Math.max(...points, 1);
-
-    return (
-        <div className="flex h-8 items-end gap-0.5" aria-hidden>
-            {points.map((point, index) => (
-                <span
-                    key={index}
-                    className="w-1.5 rounded-t-sm bg-chart-1"
-                    style={{ height: `${Math.max((point / max) * 100, 4)}%` }}
-                />
-            ))}
+        <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p
+                className={cn(
+                    'mt-0.5 text-lg font-semibold text-foreground tabular-nums',
+                    tone === 'bad' && 'text-rose-600 dark:text-rose-500',
+                )}
+            >
+                {value}
+            </p>
         </div>
-    );
-}
-
-function Trends({
-    section,
-    locale,
-    money,
-}: {
-    section: Section;
-    locale: string;
-    money: (value: number) => string;
-}) {
-    const lastClosed = section.trends[0];
-
-    return (
-        <section className="space-y-3">
-            <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                    Categorías que se están moviendo
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    Gasto por ciclo y desvío del último ciclo cerrado
-                    {lastClosed && (
-                        <>
-                            {' ('}
-                            {periodRange(
-                                lastClosed.period_start,
-                                lastClosed.period_end,
-                                locale,
-                            )}
-                            {')'}
-                        </>
-                    )}{' '}
-                    contra su promedio. El ciclo en curso no entra.
-                </p>
-            </div>
-
-            <div className="divide-y divide-border rounded-xl border border-border bg-card">
-                {section.trends.map((trend) => (
-                    <div
-                        key={trend.name}
-                        className="flex items-center justify-between gap-4 p-3"
-                    >
-                        <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">
-                                <span aria-hidden>{trend.emoji}</span>{' '}
-                                {trend.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground tabular-nums">
-                                {money(trend.latest)} el último ciclo · promedio{' '}
-                                {money(trend.baseline)}
-                            </p>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <Sparkline points={trend.points} />
-                            <span
-                                className={cn(
-                                    'w-24 shrink-0 text-right text-sm font-semibold tabular-nums',
-                                    trend.delta > 0
-                                        ? 'text-rose-600 dark:text-rose-500'
-                                        : 'text-teal-600 dark:text-teal-400',
-                                )}
-                            >
-                                {trend.delta > 0 ? '↑' : '↓'}{' '}
-                                {money(Math.abs(trend.delta))}
-                            </span>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-function CapSuggestions({
-    section,
-    money,
-}: {
-    section: Section;
-    money: (value: number) => string;
-}) {
-    return (
-        <section className="space-y-3">
-            <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                    Límites que no cuadran
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    Lo que gastás en promedio por ciclo contra el límite que
-                    tenés puesto hoy.
-                </p>
-            </div>
-
-            <div className="divide-y divide-border rounded-xl border border-border bg-card">
-                {section.cap_suggestions.map((suggestion) => (
-                    <div
-                        key={`${suggestion.budget_uuid}-${suggestion.category_name}`}
-                        className="flex items-center justify-between gap-4 p-3"
-                    >
-                        <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">
-                                <span aria-hidden>
-                                    {suggestion.category_emoji}
-                                </span>{' '}
-                                {suggestion.category_name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {suggestion.budget_name} · {suggestion.cycles}{' '}
-                                ciclos
-                            </p>
-                        </div>
-
-                        <p className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                            promedio{' '}
-                            <span className="font-semibold text-foreground">
-                                {money(suggestion.average)}
-                            </span>{' '}
-                            · límite {money(suggestion.cap)}
-                        </p>
-                    </div>
-                ))}
-            </div>
-        </section>
     );
 }
