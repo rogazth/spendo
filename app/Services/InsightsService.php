@@ -289,21 +289,22 @@ class InsightsService
             ->map(fn (string|int $key) => (int) $key)
             ->unique();
 
-        $categories = Category::withTrashed()->whereIn('id', $ids)->get()->keyBy('id');
+        $categories = Category::withTrashed()->whereIn('id', $ids)->get();
 
         $missingParents = $categories
             ->pluck('parent_id')
             ->filter()
-            ->reject(fn (int $id) => $categories->has($id))
+            ->reject(fn (int $id) => $categories->contains('id', $id))
             ->unique();
 
         if ($missingParents->isNotEmpty()) {
-            $categories = $categories->merge(
-                Category::withTrashed()->whereIn('id', $missingParents)->get()->keyBy('id'),
+            $categories = $categories->concat(
+                Category::withTrashed()->whereIn('id', $missingParents)->get(),
             );
         }
 
-        return $categories;
+        // keyBy last: merging two id-keyed collections would renumber the keys.
+        return $categories->keyBy('id');
     }
 
     /**

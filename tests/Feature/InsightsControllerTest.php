@@ -135,6 +135,50 @@ test('the year breakdown ranks categories and nests subcategories', function () 
         );
 });
 
+test('subcategory spending is named after its own parent, never another category', function () {
+    [$user, $account] = insightsUser();
+
+    // Parents with no direct spending of their own: they only reach the
+    // breakdown through their children, which is what used to shuffle names.
+    $home = Category::factory()->expense()->for($user)->create(['name' => 'Hogar']);
+    $rent = Category::factory()->expense()->for($user)->create([
+        'name' => 'Arriendo',
+        'parent_id' => $home->id,
+    ]);
+    $food = Category::factory()->expense()->for($user)->create(['name' => 'Comida']);
+    $coffee = Category::factory()->expense()->for($user)->create([
+        'name' => 'Café',
+        'parent_id' => $food->id,
+    ]);
+
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $account->id,
+        'category_id' => $rent->id,
+        'amount' => 572000,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-07-05',
+    ]);
+    Transaction::factory()->expense()->for($user)->create([
+        'account_id' => $account->id,
+        'category_id' => $coffee->id,
+        'amount' => 8000,
+        'currency' => 'CLP',
+        'transaction_date' => '2026-07-06',
+    ]);
+
+    $this->actingAs($user)->get('/insights')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cycle.0.categories.rows.0.name', 'Hogar')
+            ->where('cycle.0.categories.rows.0.amount', 572000)
+            ->where('cycle.0.categories.rows.0.children.0.name', 'Arriendo')
+            ->where('cycle.0.categories.rows.0.children.0.amount', 572000)
+            ->where('cycle.0.categories.rows.1.name', 'Comida')
+            ->where('cycle.0.categories.rows.1.amount', 8000)
+            ->where('cycle.0.categories.rows.1.children.0.name', 'Café')
+        );
+});
+
 test('the cycle block defaults to the cycle in progress', function () {
     [$user, $account] = insightsUser(28);
     $category = Category::factory()->expense()->for($user)->create(['name' => 'Comida']);
