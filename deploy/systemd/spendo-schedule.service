@@ -1,0 +1,14 @@
+[Unit]
+Description=Spendo: Laravel scheduler
+
+[Service]
+Type=oneshot
+User=spendo
+Group=spendo
+WorkingDirectory=/srv/spendo/current
+ExecStart=/usr/bin/php /srv/spendo/current/artisan schedule:run --no-interaction
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/srv/spendo/shared

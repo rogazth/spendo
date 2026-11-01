@@ -1,0 +1,8 @@
+[Unit]
+Description=Spendo: deploy latest GitHub release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/spendo-deploy

@@ -1,0 +1,90 @@
+#!/bin/bash
+# Pull-based deploy: installs the latest GitHub release of Spendo if it is newer
+# than the current one. Runs as root from spendo-deploy.service; app commands run
+# as the spendo user.
+#
+# Usage: spendo-deploy [--force] [tag]
+set -euo pipefail
+
+REPO="rogazth/spendo"
+APP_USER="spendo"
+BASE="/srv/spendo"
+RELEASES="$BASE/releases"
+SHARED="$BASE/shared"
+CURRENT="$BASE/current"
+KEEP_RELEASES=3
+KEEP_BACKUPS=10
+HEALTH_URL="http://127.0.0.1:8081/up"
+
+log() { echo "[spendo-deploy] $*"; }
+as_app() { runuser -u "$APP_USER" -- "$@"; }
+artisan() { as_app php "$1/artisan" "${@:2}"; }
+
+force=false
+if [[ "${1:-}" == "--force" ]]; then force=true; shift; fi
+wanted="${1:-}"
+
+exec 9>/run/spendo-deploy.lock
+flock -n 9 || { log "otro deploy en curso"; exit 0; }
+
+if [[ -z "$wanted" ]]; then
+    wanted=$(curl -fsS --max-time 20 "https://api.github.com/repos/$REPO/releases/latest" | jq -r '.tag_name')
+fi
+[[ "$wanted" =~ ^build-[0-9]{14}-[0-9a-f]{7}$ ]] || { log "tag inválido: $wanted"; exit 1; }
+
+current=$(cat "$CURRENT/RELEASE" 2>/dev/null || true)
+if [[ "$wanted" == "$current" && "$force" == false ]]; then
+    exit 0
+fi
+
+log "desplegando $wanted (actual: ${current:-ninguno})"
+
+target="$RELEASES/$wanted"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+base_url="https://github.com/$REPO/releases/download/$wanted"
+curl -fsSL --max-time 300 -o "$tmp/spendo.tar.gz" "$base_url/spendo.tar.gz"
+curl -fsSL --max-time 30 -o "$tmp/spendo.tar.gz.sha256" "$base_url/spendo.tar.gz.sha256"
+(cd "$tmp" && sha256sum -c --quiet spendo.tar.gz.sha256)
+
+rm -rf "$target"
+install -d -o "$APP_USER" -g "$APP_USER" -m 750 "$target"
+as_app tar -xzf "$tmp/spendo.tar.gz" -C "$target"
+
+# Shared state lives outside the release.
+as_app rm -rf "$target/storage"
+as_app ln -sfn "$SHARED/storage" "$target/storage"
+as_app ln -sfn "$SHARED/.env" "$target/.env"
+
+# Static files must be readable by nginx (group spendo).
+chmod -R g+rX "$target/public"
+chmod g+x "$target"
+
+db=$(grep -E '^DB_DATABASE=' "$SHARED/.env" | cut -d= -f2-)
+if [[ -f "$db" ]]; then
+    backup="$SHARED/backups/pre-$wanted.sqlite"
+    as_app sqlite3 "$db" ".backup '$backup'"
+    ls -1t "$SHARED"/backups/pre-*.sqlite 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
+fi
+
+artisan "$target" migrate --force --no-interaction
+artisan "$target" optimize
+
+previous=$(readlink -f "$CURRENT" 2>/dev/null || true)
+ln -sfn "$target" "$BASE/current.new"
+mv -Tf "$BASE/current.new" "$CURRENT"
+systemctl reload php8.4-fpm
+
+if ! curl -fsS --max-time 10 -o /dev/null "$HEALTH_URL"; then
+    log "health check falló, volviendo a ${previous:-nada}"
+    if [[ -n "$previous" ]]; then
+        ln -sfn "$previous" "$BASE/current.new"
+        mv -Tf "$BASE/current.new" "$CURRENT"
+        systemctl reload php8.4-fpm
+    fi
+    exit 1
+fi
+
+ls -1dt "$RELEASES"/build-* | tail -n +$((KEEP_RELEASES + 1)) | xargs -r rm -rf
+log "listo: $wanted"
