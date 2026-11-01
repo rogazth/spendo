@@ -65,13 +65,13 @@ jobs:
           TAG: ${{ steps.package.outputs.tag }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          gh release create "$TAG" spendo.tar.gz spendo.tar.gz.sha256 \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" spendo.tar.gz spendo.tar.gz.sha256 \
             --target "$SHA" --title "$TAG" --notes "Build of ${SHA}" --latest
 
       - name: Prune old releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release list --limit 100 --json tagName --jq '.[].tagName' \
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' \
             | grep '^build-' | tail -n +11 \
-            | xargs -r -I{} gh release delete {} --yes --cleanup-tag
+            | xargs -r -I{} gh release delete {} --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
