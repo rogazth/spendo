@@ -78,7 +78,7 @@ test('stores and updates exclude_from_budget in transactions', function () {
     expect($transaction->exclude_from_budget)->toBeTrue();
     expect($transaction->amount)->toEqual(-12345);
 
-    $this->actingAs($user)->put("/transactions/{$transaction->uuid}", [
+    $this->actingAs($user)->from('/transactions')->put("/transactions/{$transaction->uuid}", [
         'account_id' => $account->id,
         'category_id' => $category->id,
         'amount' => -12345,
