@@ -28,6 +28,8 @@ use App\Mcp\Tools\UpdateCategoryTool;
 use App\Mcp\Tools\UpdateTagTool;
 use App\Mcp\Tools\UpdateTransactionTool;
 use Laravel\Mcp\Server;
+use Laravel\Mcp\Server\Prompt;
+use Laravel\Mcp\Server\Tool;
 
 class SpendoServer extends Server
 {
@@ -77,7 +79,7 @@ class SpendoServer extends Server
     /**
      * The tools registered with this MCP server.
      *
-     * @var array<int, class-string<\Laravel\Mcp\Server\Tool>>
+     * @var array<int, class-string<Tool>>
      */
     protected array $tools = [
         // Summary
@@ -118,7 +120,7 @@ class SpendoServer extends Server
     /**
      * The resources registered with this MCP server.
      *
-     * @var array<int, class-string<\Laravel\Mcp\Server\Resource>>
+     * @var array<int, class-string<Server\Resource>>
      */
     protected array $resources = [
         //
@@ -127,7 +129,7 @@ class SpendoServer extends Server
     /**
      * The prompts registered with this MCP server.
      *
-     * @var array<int, class-string<\Laravel\Mcp\Server\Prompt>>
+     * @var array<int, class-string<Prompt>>
      */
     protected array $prompts = [
         SetupBudgetPrompt::class,

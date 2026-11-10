@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Actions\Transactions\UpdateTransactionAction;
 use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -73,7 +74,7 @@ class UpdateTransactionTool extends Tool
             $transaction = app(UpdateTransactionAction::class)->handle($transaction, $user, $data);
         } catch (\InvalidArgumentException $e) {
             return Response::error($e->getMessage());
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return Response::error($e->getMessage());
         }
 

@@ -3,9 +3,12 @@
 namespace App\Mcp\Tools;
 
 use App\Http\Resources\AccountResource;
+use App\Models\Account;
+use App\Models\User;
 use App\Services\BudgetMetricsService;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Collection;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -58,10 +61,10 @@ class GetAccountsTool extends Tool
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Collection<int, \App\Models\Account>  $accounts
+     * @param  Collection<int, Account>  $accounts
      * @return array<string, array{budget_balance: float, total_reserved: float, ready_to_assign: float}>
      */
-    private function buildCurrencySummaries(\App\Models\User $user, \Illuminate\Database\Eloquent\Collection $accounts): array
+    private function buildCurrencySummaries(User $user, Collection $accounts): array
     {
         $today = CarbonImmutable::now()->startOfDay();
 
@@ -90,7 +93,7 @@ class GetAccountsTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
+     * @return array<string, JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {
