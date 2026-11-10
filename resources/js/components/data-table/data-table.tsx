@@ -1,14 +1,17 @@
-import {
+import type {
     ColumnDef,
+    SortingState,
+    ColumnFiltersState,
+} from '@tanstack/react-table';
+import {
     flexRender,
     getCoreRowModel,
     useReactTable,
-    SortingState,
     getSortedRowModel,
-    ColumnFiltersState,
     getFilteredRowModel,
 } from '@tanstack/react-table';
 import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 import {
     Table,
     TableBody,
@@ -17,7 +20,6 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
@@ -55,9 +57,15 @@ export function DataTable<TData, TValue>({
                 <div className="flex items-center">
                     <Input
                         placeholder={searchPlaceholder}
-                        value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
+                        value={
+                            (table
+                                .getColumn(searchKey)
+                                ?.getFilterValue() as string) ?? ''
+                        }
                         onChange={(event) =>
-                            table.getColumn(searchKey)?.setFilterValue(event.target.value)
+                            table
+                                .getColumn(searchKey)
+                                ?.setFilterValue(event.target.value)
                         }
                         className="max-w-sm"
                     />
@@ -73,8 +81,9 @@ export function DataTable<TData, TValue>({
                                         {header.isPlaceholder
                                             ? null
                                             : flexRender(
-                                                  header.column.columnDef.header,
-                                                  header.getContext()
+                                                  header.column.columnDef
+                                                      .header,
+                                                  header.getContext(),
                                               )}
                                     </TableHead>
                                 ))}
@@ -86,13 +95,15 @@ export function DataTable<TData, TValue>({
                             table.getRowModel().rows.map((row) => (
                                 <TableRow
                                     key={row.id}
-                                    data-state={row.getIsSelected() && 'selected'}
+                                    data-state={
+                                        row.getIsSelected() && 'selected'
+                                    }
                                 >
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>
                                             {flexRender(
                                                 cell.column.columnDef.cell,
-                                                cell.getContext()
+                                                cell.getContext(),
                                             )}
                                         </TableCell>
                                     ))}

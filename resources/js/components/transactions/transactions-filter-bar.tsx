@@ -1,4 +1,7 @@
-import { AccountAvatar, accountToOption } from '@/components/accounts/account-select';
+import {
+    AccountAvatar,
+    accountToOption,
+} from '@/components/accounts/account-select';
 import { CategoryAvatar } from '@/components/categories/category-avatar';
 import { CategoryMultiSelect } from '@/components/categories/category-picker';
 import { DateFilterDropdown } from '@/components/date-filter-dropdown';
@@ -85,8 +88,8 @@ export function TransactionsFilterBar({
         (budget) => String(budget.id) === filters.budget_id,
     );
 
-    const selectedCategories = flattenCategories(categories).filter((category) =>
-        filters.category_ids.includes(String(category.id)),
+    const selectedCategories = flattenCategories(categories).filter(
+        (category) => filters.category_ids.includes(String(category.id)),
     );
 
     return (

@@ -88,7 +88,10 @@ export function CategoryPicker({
         () => toCategoryOptions(categories, parentsOnly),
         [categories, parentsOnly],
     );
-    const selected = useMemo(() => findOption(options, value), [options, value]);
+    const selected = useMemo(
+        () => findOption(options, value),
+        [options, value],
+    );
 
     return (
         <SelectField
@@ -119,7 +122,10 @@ export function CategoryPicker({
                     emptyMessage={emptyMessage}
                     clearOption={
                         allowClear
-                            ? { label: clearLabel, keywords: ['ninguna', 'sin'] }
+                            ? {
+                                  label: clearLabel,
+                                  keywords: ['ninguna', 'sin'],
+                              }
                             : undefined
                     }
                 />

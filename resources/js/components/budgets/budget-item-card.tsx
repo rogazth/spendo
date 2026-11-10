@@ -56,13 +56,17 @@ export interface BudgetItemCardProps {
     locale?: string;
 }
 
-export function BudgetItemCard({ item, currency, locale }: BudgetItemCardProps) {
+export function BudgetItemCard({
+    item,
+    currency,
+    locale,
+}: BudgetItemCardProps) {
     const tier = resolveTier(item.percentage);
     const overBudget = item.percentage >= 100;
     const nearLimit = item.percentage >= 80 && item.percentage < 100;
 
     return (
-        <div className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <div className="p-5">
                 <div className="mb-4 flex items-start gap-3">
                     <div
@@ -75,19 +79,19 @@ export function BudgetItemCard({ item, currency, locale }: BudgetItemCardProps) 
                         <span aria-hidden>{item.category_emoji}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                        <h3 className="text-foreground truncate font-semibold">
+                        <h3 className="truncate font-semibold text-foreground">
                             {item.category_name}
                         </h3>
-                        <p className="text-muted-foreground text-xs">
+                        <p className="text-xs text-muted-foreground">
                             Categoría presupuestada
                         </p>
                     </div>
                 </div>
 
                 <div className="mb-2 flex items-end justify-between gap-2">
-                    <span className="text-foreground font-mono text-2xl font-bold tabular-nums">
+                    <span className="font-mono text-2xl font-bold text-foreground tabular-nums">
                         {formatCurrency(item.spent, currency, locale)}
-                        <span className="text-muted-foreground ml-1 font-sans text-sm font-normal">
+                        <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
                             / {formatCurrency(item.budgeted, currency, locale)}
                         </span>
                     </span>
@@ -101,28 +105,38 @@ export function BudgetItemCard({ item, currency, locale }: BudgetItemCardProps) 
                     </span>
                 </div>
 
-                <div className="bg-muted mb-4 h-2 w-full overflow-hidden rounded-full">
+                <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
-                        className={cn('h-full rounded-full transition-all', tier.bar)}
+                        className={cn(
+                            'h-full rounded-full transition-all',
+                            tier.bar,
+                        )}
                         style={{ width: `${Math.min(100, item.percentage)}%` }}
                     />
                 </div>
 
-                <div className="border-border flex items-center justify-between border-t pt-3 text-xs">
-                    <span className={cn('flex items-center gap-1 font-medium', tier.text)}>
+                <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
+                    <span
+                        className={cn(
+                            'flex items-center gap-1 font-medium',
+                            tier.text,
+                        )}
+                    >
                         {(nearLimit || overBudget) && (
                             <AlertTriangleIcon className="size-3.5" />
                         )}
                         {overBudget
                             ? 'Sobre el límite'
                             : nearLimit
-                                ? 'Cerca del límite'
-                                : 'Disponible'}
+                              ? 'Cerca del límite'
+                              : 'Disponible'}
                     </span>
                     <span
                         className={cn(
                             'font-mono font-medium tabular-nums',
-                            overBudget ? 'text-red-600 dark:text-red-400' : 'text-foreground',
+                            overBudget
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-foreground',
                         )}
                     >
                         {formatCurrency(item.remaining, currency, locale)}

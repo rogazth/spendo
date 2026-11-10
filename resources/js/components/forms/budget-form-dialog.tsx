@@ -214,10 +214,7 @@ export function BudgetFormDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="grid-rows-1 overflow-hidden p-0! max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:rounded-none! max-sm:border-0 sm:max-h-[95vh] sm:max-w-[680px]">
-                <form
-                    onSubmit={handleSubmit}
-                    className="flex min-h-0 flex-col"
-                >
+                <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
                     <DialogHeader className="px-6 pt-6 max-sm:px-4">
                         <DialogTitle>
                             {isEdit ? 'Editar Budget' : 'Nuevo Budget'}

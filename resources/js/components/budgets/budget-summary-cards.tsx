@@ -42,9 +42,10 @@ interface CurrencyRowProps {
 
 function CurrencyRow({ currency, entry, showLabel }: CurrencyRowProps) {
     const locale = entry.currency_locale ?? 'es-CL';
-    const percent = entry.budgeted > 0
-        ? Math.round((entry.spent / entry.budgeted) * 100)
-        : 0;
+    const percent =
+        entry.budgeted > 0
+            ? Math.round((entry.spent / entry.budgeted) * 100)
+            : 0;
     const overBudget = entry.remaining < 0;
 
     return (
@@ -68,7 +69,9 @@ function CurrencyRow({ currency, entry, showLabel }: CurrencyRowProps) {
                     tag="CURRENT"
                     label="Total spent"
                     value={formatCurrency(entry.spent, currency, locale)}
-                    sub={entry.budgeted > 0 ? `${percent}% of total` : undefined}
+                    sub={
+                        entry.budgeted > 0 ? `${percent}% of total` : undefined
+                    }
                 />
                 <StatCard
                     icon={<PiggyBankIcon className="size-5" />}
@@ -85,7 +88,11 @@ function CurrencyRow({ currency, entry, showLabel }: CurrencyRowProps) {
                     }
                     label="Remaining"
                     value={formatCurrency(entry.remaining, currency, locale)}
-                    valueClass={overBudget ? 'text-red-600 dark:text-red-400' : undefined}
+                    valueClass={
+                        overBudget
+                            ? 'text-red-600 dark:text-red-400'
+                            : undefined
+                    }
                     sub={overBudget ? 'Over budget' : 'Available'}
                 />
             </div>
@@ -104,9 +111,18 @@ interface StatCardProps {
     sub?: string;
 }
 
-function StatCard({ icon, iconClass, tag, tagClass, label, value, valueClass, sub }: StatCardProps) {
+function StatCard({
+    icon,
+    iconClass,
+    tag,
+    tagClass,
+    label,
+    value,
+    valueClass,
+    sub,
+}: StatCardProps) {
     return (
-        <div className="bg-card border-border rounded-xl border p-5 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex items-start justify-between">
                 <div
                     className={cn(
@@ -118,14 +134,14 @@ function StatCard({ icon, iconClass, tag, tagClass, label, value, valueClass, su
                 </div>
                 <span
                     className={cn(
-                        'bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[10px] font-medium tracking-wider',
+                        'rounded bg-muted px-2 py-0.5 font-mono text-[10px] font-medium tracking-wider text-muted-foreground',
                         tagClass,
                     )}
                 >
                     {tag}
                 </span>
             </div>
-            <p className="text-muted-foreground text-sm font-medium">{label}</p>
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
             <div className="mt-1.5 flex items-baseline gap-2">
                 <span
                     className={cn(
@@ -136,7 +152,7 @@ function StatCard({ icon, iconClass, tag, tagClass, label, value, valueClass, su
                     {value}
                 </span>
                 {sub && (
-                    <span className="text-muted-foreground text-xs">{sub}</span>
+                    <span className="text-xs text-muted-foreground">{sub}</span>
                 )}
             </div>
         </div>

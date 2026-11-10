@@ -6,7 +6,12 @@ type Props = React.ComponentProps<'main'> & {
     variant?: 'header' | 'sidebar';
 };
 
-export function AppContent({ variant = 'header', children, className, ...props }: Props) {
+export function AppContent({
+    variant = 'header',
+    children,
+    className,
+    ...props
+}: Props) {
     if (variant === 'sidebar') {
         return (
             <SidebarInset className={cn('relative', className)} {...props}>

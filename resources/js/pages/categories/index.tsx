@@ -150,10 +150,10 @@ export default function CategoriesIndex({
             <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
                             Categorías
                         </h1>
-                        <p className="text-muted-foreground text-sm">
+                        <p className="text-sm text-muted-foreground">
                             Jerarquía de categorías · movimientos del mes en
                             curso ·{' '}
                             <span className="font-mono">
@@ -173,9 +173,7 @@ export default function CategoriesIndex({
                             <EmptyMedia variant="icon">
                                 <TagIcon />
                             </EmptyMedia>
-                            <EmptyTitle>
-                                Aún no tienes categorías
-                            </EmptyTitle>
+                            <EmptyTitle>Aún no tienes categorías</EmptyTitle>
                             <EmptyDescription>
                                 Crea tu primera categoría para empezar a
                                 organizar tus movimientos.
@@ -234,7 +232,7 @@ export default function CategoriesIndex({
 
 function GlobalKpiStrip({ totals }: { totals: Totals }) {
     return (
-        <div className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-2xl border shadow-sm md:grid-cols-3">
+        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:grid-cols-3">
             <KpiCell
                 label="CATEGORIES"
                 value={String(totals.categories)}
@@ -267,8 +265,8 @@ function KpiCell({
     tone?: 'neutral' | 'muted';
 }) {
     return (
-        <div className="border-border flex flex-col gap-1.5 border-r border-b px-5 py-4 last:border-r-0 md:border-b-0">
-            <p className="text-muted-foreground font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+        <div className="flex flex-col gap-1.5 border-r border-b border-border px-5 py-4 last:border-r-0 md:border-b-0">
+            <p className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 {label}
             </p>
             <p
@@ -282,7 +280,7 @@ function KpiCell({
             >
                 {value}
             </p>
-            <p className="text-muted-foreground truncate text-[11px]">{note}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{note}</p>
         </div>
     );
 }
@@ -337,13 +335,13 @@ function CategoriesBoard({
     };
 
     return (
-        <section className="bg-card border-border overflow-hidden rounded-2xl border shadow-sm">
-            <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-6 py-3">
+        <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-3">
                 <div className="flex items-center gap-3">
-                    <span className="text-foreground font-mono text-xs font-semibold tracking-[0.18em] uppercase">
+                    <span className="font-mono text-xs font-semibold tracking-[0.18em] text-foreground uppercase">
                         Categories
                     </span>
-                    <span className="text-muted-foreground text-[11px]">
+                    <span className="text-[11px] text-muted-foreground">
                         Jerarquía · roll-up padre + hijos
                     </span>
                 </div>
@@ -366,7 +364,7 @@ function CategoriesBoard({
                             {statusLabel}
                         </span>
                     </div>
-                    <div className="text-muted-foreground text-[11px]">
+                    <div className="text-[11px] text-muted-foreground">
                         transacciones del mes en curso
                     </div>
                 </div>
@@ -375,7 +373,7 @@ function CategoriesBoard({
             <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                     <thead>
-                        <tr className="border-border text-muted-foreground border-b font-mono text-[10px] tracking-wider uppercase">
+                        <tr className="border-b border-border font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
                             <th className="px-6 py-2 text-left font-semibold">
                                 name
                             </th>
@@ -385,7 +383,7 @@ function CategoriesBoard({
                             <th className="px-3 py-2" />
                         </tr>
                     </thead>
-                    <tbody className="divide-border divide-y">
+                    <tbody className="divide-y divide-border">
                         {categories.map((parent) => {
                             const isExpanded = expanded.has(parent.id);
                             const hasChildren = parent.children.length > 0;
@@ -473,7 +471,7 @@ function CategoryRow({
     return (
         <tr
             className={cn(
-                'hover:bg-muted/40 transition-colors',
+                'transition-colors hover:bg-muted/40',
                 isChild && 'bg-muted/10',
                 row.transaction_count === 0 && 'opacity-70',
             )}
@@ -485,7 +483,7 @@ function CategoryRow({
                             <button
                                 type="button"
                                 onClick={onToggle}
-                                className="hover:bg-muted text-muted-foreground -ml-1 flex size-5 items-center justify-center rounded-sm transition-colors"
+                                className="-ml-1 flex size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted"
                                 aria-label={expanded ? 'Colapsar' : 'Expandir'}
                             >
                                 {expanded ? (
@@ -517,7 +515,7 @@ function CategoryRow({
                     </span>
                 </div>
             </td>
-            <td className="text-muted-foreground px-3 py-2.5 text-right font-mono tabular-nums">
+            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground tabular-nums">
                 {row.transaction_count > 0 ? row.transaction_count : '—'}
             </td>
             <td className="px-3 py-2.5 text-right">
@@ -526,7 +524,7 @@ function CategoryRow({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground hover:text-foreground size-7"
+                            className="size-7 text-muted-foreground hover:text-foreground"
                             aria-label="Acciones"
                         >
                             <MoreHorizontalIcon className="size-4" />
