@@ -22,10 +22,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { DEFAULT_COLORS } from '@/constants/colors';
 import { getCurrencyLocale } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import type { Account, Currency } from '@/types';
-import { DEFAULT_COLORS } from '@/constants/colors';
 
 interface AccountFormDialogProps {
     open: boolean;
@@ -157,7 +157,8 @@ export function AccountFormDialog({
                                                 key={currency.code}
                                                 value={currency.code}
                                             >
-                                                {currency.code} - {currency.name}
+                                                {currency.code} -{' '}
+                                                {currency.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

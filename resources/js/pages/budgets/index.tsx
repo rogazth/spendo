@@ -26,7 +26,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Budgets', href: '/budgets' },
 ];
 
-export default function BudgetsIndex({ budgets, summary, accounts, categories }: Props) {
+export default function BudgetsIndex({
+    budgets,
+    summary,
+    accounts,
+    categories,
+}: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
     const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
@@ -39,9 +44,7 @@ export default function BudgetsIndex({ budgets, summary, accounts, categories }:
             preserveScroll: true,
             onSuccess: () =>
                 toast.success(
-                    budget.is_active
-                        ? 'Budget desactivado'
-                        : 'Budget activado',
+                    budget.is_active ? 'Budget desactivado' : 'Budget activado',
                 ),
             onError: () => toast.error('No se pudo cambiar el estado'),
         });
@@ -71,10 +74,10 @@ export default function BudgetsIndex({ budgets, summary, accounts, categories }:
             <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
                             Budgets
                         </h1>
-                        <p className="text-muted-foreground text-sm">
+                        <p className="text-sm text-muted-foreground">
                             Controla tus límites de gasto por categoría.
                         </p>
                     </div>
@@ -88,7 +91,7 @@ export default function BudgetsIndex({ budgets, summary, accounts, categories }:
 
                 <div className="space-y-3">
                     {!isEmpty && (
-                        <h2 className="text-foreground text-lg font-semibold">
+                        <h2 className="text-lg font-semibold text-foreground">
                             Tus budgets
                         </h2>
                     )}

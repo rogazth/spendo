@@ -11,7 +11,11 @@ export interface AmountDisplayProps {
     placeholder?: string;
 }
 
-function formatMagnitude(value: number, locale: string, fractionDigits: number): string {
+function formatMagnitude(
+    value: number,
+    locale: string,
+    fractionDigits: number,
+): string {
     return new Intl.NumberFormat(locale, {
         minimumFractionDigits: fractionDigits,
         maximumFractionDigits: fractionDigits,
@@ -31,7 +35,9 @@ export function AmountDisplay({
         ? placeholder
         : formatMagnitude(magnitude, locale, fractionDigits);
 
-    const effectiveSign: AmountDisplayProps['sign'] = isEmpty ? 'neutral' : sign;
+    const effectiveSign: AmountDisplayProps['sign'] = isEmpty
+        ? 'neutral'
+        : sign;
 
     const colorClass =
         effectiveSign === 'negative'
@@ -41,7 +47,11 @@ export function AmountDisplay({
               : 'text-foreground';
 
     const prefix =
-        effectiveSign === 'negative' ? '−' : effectiveSign === 'positive' ? '+' : '';
+        effectiveSign === 'negative'
+            ? '−'
+            : effectiveSign === 'positive'
+              ? '+'
+              : '';
 
     return (
         <div className="flex items-baseline justify-center gap-2 transition-colors">
@@ -54,7 +64,7 @@ export function AmountDisplay({
             >
                 {prefix}${formatted}
             </span>
-            <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+            <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 {currency}
             </span>
         </div>

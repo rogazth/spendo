@@ -3,16 +3,10 @@ name: tests
 on:
   push:
     branches:
-      - develop
-      - main
       - master
-      - workos
   pull_request:
     branches:
-      - develop
-      - main
       - master
-      - workos
 
 jobs:
   ci:
@@ -23,22 +17,22 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer:v2
-          coverage: xdebug
+          coverage: none
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Install Node Dependencies
-        run: npm i
+        run: npm ci
 
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -51,6 +45,9 @@ jobs:
 
       - name: Build Assets
         run: npm run build
+
+      - name: Type Check
+        run: npm run types
 
       - name: Tests
         run: ./vendor/bin/pest

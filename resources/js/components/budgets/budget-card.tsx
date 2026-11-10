@@ -79,7 +79,8 @@ export function BudgetCard({
     const tier = resolveTier(percentage);
 
     const emoji = budget.emoji ?? budget.items?.[0]?.category?.emoji ?? '💰';
-    const color = budget.color ?? budget.items?.[0]?.category?.color ?? '#94a3b8';
+    const color =
+        budget.color ?? budget.items?.[0]?.category?.color ?? '#94a3b8';
 
     const overBudget = percentage >= 100;
     const nearLimit = percentage >= 80 && percentage < 100;
@@ -128,7 +129,7 @@ export function BudgetCard({
             onClick={navigate}
             onKeyDown={handleKeyDown}
             className={cn(
-                'group bg-card border-border hover:border-foreground/20 hover:shadow-md focus-visible:border-foreground/20 focus-visible:outline-hidden relative block cursor-pointer overflow-hidden rounded-xl border shadow-sm transition-all',
+                'group relative block cursor-pointer overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:border-foreground/20 hover:shadow-md focus-visible:border-foreground/20 focus-visible:outline-hidden',
                 !isActive && 'opacity-65',
             )}
         >
@@ -141,7 +142,7 @@ export function BudgetCard({
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                className="text-muted-foreground shrink-0"
+                                className="shrink-0 text-muted-foreground"
                                 aria-label="Acciones del budget"
                                 onClick={(event) => event.stopPropagation()}
                                 onKeyDown={(event) => event.stopPropagation()}
@@ -163,21 +164,22 @@ export function BudgetCard({
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                            <h3 className="text-foreground truncate font-semibold">
+                            <h3 className="truncate font-semibold text-foreground">
                                 {budget.name}
                             </h3>
                             {!isActive && <InactiveBadge />}
                         </div>
-                        <p className="text-muted-foreground text-xs">
-                            {FREQUENCY_RESETS[budget.frequency] ?? 'Custom cycle'}
+                        <p className="text-xs text-muted-foreground">
+                            {FREQUENCY_RESETS[budget.frequency] ??
+                                'Custom cycle'}
                         </p>
                     </div>
                 </div>
 
                 <div className="mb-2 flex items-end justify-between gap-2">
-                    <span className="text-foreground font-mono text-2xl font-bold tabular-nums">
+                    <span className="font-mono text-2xl font-bold text-foreground tabular-nums">
                         {formatCurrency(spent, budget.currency)}
-                        <span className="text-muted-foreground ml-1 font-sans text-sm font-normal">
+                        <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
                             / {formatCurrency(total, budget.currency)}
                         </span>
                     </span>
@@ -191,28 +193,38 @@ export function BudgetCard({
                     </span>
                 </div>
 
-                <div className="bg-muted mb-4 h-2 w-full overflow-hidden rounded-full">
+                <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
-                        className={cn('h-full rounded-full transition-all', tier.bar)}
+                        className={cn(
+                            'h-full rounded-full transition-all',
+                            tier.bar,
+                        )}
                         style={{ width: `${Math.min(100, percentage)}%` }}
                     />
                 </div>
 
-                <div className="border-border flex items-center justify-between border-t pt-3 text-xs">
-                    <span className={cn('flex items-center gap-1 font-medium', tier.text)}>
+                <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
+                    <span
+                        className={cn(
+                            'flex items-center gap-1 font-medium',
+                            tier.text,
+                        )}
+                    >
                         {(nearLimit || overBudget) && (
                             <AlertTriangleIcon className="size-3.5" />
                         )}
                         {overBudget
                             ? 'Over budget'
                             : nearLimit
-                                ? 'Near limit'
-                                : 'Left to spend'}
+                              ? 'Near limit'
+                              : 'Left to spend'}
                     </span>
                     <span
                         className={cn(
                             'font-mono font-medium tabular-nums',
-                            overBudget ? 'text-red-600 dark:text-red-400' : 'text-foreground',
+                            overBudget
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-foreground',
                         )}
                     >
                         {formatCurrency(remaining, budget.currency)}
@@ -225,7 +237,7 @@ export function BudgetCard({
 
 function InactiveBadge() {
     return (
-        <span className="text-muted-foreground bg-muted shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider uppercase">
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
             inactivo
         </span>
     );

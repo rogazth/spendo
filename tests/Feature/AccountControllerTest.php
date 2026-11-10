@@ -1,8 +1,12 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Budget;
+use App\Models\Category;
 use App\Models\Currency;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -54,15 +58,15 @@ test('index groups accounts by currency with summary aggregates', function () {
         'is_default' => false,
     ]);
 
-    \App\Models\Transaction::factory()->for($user)->for($clpDefault)->create([
+    Transaction::factory()->for($user)->for($clpDefault)->create([
         'amount' => 500000,
         'currency' => 'CLP',
     ]);
-    \App\Models\Transaction::factory()->for($user)->for($clpSavings)->create([
+    Transaction::factory()->for($user)->for($clpSavings)->create([
         'amount' => 200000,
         'currency' => 'CLP',
     ]);
-    \App\Models\Transaction::factory()->for($user)->for($usd)->create([
+    Transaction::factory()->for($user)->for($usd)->create([
         'amount' => -15000,
         'currency' => 'USD',
     ]);
@@ -89,21 +93,21 @@ test('index groups accounts by currency with summary aggregates', function () {
 
 test('index reports reserved and available accounting for budgets', function () {
     $user = User::factory()->create();
-    \App\Models\UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
 
     $account = Account::factory()->for($user)->create([
         'name' => 'Banco CLP',
         'currency' => 'CLP',
         'is_default' => true,
     ]);
-    $category = \App\Models\Category::factory()->expense()->for($user)->create();
+    $category = Category::factory()->expense()->for($user)->create();
 
-    \App\Models\Transaction::factory()->for($user)->for($account)->create([
+    Transaction::factory()->for($user)->for($account)->create([
         'amount' => 500000,
         'currency' => 'CLP',
     ]);
 
-    $budget = \App\Models\Budget::factory()->for($user)->create([
+    $budget = Budget::factory()->for($user)->create([
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->startOfMonth()->toDateString(),
@@ -111,7 +115,7 @@ test('index reports reserved and available accounting for budgets', function () 
     $budget->items()->create(['category_id' => $category->id, 'amount' => 120000]);
     $budget->update(['account_id' => $account->id]);
 
-    \App\Models\Transaction::factory()->expense()->for($user)->for($account)->create([
+    Transaction::factory()->expense()->for($user)->for($account)->create([
         'category_id' => $category->id,
         'amount' => -50000,
         'currency' => 'CLP',
@@ -137,7 +141,7 @@ test('index reports reserved and available accounting for budgets', function () 
 
 test('index surfaces overspend and reserves caps from every active budget, matching the dashboard', function () {
     $user = User::factory()->create();
-    \App\Models\UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
+    UserSettings::factory()->for($user)->create(['budget_cycle_start_day' => 1]);
 
     $budgeted = Account::factory()->for($user)->create([
         'name' => 'Banco CLP',
@@ -150,22 +154,22 @@ test('index surfaces overspend and reserves caps from every active budget, match
         'is_default' => false,
     ]);
 
-    $catOver = \App\Models\Category::factory()->expense()->for($user)->create();
-    $catUnder = \App\Models\Category::factory()->expense()->for($user)->create();
-    $catGhost = \App\Models\Category::factory()->expense()->for($user)->create();
+    $catOver = Category::factory()->expense()->for($user)->create();
+    $catUnder = Category::factory()->expense()->for($user)->create();
+    $catGhost = Category::factory()->expense()->for($user)->create();
 
     // Seed balances: budgeted account 1,000,000 income, free account 250,000.
-    \App\Models\Transaction::factory()->for($user)->for($budgeted)->create([
+    Transaction::factory()->for($user)->for($budgeted)->create([
         'amount' => 1000000,
         'currency' => 'CLP',
     ]);
-    \App\Models\Transaction::factory()->for($user)->for($free)->create([
+    Transaction::factory()->for($user)->for($free)->create([
         'amount' => 250000,
         'currency' => 'CLP',
     ]);
 
     // Hogar: scoped to the budgeted account. One item overspent, one under.
-    $hogar = \App\Models\Budget::factory()->for($user)->create([
+    $hogar = Budget::factory()->for($user)->create([
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->startOfMonth()->toDateString(),
@@ -174,14 +178,14 @@ test('index surfaces overspend and reserves caps from every active budget, match
     $hogar->items()->create(['category_id' => $catUnder->id, 'amount' => 300000]);
     $hogar->update(['account_id' => $budgeted->id]);
 
-    \App\Models\Transaction::factory()->expense()->for($user)->for($budgeted)->create([
+    Transaction::factory()->expense()->for($user)->for($budgeted)->create([
         'category_id' => $catOver->id,
         'amount' => -500000, // over its 300k cap by 200k
         'currency' => 'CLP',
         'exclude_from_budget' => false,
         'transaction_date' => now()->toDateString(),
     ]);
-    \App\Models\Transaction::factory()->expense()->for($user)->for($budgeted)->create([
+    Transaction::factory()->expense()->for($user)->for($budgeted)->create([
         'category_id' => $catUnder->id,
         'amount' => -100000, // under its 300k cap by 200k
         'currency' => 'CLP',
@@ -191,7 +195,7 @@ test('index surfaces overspend and reserves caps from every active budget, match
 
     // Fantasma: active budget with NO accounts attached and no spending. Its cap
     // is fully reserved. The dashboard counts it; the accounts page must too.
-    $fantasma = \App\Models\Budget::factory()->for($user)->create([
+    $fantasma = Budget::factory()->for($user)->create([
         'currency' => 'CLP',
         'frequency' => 'monthly',
         'anchor_date' => now()->startOfMonth()->toDateString(),

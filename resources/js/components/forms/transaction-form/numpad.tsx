@@ -68,7 +68,9 @@ export function Numpad({
                     key={index}
                     type="button"
                     aria-label={key.ariaLabel}
-                    disabled={disabled || (submitting && key.variant !== 'accent')}
+                    disabled={
+                        disabled || (submitting && key.variant !== 'accent')
+                    }
                     onClick={key.onPress}
                     className={cn(
                         'flex h-12 items-center justify-center rounded-xl text-xl font-semibold transition-all',

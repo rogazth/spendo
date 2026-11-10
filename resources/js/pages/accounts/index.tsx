@@ -144,10 +144,10 @@ export default function AccountsIndex({ currencySummaries }: Props) {
 
             <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-6">
                 <div>
-                    <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
                         Cuentas
                     </h1>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-sm text-muted-foreground">
                         Lo que te queda disponible por cuenta, después de lo
                         reservado por cada budget.
                     </p>
@@ -163,7 +163,8 @@ export default function AccountsIndex({ currencySummaries }: Props) {
                                 No tienes cuentas registradas
                             </EmptyTitle>
                             <EmptyDescription>
-                                Las cuentas se crean mediante el asistente de IA.
+                                Las cuentas se crean mediante el asistente de
+                                IA.
                             </EmptyDescription>
                         </EmptyHeader>
                     </Empty>
@@ -267,7 +268,7 @@ function CurrencyBlock({
 
 function CurrencyLabel({ currency }: { currency: string }) {
     return (
-        <p className="text-muted-foreground font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+        <p className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             {currency}
         </p>
     );
@@ -289,13 +290,13 @@ function CurrencyRollup({
     const availablePct = denom > 0 ? Math.max(0, 100 - reservedPct) : 0;
 
     return (
-        <div className="bg-card border-border rounded-2xl border px-6 py-5 shadow-sm">
+        <div className="rounded-2xl border border-border bg-card px-6 py-5 shadow-sm">
             <div className="flex items-end justify-between gap-3">
                 <div>
-                    <p className="text-muted-foreground flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+                    <p className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                         Disponible
                         {showCurrencyLabel && (
-                            <span className="text-foreground bg-muted rounded px-1.5 py-0.5">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-foreground">
                                 {summary.currency}
                             </span>
                         )}
@@ -311,15 +312,15 @@ function CurrencyRollup({
                         {fmt(summary.available)}
                     </p>
                 </div>
-                <p className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
                     saldo{' '}
-                    <span className="text-foreground font-semibold">
+                    <span className="font-semibold text-foreground">
                         {fmt(summary.total)}
                     </span>
                 </p>
             </div>
 
-            <div className="bg-muted mt-4 flex h-2.5 w-full overflow-hidden rounded-full">
+            <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
                     className={cn(
                         'h-full',
@@ -354,9 +355,9 @@ function CurrencyRollup({
                     }
                 />
                 {summary.unassigned_reserved > 0 && (
-                    <span className="text-muted-foreground/70 flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 text-muted-foreground/70">
                         sin cuenta{' '}
-                        <span className="text-muted-foreground font-semibold tabular-nums">
+                        <span className="font-semibold text-muted-foreground tabular-nums">
                             {fmt(summary.unassigned_reserved)}
                         </span>
                     </span>
@@ -397,9 +398,9 @@ function AccountCard({
             : 0;
 
     return (
-        <div className="bg-card border-border overflow-hidden rounded-2xl border shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div
-                className="border-border flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4"
+                className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4"
                 style={{ borderLeft: `3px solid ${account.color}` }}
             >
                 <div className="flex items-center gap-2.5">
@@ -414,20 +415,20 @@ function AccountCard({
                     </span>
                     <div>
                         <div className="flex items-center gap-2">
-                            <p className="text-foreground text-sm font-semibold">
+                            <p className="text-sm font-semibold text-foreground">
                                 {account.name}
                             </p>
                             {account.is_default && <DefaultBadge />}
                             {!account.is_active && <InactiveBadge />}
                         </div>
-                        <p className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                        <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
                             saldo {fmt(balance)}
                         </p>
                     </div>
                 </div>
                 <div className="flex items-start gap-1">
                     <div className="text-right">
-                        <p className="text-muted-foreground font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+                        <p className="font-mono text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                             Disponible
                         </p>
                         <p
@@ -452,7 +453,7 @@ function AccountCard({
 
             <div className="px-5 pt-4 pb-5">
                 <TooltipProvider delayDuration={100}>
-                    <div className="bg-muted flex h-2.5 w-full overflow-hidden rounded-full">
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
                         {segments.map((segment) => (
                             <Tooltip key={segment.uuid}>
                                 <TooltipTrigger asChild>
@@ -474,7 +475,7 @@ function AccountCard({
                                             {fmt(segment.reserved)}
                                         </span>
                                         {segment.overspend > 0 && (
-                                            <span className="tabular-nums text-red-400">
+                                            <span className="text-red-400 tabular-nums">
                                                 +{fmt(segment.overspend)}
                                             </span>
                                         )}
@@ -509,29 +510,29 @@ function AccountCard({
                     {account.budgets.map((budget) => (
                         <span
                             key={budget.uuid}
-                            className="text-muted-foreground flex items-center gap-1.5"
+                            className="flex items-center gap-1.5 text-muted-foreground"
                         >
                             <span
                                 className="size-2 rounded-full"
                                 style={{ backgroundColor: budget.color }}
                             />
                             {budget.emoji ?? '🎯'} {budget.name}{' '}
-                            <span className="text-foreground font-semibold tabular-nums">
+                            <span className="font-semibold text-foreground tabular-nums">
                                 {fmt(budget.reserved)}
                             </span>
                             {budget.overspend > 0 && (
-                                <span className="font-semibold tabular-nums text-red-600 dark:text-red-400">
+                                <span className="font-semibold text-red-600 tabular-nums dark:text-red-400">
                                     +{fmt(budget.overspend)}
                                 </span>
                             )}
                         </span>
                     ))}
-                    <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span className="size-2 rounded-full bg-emerald-500" />
                         libre{' '}
                         <span
                             className={cn(
-                                'text-foreground font-semibold tabular-nums',
+                                'font-semibold text-foreground tabular-nums',
                                 negative && 'text-red-600 dark:text-red-400',
                             )}
                         >
@@ -556,12 +557,12 @@ function LegendDot({
     valueClass?: string;
 }) {
     return (
-        <span className="text-muted-foreground flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
             <span className={cn('size-2 rounded-full', dotClass)} />
             {label}{' '}
             <span
                 className={cn(
-                    'text-foreground font-semibold tabular-nums',
+                    'font-semibold text-foreground tabular-nums',
                     valueClass,
                 )}
             >
@@ -619,7 +620,7 @@ function DefaultBadge() {
 
 function InactiveBadge() {
     return (
-        <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider uppercase">
+        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
             inactive
         </span>
     );

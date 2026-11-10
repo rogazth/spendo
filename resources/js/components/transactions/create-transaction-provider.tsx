@@ -47,7 +47,11 @@ function loadCreateTransactionData(): Promise<CreateTransactionFormData> {
  * screen (e.g. the mobile bottom toolbar or a page header button). Mounted once
  * inside the authenticated layout.
  */
-export function CreateTransactionProvider({ children }: { children: ReactNode }) {
+export function CreateTransactionProvider({
+    children,
+}: {
+    children: ReactNode;
+}) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [data, setData] = useState<CreateTransactionFormData | null>(
         cachedFormData,

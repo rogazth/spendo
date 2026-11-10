@@ -88,8 +88,7 @@ export function YearChart({
                             <ChartTooltipContent
                                 labelFormatter={(_label, payload) => {
                                     const point = payload?.[0]?.payload as
-                                        | CashFlowPoint
-                                        | undefined;
+                                        CashFlowPoint | undefined;
 
                                     return point
                                         ? rangeLabel(

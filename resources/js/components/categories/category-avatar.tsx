@@ -6,7 +6,11 @@ interface CategoryAvatarProps {
     size?: 'sm' | 'md';
 }
 
-export function CategoryAvatar({ color, emoji, size = 'sm' }: CategoryAvatarProps) {
+export function CategoryAvatar({
+    color,
+    emoji,
+    size = 'sm',
+}: CategoryAvatarProps) {
     const sizeClass =
         size === 'sm' ? 'size-5 text-[11px]' : 'size-6 text-[13px]';
 

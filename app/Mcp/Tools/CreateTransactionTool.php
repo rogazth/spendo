@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Actions\Transactions\CreateTransactionAction;
 use App\Http\Resources\TransactionResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -84,7 +85,7 @@ class CreateTransactionTool extends Tool
 
         try {
             $transaction = app(CreateTransactionAction::class)->handle($user, $data);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return Response::error($e->getMessage());
         } catch (\InvalidArgumentException $e) {
             return Response::error($e->getMessage());
@@ -114,7 +115,7 @@ class CreateTransactionTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
+     * @return array<string, JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {

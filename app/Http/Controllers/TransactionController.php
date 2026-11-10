@@ -17,6 +17,8 @@ use App\Models\Currency;
 use App\Models\Transaction;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -272,7 +274,7 @@ class TransactionController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<Transaction>|\Illuminate\Database\Eloquent\Relations\HasMany<Transaction, \App\Models\User>  $query
+     * @param  Builder<Transaction>|HasMany<Transaction, User>  $query
      * @return array<string, array{income: float, expenses: float, net: float, currency_locale: string}>
      */
     private function buildCurrencySummary($query): array

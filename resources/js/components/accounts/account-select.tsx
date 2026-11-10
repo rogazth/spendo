@@ -12,7 +12,8 @@ interface AccountAvatarProps {
 }
 
 export function AccountAvatar({ emoji, size = 'sm' }: AccountAvatarProps) {
-    const boxClass = size === 'sm' ? 'size-5 text-[12px]' : 'size-7 text-[15px]';
+    const boxClass =
+        size === 'sm' ? 'size-5 text-[12px]' : 'size-7 text-[15px]';
     const iconClass = size === 'sm' ? 'size-3' : 'size-3.5';
 
     return (
@@ -80,7 +81,9 @@ export function AccountField({
 }: AccountFieldProps) {
     const options = useMemo(
         () =>
-            accounts.map((account) => accountToOption(account, { showBalance })),
+            accounts.map((account) =>
+                accountToOption(account, { showBalance }),
+            ),
         [accounts, showBalance],
     );
     const selected = accounts.find((account) => account.id === value);

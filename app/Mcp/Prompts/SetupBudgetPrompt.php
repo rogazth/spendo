@@ -12,7 +12,7 @@ use Laravel\Mcp\Server\Prompts\Argument;
 class SetupBudgetPrompt extends Prompt
 {
     /**
-     * @return array<int, \Laravel\Mcp\Server\Prompts\Argument>
+     * @return array<int, Argument>
      */
     public function arguments(): array
     {
@@ -26,7 +26,7 @@ class SetupBudgetPrompt extends Prompt
     }
 
     /**
-     * @return array<int, \Laravel\Mcp\Response>
+     * @return array<int, Response>
      */
     public function handle(Request $request): array
     {

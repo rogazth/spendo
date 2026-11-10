@@ -140,6 +140,9 @@ export function TransactionFormDialog({
             magnitude * Math.pow(10, fractionDigits),
         );
 
+        // Resets the form each time the dialog opens. Moving this to a keyed
+        // remount would drop the effect; until then, this is intentional.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMode(incomingMode);
         setDirection(initialDirection);
         setCents(initialCents);
