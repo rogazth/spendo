@@ -20,8 +20,7 @@ interface FilterPillProps {
     /** Let full-bleed list content reach the bottom edge of the mobile drawer. */
     flushBottom?: boolean;
     children:
-        | React.ReactNode
-        | ((helpers: FilterPillRenderProps) => React.ReactNode);
+        React.ReactNode | ((helpers: FilterPillRenderProps) => React.ReactNode);
 }
 
 export function FilterPill({
