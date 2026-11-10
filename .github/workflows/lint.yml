@@ -32,6 +32,14 @@ jobs:
           composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
           npm ci
 
+      # Wayfinder output is gitignored; without it eslint's import/order sees
+      # @/routes and @/actions as unresolved and sorts them differently.
+      - name: Generate Wayfinder Routes
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan wayfinder:generate --with-form
+
       - name: Pint
         run: composer test:lint
 
